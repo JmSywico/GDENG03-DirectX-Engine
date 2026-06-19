@@ -1,31 +1,8 @@
-/*MIT License
-
-C++ 3D Game Tutorial Series (https://github.com/PardCode/CPP-3D-Game-Tutorial-Series)
-
-Copyright (c) 2019-2026, PardCode
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.*/
-
 #include <DX3D/Game/World.h>
 #include <DX3D/Game/GameObject.h>
 #include <DX3D/Game/Component.h>
 #include <DX3D/Component/TransformComponent.h>
+#include <algorithm>
 
 dx3d::World::World(const WorldDesc& desc) : Base(desc.base), m_gameContext(desc.gameContext)
 {
@@ -47,8 +24,13 @@ void dx3d::World::update(f32 deltaTime)
 			{
 				auto& obj = m_pendingObjectsSwapBuffer[pendingObjIndex];
 				auto ptr = obj.get();
+
 				m_objects[objTypeId].push_back(std::move(obj));
-				ptr->onCreate();		
+				ptr->onCreate();
+			}
+			else if (e.eventType == EventType::Destroy)
+			{
+				destroyGameObjectInternal(e.object);
 			}
 		}
 
@@ -82,6 +64,87 @@ dx3d::GameObject* dx3d::World::createGameObjectInternal(UniquePtr<GameObject>& o
 	m_events.push_back({ ptr, index, EventType::Create });
 
 	return ptr;
+}
+
+void dx3d::World::destroyGameObject(GameObject* object)
+{
+	if (!object)
+		return;
+
+	m_events.push_back(
+		{
+			object,
+			0,
+			EventType::Destroy
+		}
+	);
+}
+
+void dx3d::World::destroyGameObjectInternal(GameObject* object)
+{
+	if (!object)
+		return;
+
+	// Remove every component belonging to this object
+	// from the World's component lists.
+	for (auto& [componentTypeId, component] : object->m_components)
+	{
+		auto componentListIt = m_components.find(componentTypeId);
+
+		if (componentListIt == m_components.end())
+			continue;
+
+		auto& componentList = componentListIt->second;
+
+		componentList.erase(
+			std::remove(
+				componentList.begin(),
+				componentList.end(),
+				component.get()
+			),
+			componentList.end()
+		);
+
+		if (componentList.empty())
+		{
+			m_components.erase(componentListIt);
+		}
+	}
+
+	// Make sure the transform is not waiting in the dirty list.
+	m_dirtyTransforms.erase(
+		std::remove(
+			m_dirtyTransforms.begin(),
+			m_dirtyTransforms.end(),
+			object->m_transform
+		),
+		m_dirtyTransforms.end()
+	);
+
+	// Remove and delete the actual GameObject.
+	auto objectListIt = m_objects.find(object->getTypeId());
+
+	if (objectListIt == m_objects.end())
+		return;
+
+	auto& objectList = objectListIt->second;
+
+	objectList.erase(
+		std::remove_if(
+			objectList.begin(),
+			objectList.end(),
+			[object](const UniquePtr<GameObject>& storedObject)
+			{
+				return storedObject.get() == object;
+			}
+		),
+		objectList.end()
+	);
+
+	if (objectList.empty())
+	{
+		m_objects.erase(objectListIt);
+	}
 }
 
 void dx3d::World::addComponentInternal(Component& component)
