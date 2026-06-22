@@ -3,18 +3,19 @@
 #include <DX3D/Game/GameObject.h>
 #include <DX3D/Game/World.h>
 #include <DX3D/Game/Game.h>
-#include <DX3D/Game/GameObject.h>
 #include <algorithm>
 
-
-dx3d::CameraComponent::CameraComponent(const ComponentDesc& data) : Component(data)
+dx3d::CameraComponent::CameraComponent(const ComponentDesc& data)
+	: Component(data)
 {
 	computeProjectionMatrix();
 }
 
 dx3d::Mat4x4 dx3d::CameraComponent::getViewMatrix() noexcept
 {
-	return Mat4x4::inverse(m_object.getTransform().getRigidWorldMatrix());
+	return Mat4x4::inverse(
+		m_object.getTransform().getRigidWorldMatrix()
+	);
 }
 
 dx3d::Mat4x4 dx3d::CameraComponent::getProjectionMatrix() const noexcept
@@ -24,7 +25,9 @@ dx3d::Mat4x4 dx3d::CameraComponent::getProjectionMatrix() const noexcept
 
 void dx3d::CameraComponent::setFarPlane(f32 farPlane) noexcept
 {
-	if (farPlane <= m_nearPlane) return;
+	if (farPlane <= m_nearPlane)
+		return;
+
 	m_farPlane = farPlane;
 	computeProjectionMatrix();
 }
@@ -36,7 +39,9 @@ dx3d::f32 dx3d::CameraComponent::getFarPlane() const noexcept
 
 void dx3d::CameraComponent::setNearPlane(f32 nearPlane) noexcept
 {
-	if (nearPlane <= 0.001f) return;
+	if (nearPlane <= 0.001f || nearPlane >= m_farPlane)
+		return;
+
 	m_nearPlane = nearPlane;
 	computeProjectionMatrix();
 }
@@ -48,7 +53,12 @@ dx3d::f32 dx3d::CameraComponent::getNearPlane() const noexcept
 
 void dx3d::CameraComponent::setFieldOfView(f32 fieldOfView) noexcept
 {
-	if (fieldOfView <= 0.001f || fieldOfView >= MathUtils::PI) return;
+	if (fieldOfView <= 0.001f ||
+		fieldOfView >= MathUtils::PI)
+	{
+		return;
+	}
+
 	m_fieldOfView = fieldOfView;
 	computeProjectionMatrix();
 }
@@ -58,10 +68,15 @@ dx3d::f32 dx3d::CameraComponent::getFieldOfView() const noexcept
 	return m_fieldOfView;
 }
 
-void dx3d::CameraComponent::setViewportSize(const Rect& area) noexcept
+void dx3d::CameraComponent::setViewportSize(
+	const Rect& area
+) noexcept
 {
-	if (m_viewportSize == area) return;
-	if (m_viewportSize.width == 0 || m_viewportSize.height == 0) return;
+	if (area.width <= 0 || area.height <= 0)
+		return;
+
+	if (m_viewportSize == area)
+		return;
 
 	m_viewportSize = area;
 	computeProjectionMatrix();
@@ -74,11 +89,21 @@ dx3d::Rect dx3d::CameraComponent::getViewportSize() const noexcept
 
 void dx3d::CameraComponent::computeProjectionMatrix() noexcept
 {
-	m_projection = Mat4x4::orthoLH(
-		static_cast<f32>(m_viewportSize.width),
-		static_cast<f32>(m_viewportSize.height),
+	const f32 width =
+		static_cast<f32>(m_viewportSize.width);
+
+	const f32 height =
+		static_cast<f32>(m_viewportSize.height);
+
+	if (width <= 0.0f || height <= 0.0f)
+		return;
+
+	const f32 aspectRatio = width / height;
+
+	m_projection = Mat4x4::perspectiveFovLH(
+		m_fieldOfView,
+		aspectRatio,
 		m_nearPlane,
 		m_farPlane
 	);
 }
-

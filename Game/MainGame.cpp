@@ -1,6 +1,11 @@
 #include "MainGame.h"
 
 #include <DX3D/Component/CircleComponent.h>
+#include <DX3D/Component/CubeComponent.h>
+#include <DX3D/Component/PlaneComponent.h>
+
+#include <imgui.h>
+
 #include <cmath>
 #include <random>
 
@@ -49,11 +54,70 @@ void MainGame::onCreate()
 
 	auto& world = getWorld();
 
-	auto camera = world.createGameObject<dx3d::GameObject>();
-	camera->createOrGetComponent<dx3d::CameraComponent>();
-	camera->getTransform().setPosition({ 0.0f, 0.0f, -10.0f });
+	m_editorCamera =
+		world.createGameObject<dx3d::GameObject>();
 
-	spawnCircle();
+	m_editorCamera->setName("Editor Camera");
+
+	auto camera = m_editorCamera;
+
+	auto cameraComponent =
+		camera->createOrGetComponent<
+		dx3d::CameraComponent>();
+
+	cameraComponent->setNearPlane(0.1f);
+	cameraComponent->setFarPlane(100.0f);
+	cameraComponent->setFieldOfView(1.0f);
+
+	camera->getTransform().setPosition(
+		{ 0.0f, 3.0f, -6.0f }
+	);
+
+	// Positive X rotation looks downward in this engine.
+	camera->getTransform().setRotation(
+		{ 0.45f, 0.0f, 0.0f }
+	);
+
+	// Cube
+	auto cube =
+		world.createGameObject<dx3d::GameObject>();
+
+	cube->setName("Cube");
+
+	cube->createOrGetComponent<
+		dx3d::CubeComponent>();
+
+	// Cube has a height of one unit, so Y = 0.5
+	// places its bottom directly on the plane.
+	cube->getTransform().setPosition(
+		{ 0.0f, 0.5f, 0.0f }
+	);
+
+	cube->getTransform().setRotation(
+		{ 0.0f, 0.55f, 0.0f }
+	);
+
+	cube->getTransform().setScale(
+		{ 1.0f, 1.0f, 1.0f }
+	);
+
+	// Ground plane
+	auto plane =
+		world.createGameObject<dx3d::GameObject>();
+
+	plane->setName("Plane");
+
+	plane->createOrGetComponent<
+		dx3d::PlaneComponent>();
+
+	plane->getTransform().setPosition(
+		{ 0.0f, 0.0f, 0.0f }
+	);
+
+	plane->getTransform().setScale(
+		{ 10.0f, 1.0f, 10.0f }
+	);
+
 	getInputSystem().setCursorLocked(false);
 	getInputSystem().setCursorVisible(true);
 }
@@ -62,91 +126,187 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 {
 	Game::onUpdate(deltaTime);
 
-	if (getInputSystem().isKeyPressed(dx3d::KeyCode::Escape))
+	auto& input = getInputSystem();
+
+	if (input.isKeyPressed(dx3d::KeyCode::Escape))
 	{
 		requestExit();
 		return;
 	}
 
-	auto& input = getInputSystem();
-	auto& world = getWorld();
+	if (!m_editorCamera)
+		return;
 
-	// Space creates a new circle.
-	if (input.isKeyPressed(dx3d::KeyCode::Space))
+	bool imguiWantsMouse = false;
+	bool imguiWantsKeyboard = false;
+
+	// Check that ImGui has already been initialized before accessing its IO.
+	if (ImGui::GetCurrentContext() != nullptr)
 	{
-		spawnCircle();
+		const ImGuiIO& io = ImGui::GetIO();
+
+		imguiWantsMouse = io.WantCaptureMouse;
+
+		// WantTextInput is included so movement also stops while
+		// typing into an Inspector input field.
+		imguiWantsKeyboard =
+			io.WantCaptureKeyboard ||
+			io.WantTextInput;
 	}
 
-	// Backspace removes the most recently created circle.
-	if (input.isKeyPressed(dx3d::KeyCode::Backspace) &&
-		!m_circles.empty())
+	const bool rightMousePressed =
+		input.isKeyPressed(dx3d::KeyCode::MouseRight);
+
+	const bool rightMouseReleased =
+		input.isKeyReleased(dx3d::KeyCode::MouseRight);
+
+	const bool rightMouseDown =
+		input.isKeyDown(dx3d::KeyCode::MouseRight);
+
+	// Begin camera control only when the right-click did not
+	// begin over an ImGui window or control.
+	if (rightMousePressed &&
+		!imguiWantsMouse &&
+		!m_isCameraControlActive)
 	{
-		world.destroyGameObject(m_circles.back().object);
-		m_circles.pop_back();
+		m_isCameraControlActive = true;
+
+		input.setCursorVisible(false);
+		input.setCursorLocked(true);
 	}
 
-	// Delete removes every circle.
-	if (input.isKeyPressed(dx3d::KeyCode::Delete))
+	// End camera control when right mouse is released.
+	//
+	// The !rightMouseDown check also protects against cases where
+	// the release event is missed, such as losing window focus.
+	if (m_isCameraControlActive &&
+		(rightMouseReleased || !rightMouseDown))
 	{
-		for (auto& circle : m_circles)
-		{
-			if (circle.object)
+		m_isCameraControlActive = false;
+
+		input.setCursorLocked(false);
+		input.setCursorVisible(true);
+	}
+
+	// Right-clicking an ImGui window will never activate this.
+	if (!m_isCameraControlActive)
+		return;
+
+	auto& transform = m_editorCamera->getTransform();
+
+	// Ignore the first mouse delta when camera control begins.
+	if (!rightMousePressed)
+	{
+		const auto mouseDelta = input.getMouseDelta();
+
+		m_cameraYaw +=
+			mouseDelta.x * m_cameraLookSpeed;
+
+		m_cameraPitch +=
+			mouseDelta.y * m_cameraLookSpeed;
+
+		// Prevent the camera from turning upside down.
+		constexpr dx3d::f32 minimumPitch = -1.5f;
+		constexpr dx3d::f32 maximumPitch = 1.5f;
+
+		if (m_cameraPitch < minimumPitch)
+			m_cameraPitch = minimumPitch;
+
+		if (m_cameraPitch > maximumPitch)
+			m_cameraPitch = maximumPitch;
+
+		transform.setRotation(
 			{
-				world.destroyGameObject(circle.object);
+				m_cameraPitch,
+				m_cameraYaw,
+				0.0f
 			}
-		}
-
-		m_circles.clear();
+		);
 	}
 
-	constexpr dx3d::f32 halfWindowWidth = 512.0f;
-	constexpr dx3d::f32 halfWindowHeight = 384.0f;
+	// Do not use keyboard movement while ImGui is accepting
+	// keyboard input, such as while editing an Inspector value.
+	if (imguiWantsKeyboard)
+		return;
 
-	const dx3d::f32 leftEdge =
-		-halfWindowWidth + m_circleRadius;
+	const dx3d::f32 currentSpeed =
+		input.isKeyDown(dx3d::KeyCode::Shift)
+		? m_cameraFastSpeed
+		: m_cameraMoveSpeed;
 
-	const dx3d::f32 rightEdge =
-		halfWindowWidth - m_circleRadius;
-
-	const dx3d::f32 bottomEdge =
-		-halfWindowHeight + m_circleRadius;
-
-	const dx3d::f32 topEdge =
-		halfWindowHeight - m_circleRadius;
-
-	// Move every circle independently.
-	for (auto& circle : m_circles)
+	dx3d::Vec3 movement
 	{
-		if (!circle.object)
-			continue;
+		0.0f,
+		0.0f,
+		0.0f
+	};
 
-		auto& transform = circle.object->getTransform();
+	const dx3d::Vec3 forward = transform.forward();
+	const dx3d::Vec3 right = transform.right();
+
+	// Forward and backward.
+	if (input.isKeyDown(dx3d::KeyCode::W))
+	{
+		movement.x += forward.x;
+		movement.y += forward.y;
+		movement.z += forward.z;
+	}
+
+	if (input.isKeyDown(dx3d::KeyCode::S))
+	{
+		movement.x -= forward.x;
+		movement.y -= forward.y;
+		movement.z -= forward.z;
+	}
+
+	// Left and right.
+	if (input.isKeyDown(dx3d::KeyCode::D))
+	{
+		movement.x += right.x;
+		movement.y += right.y;
+		movement.z += right.z;
+	}
+
+	if (input.isKeyDown(dx3d::KeyCode::A))
+	{
+		movement.x -= right.x;
+		movement.y -= right.y;
+		movement.z -= right.z;
+	}
+
+	// World-space vertical movement.
+	if (input.isKeyDown(dx3d::KeyCode::E))
+	{
+		movement.y += 1.0f;
+	}
+
+	if (input.isKeyDown(dx3d::KeyCode::Q))
+	{
+		movement.y -= 1.0f;
+	}
+
+	const dx3d::f32 movementLength =
+		std::sqrt(
+			movement.x * movement.x +
+			movement.y * movement.y +
+			movement.z * movement.z
+		);
+
+	// Normalize so diagonal movement is not faster.
+	if (movementLength > 0.0001f)
+	{
+		movement.x /= movementLength;
+		movement.y /= movementLength;
+		movement.z /= movementLength;
+
+		const dx3d::f32 movementAmount =
+			currentSpeed * deltaTime;
+
 		auto position = transform.getPosition();
 
-		position.x += circle.velocityX * deltaTime;
-		position.y += circle.velocityY * deltaTime;
-
-		if (position.x <= leftEdge)
-		{
-			position.x = leftEdge;
-			circle.velocityX = std::abs(circle.velocityX);
-		}
-		else if (position.x >= rightEdge)
-		{
-			position.x = rightEdge;
-			circle.velocityX = -std::abs(circle.velocityX);
-		}
-
-		if (position.y <= bottomEdge)
-		{
-			position.y = bottomEdge;
-			circle.velocityY = std::abs(circle.velocityY);
-		}
-		else if (position.y >= topEdge)
-		{
-			position.y = topEdge;
-			circle.velocityY = -std::abs(circle.velocityY);
-		}
+		position.x += movement.x * movementAmount;
+		position.y += movement.y * movementAmount;
+		position.z += movement.z * movementAmount;
 
 		transform.setPosition(position);
 	}

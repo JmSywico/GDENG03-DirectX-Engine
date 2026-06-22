@@ -4,6 +4,8 @@
 #include <DX3D/Graphics/SwapChain.h>
 #include <DX3D/Graphics/VertexBuffer.h>
 #include <DX3D/Graphics/IndexBuffer.h>
+#include <DX3D/Graphics/MeshData.h>
+#include <DX3D/Graphics/PrimitiveMeshData.h>
 
 #include <DX3D/Game/World.h>
 #include <DX3D/Game/Component.h>
@@ -11,14 +13,17 @@
 
 #include <DX3D/Component/TransformComponent.h>
 #include <DX3D/Component/CubeComponent.h>
+#include <DX3D/Component/PlaneComponent.h>
 #include <DX3D/Component/CircleComponent.h>
 #include <DX3D/Component/CameraComponent.h>
+#include <DX3D/Component/CombinedMeshComponent.h>
 
 #include <DX3D/Math/Vec3.h>
 #include <fstream>
 #include <ranges>
 #include <vector>
 #include <cmath>
+#include <unordered_set>
 
 dx3d::WorldRenderer::WorldRenderer(const WorldRendererDesc& desc)
 	: Base(desc.base),
@@ -66,55 +71,61 @@ dx3d::WorldRenderer::WorldRenderer(const WorldRendererDesc& desc)
 
 	m_pipeline = device.createGraphicsPipelineState({ *vsSig, *ps });
 
-	const Vertex vertexList[] =
-	{
-		{{-0.5f,-0.5f,-0.5f}, {1,0,0,1}},
-		{{-0.5f,0.5f,-0.5f}, {0,1,0,1}},
-		{{0.5f,0.5f,-0.5f},  {0,0,1,1}},
-		{{0.5f,-0.5f,-0.5f}, {1,0,1,1}},
+	const auto& cubeMesh =
+		getCubeMeshData();
 
-		{{0.5f,-0.5f,0.5f}, {1,0,1,1}},
-		{{0.5f,0.5f,0.5f}, {0,0,1,1}},
-		{{-0.5f,0.5f,0.5f}, {0,1,0,1}},
-		{{-0.5f,-0.5f,0.5f}, {1,0,0,1}}
-	};
+	m_cubeVertexBuffer =
+		device.createVertexBuffer(
+			{
+				cubeMesh.vertices.data(),
+				static_cast<ui32>(
+					cubeMesh.vertices.size()
+				),
+				sizeof(MeshVertex)
+			}
+		);
 
-	const ui32 indexList[] =
-	{
-		0,1,2,
-		2,3,0,
-
-		4,5,6,
-		6,7,4,
-
-		1,6,5,
-		5,2,1,
-
-		7,0,3,
-		3,4,7,
-
-		3,2,5,
-		5,4,3,
-
-		7,6,1,
-		1,0,7
-	};
-
-	m_cubeVertexBuffer = device.createVertexBuffer(
-		{ vertexList, std::size(vertexList), sizeof(Vertex) }
-	);
+	m_cubeIndexBuffer =
+		device.createIndexBuffer(
+			{
+				cubeMesh.indices.data(),
+				static_cast<ui32>(
+					cubeMesh.indices.size()
+				)
+			}
+		);
 
 	m_cb = device.createConstantBuffer(
 		{ {}, sizeof(ConstantData) }
 	);
 
-	m_cubeIndexBuffer = device.createIndexBuffer(
-		{ indexList, std::size(indexList) }
-	);
+	const auto& planeMesh =
+		getPlaneMeshData();
+
+	m_planeVertexBuffer =
+		device.createVertexBuffer(
+			{
+				planeMesh.vertices.data(),
+				static_cast<ui32>(
+					planeMesh.vertices.size()
+				),
+				sizeof(MeshVertex)
+			}
+		);
+
+	m_planeIndexBuffer =
+		device.createIndexBuffer(
+			{
+				planeMesh.indices.data(),
+				static_cast<ui32>(
+					planeMesh.indices.size()
+				)
+			}
+		);
 
 	constexpr dx3d::ui32 circleSegments = 64;
 
-	std::vector<Vertex> circleVertices;
+	std::vector<MeshVertex> circleVertices;
 	std::vector<dx3d::ui32> circleIndices;
 
 
@@ -157,7 +168,7 @@ dx3d::WorldRenderer::WorldRenderer(const WorldRendererDesc& desc)
 		{
 			circleVertices.data(),
 			static_cast<dx3d::ui32>(circleVertices.size()),
-			sizeof(Vertex)
+			sizeof(MeshVertex)
 		}
 	);
 
@@ -184,7 +195,7 @@ void dx3d::WorldRenderer::render(
 
 	context.clearAndSetBackBuffer(
 		swapChain,
-		{ 0.0f, 0.0f, 0.0f, 1.0f }
+		{ 0.08f, 0.10f, 0.14f, 1.0f }
 	);
 
 	context.setGraphicsPipelineState(*m_pipeline);
@@ -245,6 +256,38 @@ void dx3d::WorldRenderer::render(
 
 	{
 		auto components =
+			world.getComponents<PlaneComponent>(numComponents);
+
+		for (auto i : std::views::iota(0u, numComponents))
+		{
+			auto component = components[i];
+
+			auto& transform =
+				component->getGameObject().getTransform();
+
+			data.world = transform.getAffineWorldMatrix();
+
+			auto& cb = *m_cb;
+
+			context.updateConstantBuffer(cb, &data);
+
+			auto& vb = *m_planeVertexBuffer;
+			auto& ib = *m_planeIndexBuffer;
+
+			context.setVertexBuffer(vb);
+			context.setConstantBuffer(cb);
+			context.setIndexBuffer(ib);
+
+			context.drawIndexedTriangleList(
+				ib.getIndexListSize(),
+				0u,
+				0u
+			);
+		}
+	}
+
+	{
+		auto components =
 			world.getComponents<CircleComponent>(numComponents);
 
 		for (auto i : std::views::iota(0u, numComponents))
@@ -274,7 +317,123 @@ void dx3d::WorldRenderer::render(
 			);
 		}
 	}
+	{
+		auto components =
+			world.getComponents<CombinedMeshComponent>(
+				numComponents
+			);
+
+		std::unordered_set<
+			const CombinedMeshComponent*
+		> activeCombinedMeshes{};
+
+		activeCombinedMeshes.reserve(numComponents);
+
+		for (auto i : std::views::iota(0u, numComponents))
+		{
+			auto* component = components[i];
+
+			if (!component)
+				continue;
+
+			activeCombinedMeshes.insert(component);
+
+			if (!component->hasMeshData())
+			{
+				m_combinedMeshResources.erase(component);
+				continue;
+			}
+
+			const auto& meshData =
+				component->getMeshData();
+
+			auto& renderResources =
+				m_combinedMeshResources[component];
+
+			const bool needsBufferRebuild =
+				!renderResources.vertexBuffer ||
+				!renderResources.indexBuffer ||
+				renderResources.meshRevision !=
+				component->getMeshRevision();
+
+			if (needsBufferRebuild)
+			{
+				renderResources.vertexBuffer =
+					m_graphicsDevice.createVertexBuffer(
+						{
+							meshData.vertices.data(),
+							static_cast<ui32>(
+								meshData.vertices.size()
+							),
+							sizeof(MeshVertex)
+						}
+					);
+
+				renderResources.indexBuffer =
+					m_graphicsDevice.createIndexBuffer(
+						{
+							meshData.indices.data(),
+							static_cast<ui32>(
+								meshData.indices.size()
+							)
+						}
+					);
+
+				renderResources.meshRevision =
+					component->getMeshRevision();
+			}
+
+			auto& transform =
+				component->getGameObject().getTransform();
+
+			data.world =
+				transform.getAffineWorldMatrix();
+
+			auto& cb = *m_cb;
+
+			context.updateConstantBuffer(
+				cb,
+				&data
+			);
+
+			auto& vertexBuffer =
+				*renderResources.vertexBuffer;
+
+			auto& indexBuffer =
+				*renderResources.indexBuffer;
+
+			context.setVertexBuffer(vertexBuffer);
+			context.setConstantBuffer(cb);
+			context.setIndexBuffer(indexBuffer);
+
+			context.drawIndexedTriangleList(
+				indexBuffer.getIndexListSize(),
+				0u,
+				0u
+			);
+		}
+
+		// Delete cached GPU resources belonging to components
+		// that no longer exist in the World.
+		for (
+			auto it = m_combinedMeshResources.begin();
+			it != m_combinedMeshResources.end();
+			)
+		{
+			if (
+				activeCombinedMeshes.find(it->first) ==
+				activeCombinedMeshes.end()
+				)
+			{
+				it = m_combinedMeshResources.erase(it);
+			}
+			else
+			{
+				++it;
+			}
+		}
+	}
 
 	m_graphicsDevice.executeCommandList(context);
-	swapChain.present();
+	//swapChain.present();
 }

@@ -10,6 +10,8 @@ namespace dx3d
 	public:
 		explicit Window(const WindowDesc& desc);
 		virtual ~Window() override;
+
+		void* getNativeHandle() const noexcept;
 		dx3d::Rect getClientAreaInScreenSpace();
 	protected:
 		void* m_handle{};

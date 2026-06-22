@@ -13,6 +13,9 @@ namespace dx3d
 		explicit GraphicsDevice(const GraphicsDeviceDesc& desc);
 		virtual ~GraphicsDevice() override;
 
+		ID3D11Device* getD3DDevice() const noexcept;
+		ID3D11DeviceContext* getImmediateContext() const noexcept;
+
 		RefPtr<SwapChain> createSwapChain(const SwapChainDesc& desc);
 		RefPtr<DeviceContext> createDeviceContext();
 		RefPtr<ShaderBinary> compileShader(const ShaderCompileDesc& desc);
@@ -23,6 +26,7 @@ namespace dx3d
 		RefPtr<IndexBuffer> createIndexBuffer(const IndexBufferDesc& desc);
 
 		void executeCommandList(DeviceContext& context);
+		void bindBackBuffer(const SwapChain& swapChain);
 	private:
 		GraphicsResourceDesc getGraphicsResourceDesc() const noexcept;
 	private:

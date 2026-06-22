@@ -172,6 +172,35 @@ namespace dx3d
 			return { m_data[0][index], m_data[1][index], m_data[2][index], m_data[3][index] };
 		}
 
+		Vec4 transform(const Vec4& vector) const noexcept
+		{
+			// Row-vector convention:
+			// transformedVector = vector * matrix
+
+			return
+			{
+				vector.x * m_data[0][0] +
+				vector.y * m_data[1][0] +
+				vector.z * m_data[2][0] +
+				vector.w * m_data[3][0],
+
+				vector.x * m_data[0][1] +
+				vector.y * m_data[1][1] +
+				vector.z * m_data[2][1] +
+				vector.w * m_data[3][1],
+
+				vector.x * m_data[0][2] +
+				vector.y * m_data[1][2] +
+				vector.z * m_data[2][2] +
+				vector.w * m_data[3][2],
+
+				vector.x * m_data[0][3] +
+				vector.y * m_data[1][3] +
+				vector.z * m_data[2][3] +
+				vector.w * m_data[3][3]
+			};
+		}
+
 		Mat4x4 operator *(const Mat4x4& rhs) const noexcept
 		{
 			Mat4x4 res{};

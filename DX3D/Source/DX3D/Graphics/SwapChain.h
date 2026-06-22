@@ -19,6 +19,7 @@ namespace dx3d
 		Rect m_size{};
 
 		friend class DeviceContext;
+		friend class GraphicsDevice;
 	};
 }
 

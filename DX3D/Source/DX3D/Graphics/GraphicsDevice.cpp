@@ -41,6 +41,18 @@ dx3d::GraphicsDevice::~GraphicsDevice()
 {
 }
 
+ID3D11Device*
+dx3d::GraphicsDevice::getD3DDevice() const noexcept
+{
+	return m_d3dDevice.Get();
+}
+
+ID3D11DeviceContext*
+dx3d::GraphicsDevice::getImmediateContext() const noexcept
+{
+	return m_d3dContext.Get();
+}
+
 RefPtr<SwapChain> dx3d::GraphicsDevice::createSwapChain(const SwapChainDesc& desc)
 {
 	return std::make_shared<SwapChain>(desc, getGraphicsResourceDesc());
@@ -91,6 +103,20 @@ void dx3d::GraphicsDevice::executeCommandList(DeviceContext& context)
 		return;
 	}
 	m_d3dContext->ExecuteCommandList(list.Get(), false);
+}
+
+void dx3d::GraphicsDevice::bindBackBuffer(
+	const SwapChain& swapChain
+)
+{
+	auto rtv = swapChain.m_rtv.Get();
+	auto dsv = swapChain.m_dsv.Get();
+
+	m_d3dContext->OMSetRenderTargets(
+		1,
+		&rtv,
+		dsv
+	);
 }
 
 GraphicsResourceDesc dx3d::GraphicsDevice::getGraphicsResourceDesc() const noexcept

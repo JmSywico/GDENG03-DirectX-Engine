@@ -80,6 +80,25 @@ void dx3d::World::destroyGameObject(GameObject* object)
 	);
 }
 
+std::vector<dx3d::GameObject*>
+dx3d::World::getGameObjects() const
+{
+	std::vector<GameObject*> result{};
+
+	for (const auto& [typeId, objects] : m_objects)
+	{
+		for (const auto& object : objects)
+		{
+			if (object)
+			{
+				result.push_back(object.get());
+			}
+		}
+	}
+
+	return result;
+}
+
 void dx3d::World::destroyGameObjectInternal(GameObject* object)
 {
 	if (!object)

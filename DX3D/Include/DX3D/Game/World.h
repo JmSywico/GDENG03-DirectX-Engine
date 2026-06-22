@@ -45,6 +45,8 @@ namespace dx3d
 
 		void destroyGameObject(GameObject* object);
 
+		std::vector<GameObject*> getGameObjects() const;
+
 	private:
 		GameObject* createGameObjectInternal(
 			UniquePtr<GameObject>& object

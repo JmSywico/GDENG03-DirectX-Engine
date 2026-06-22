@@ -1,20 +1,49 @@
 #include <DX3D/Window/Window.h>
-#include <Windows.h>
-#include <stdexcept>
 
-static LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+#include <Windows.h>
+
+#include <imgui.h>
+#include <imgui_impl_win32.h>
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
+	HWND hwnd,
+	UINT msg,
+	WPARAM wparam,
+	LPARAM lparam
+);
+
+static LRESULT CALLBACK WindowProcedure(
+	HWND hwnd,
+	UINT msg,
+	WPARAM wparam,
+	LPARAM lparam
+)
 {
+	if (ImGui::GetCurrentContext() &&
+		ImGui_ImplWin32_WndProcHandler(
+			hwnd,
+			msg,
+			wparam,
+			lparam
+		))
+	{
+		return 1;
+	}
+
 	switch (msg)
 	{
 	case WM_CLOSE:
-	{
 		PostQuitMessage(0);
-		break;
-	}
+		return 0;
+
 	default:
-		return DefWindowProc(hwnd, msg, wparam, lparam);
+		return DefWindowProc(
+			hwnd,
+			msg,
+			wparam,
+			lparam
+		);
 	}
-	return 0;
 }
 
 dx3d::Window::Window(const WindowDesc& desc) : Base(desc.base), m_size(desc.size)
@@ -49,6 +78,10 @@ dx3d::Window::Window(const WindowDesc& desc) : Base(desc.base), m_size(desc.size
 	ShowWindow(static_cast<HWND>(m_handle), SW_SHOW);
 }
 
+void* dx3d::Window::getNativeHandle() const noexcept
+{
+	return m_handle;
+}
 
 dx3d::Rect dx3d::Window::getClientAreaInScreenSpace()
 {

@@ -1,42 +1,85 @@
-#include<DX3D/Game/GameObject.h>
-#include<DX3D/Game/Component.h>
-#include<DX3D/Component/TransformComponent.h>
-#include<DX3D/Game/World.h>
+#include <DX3D/Game/GameObject.h>
+#include <DX3D/Game/Component.h>
+#include <DX3D/Component/TransformComponent.h>
+#include <DX3D/Game/World.h>
 
-dx3d::GameObject::GameObject(const GameObjectDesc& desc) : Identifiable(desc.base), m_world(desc.world), m_gameContext(desc.gameContext)
+dx3d::GameObject::GameObject(const GameObjectDesc& desc)
+	: Identifiable(desc.base),
+	m_world(desc.world),
+	m_gameContext(desc.gameContext)
 {
-	m_transform = createOrGetComponent<TransformComponent>();
+	m_transform =
+		createOrGetComponent<TransformComponent>();
 }
 
-dx3d::TransformComponent& dx3d::GameObject::getTransform() noexcept
+void dx3d::GameObject::setName(
+	const std::string& name
+)
+{
+	if (name.empty())
+	{
+		m_name = "GameObject";
+		return;
+	}
+
+	m_name = name;
+}
+
+const std::string&
+dx3d::GameObject::getName() const noexcept
+{
+	return m_name;
+}
+
+dx3d::TransformComponent&
+dx3d::GameObject::getTransform() noexcept
 {
 	return *m_transform;
 }
 
-dx3d::World& dx3d::GameObject::getWorld() noexcept
+dx3d::World&
+dx3d::GameObject::getWorld() noexcept
 {
 	return m_world;
 }
 
-dx3d::InputSystem& dx3d::GameObject::getInputSystem() noexcept
+dx3d::InputSystem&
+dx3d::GameObject::getInputSystem() noexcept
 {
 	return m_gameContext.input;
 }
 
-dx3d::Component* dx3d::GameObject::createComponentInternal(UniquePtr<Component>& component)
+dx3d::Component*
+dx3d::GameObject::createComponentInternal(
+	UniquePtr<Component>& component
+)
 {
-	if (!component) return {};
+	if (!component)
+		return {};
+
 	auto typeId = component->getTypeId();
 	auto ptr = component.get();
-	if (m_components.find(typeId) != m_components.end()) return {};
-	m_components.emplace(typeId, std::move(component));
+
+	if (m_components.find(typeId) != m_components.end())
+		return {};
+
+	m_components.emplace(
+		typeId,
+		std::move(component)
+	);
+
 	m_world.addComponentInternal(*ptr);
+
 	return ptr;
 }
 
-dx3d::Component* dx3d::GameObject::getComponentInternal(size_t id)
+dx3d::Component*
+dx3d::GameObject::getComponentInternal(size_t id)
 {
 	auto it = m_components.find(id);
-	if (it == m_components.end()) return {};
+
+	if (it == m_components.end())
+		return {};
+
 	return it->second.get();
 }

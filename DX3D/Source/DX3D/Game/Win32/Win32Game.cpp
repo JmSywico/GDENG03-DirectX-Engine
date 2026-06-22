@@ -4,9 +4,6 @@
 #include <mmsystem.h>
 
 #include <thread>
-#include <string>
-#include <iomanip>
-#include <sstream>
 
 #pragma comment(lib, "winmm.lib")
 
@@ -28,7 +25,13 @@ void dx3d::Game::run()
 		const auto frameStart =
 			std::chrono::steady_clock::now();
 
-		while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+		while (PeekMessage(
+			&msg,
+			nullptr,
+			0,
+			0,
+			PM_REMOVE
+		))
 		{
 			if (msg.message == WM_QUIT)
 			{
@@ -51,8 +54,10 @@ void dx3d::Game::run()
 		const auto targetFrameEnd =
 			frameStart + targetFrameTime;
 
-
-		while (std::chrono::steady_clock::now() < targetFrameEnd)
+		while (
+			std::chrono::steady_clock::now() <
+			targetFrameEnd
+			)
 		{
 			const auto remaining =
 				targetFrameEnd -
@@ -68,35 +73,6 @@ void dx3d::Game::run()
 			{
 				std::this_thread::yield();
 			}
-		}
-
-		const auto frameEnd =
-			std::chrono::steady_clock::now();
-
-		const std::chrono::duration<double> frameDuration =
-			frameEnd - frameStart;
-
-		const double fps =
-			frameDuration.count() > 0.0
-			? 1.0 / frameDuration.count()
-			: 0.0;
-
-		std::ostringstream title;
-
-		title
-			<< "Bouncing Circles | FPS: "
-			<< std::fixed
-			<< std::setprecision(1)
-			<< fps;
-
-		const HWND windowHandle = GetActiveWindow();
-
-		if (windowHandle)
-		{
-			SetWindowTextA(
-				windowHandle,
-				title.str().c_str()
-			);
 		}
 	}
 
