@@ -212,7 +212,7 @@ void MainGame::onCreate()
 
 	// Single rotating white cube
 		// Single animated rainbow cube
-		m_animatedCube =
+/*		m_animatedCube =
 		world.createGameObject<dx3d::GameObject>();
 
 	m_animatedCube->setName(
@@ -233,7 +233,7 @@ void MainGame::onCreate()
 
 	m_animatedCube->getTransform().setScale(
 		{ 1.0f, 1.0f, 1.0f }
-	);
+	);*/
 
 	// Ground plane
 	/*auto plane =
@@ -335,7 +335,7 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 	}*/
 
 	// Move the cube along X and Y while uniformly scaling it.
-	if (m_animatedCube)
+/*	if (m_animatedCube)
 	{
 		// Controls how quickly interpolation moves from 0 to 1.
 		constexpr dx3d::f32 animationSpeed = 0.4f;
@@ -411,7 +411,7 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 				currentScale
 			}
 		);
-	}
+	}*/
 
 	// Warp the uniformly scaled cube into a horizontal plane.
 /*if (m_warpCube && !m_warpFinished)
