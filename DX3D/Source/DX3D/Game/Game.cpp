@@ -387,6 +387,184 @@ void dx3d::Game::mergeSelectedObjects()
 	selectOnly(mergedObject);
 }
 
+bool dx3d::Game::canCopySelectedObject() const noexcept
+{
+	if (!m_selectedObject)
+		return false;
+
+	// Do not allow the editor camera to be copied.
+	if (m_selectedObject->getComponent<
+		CameraComponent>())
+	{
+		return false;
+	}
+
+	if (auto* combinedComponent =
+		m_selectedObject->getComponent<
+		CombinedMeshComponent>())
+	{
+		return combinedComponent->hasMeshData();
+	}
+
+	if (m_selectedObject->getComponent<
+		CubeComponent>())
+	{
+		return true;
+	}
+
+	if (m_selectedObject->getComponent<
+		PlaneComponent>())
+	{
+		return true;
+	}
+
+	return false;
+}
+
+void dx3d::Game::copySelectedObject()
+{
+	if (!canCopySelectedObject())
+		return;
+
+	ObjectCopyData copiedData{};
+
+	copiedData.isValid = true;
+	copiedData.sourceName =
+		m_selectedObject->getName();
+
+	auto& transform =
+		m_selectedObject->getTransform();
+
+	copiedData.position =
+		transform.getPosition();
+
+	copiedData.rotation =
+		transform.getRotation();
+
+	copiedData.scale =
+		transform.getScale();
+
+	// Combined meshes must copy their complete custom
+	// vertex and index data.
+	if (auto* combinedComponent =
+		m_selectedObject->getComponent<
+		CombinedMeshComponent>())
+	{
+		copiedData.type =
+			CopiedObjectType::CombinedMesh;
+
+		copiedData.meshData =
+			combinedComponent->getMeshData();
+	}
+	else if (
+		m_selectedObject->getComponent<
+		CubeComponent>())
+	{
+		copiedData.type =
+			CopiedObjectType::Cube;
+	}
+	else if (
+		m_selectedObject->getComponent<
+		PlaneComponent>())
+	{
+		copiedData.type =
+			CopiedObjectType::Plane;
+	}
+	else
+	{
+		return;
+	}
+
+	// A new copy operation restarts the pasted-object count.
+	copiedData.pasteCount = 0;
+
+	m_objectClipboard =
+		copiedData;
+}
+
+void dx3d::Game::pasteCopiedObject()
+{
+	if (!m_objectClipboard.isValid)
+		return;
+
+	auto* pastedObject =
+		m_world->createGameObject<GameObject>();
+
+	switch (m_objectClipboard.type)
+	{
+	case CopiedObjectType::Cube:
+		pastedObject->createOrGetComponent<
+			CubeComponent>();
+		break;
+
+	case CopiedObjectType::Plane:
+		pastedObject->createOrGetComponent<
+			PlaneComponent>();
+		break;
+
+	case CopiedObjectType::CombinedMesh:
+	{
+		auto* combinedComponent =
+			pastedObject->createOrGetComponent<
+			CombinedMeshComponent>();
+
+		combinedComponent->setMeshData(
+			m_objectClipboard.meshData
+		);
+
+		break;
+	}
+
+	case CopiedObjectType::None:
+	default:
+		m_world->destroyGameObject(
+			pastedObject
+		);
+		return;
+	}
+
+	++m_objectClipboard.pasteCount;
+
+	std::string pastedName =
+		m_objectClipboard.sourceName +
+		" Copy";
+
+	if (m_objectClipboard.pasteCount > 1)
+	{
+		pastedName +=
+			" (" +
+			std::to_string(
+				m_objectClipboard.pasteCount
+			) +
+			")";
+	}
+
+	pastedObject->setName(
+		pastedName
+	);
+
+	// Preserve the exact transform of the copied object.
+	auto& pastedTransform =
+		pastedObject->getTransform();
+
+	pastedTransform.setPosition(
+		m_objectClipboard.position
+	);
+
+	pastedTransform.setRotation(
+		m_objectClipboard.rotation
+	);
+
+	pastedTransform.setScale(
+		m_objectClipboard.scale
+	);
+
+	// Automatically select the newly pasted object.
+	selectOnly(
+		pastedObject
+	);
+}
+
 void dx3d::Game::handleViewportPicking(
 	CameraComponent* camera,
 	const TransformGizmo::ViewportArea& viewportArea
@@ -1202,6 +1380,39 @@ void dx3d::Game::onInternalUpdate()
 			m_transformGizmo.setOperation(
 				TransformGizmo::Operation::Scale
 			);
+		}
+	}
+
+	// --------------------------------------------------
+// Object clipboard shortcuts
+// Ctrl + C = copy active object
+// Ctrl + V = paste copied object
+// --------------------------------------------------
+
+	const bool controlHeld =
+		ImGui::GetIO().KeyCtrl;
+
+	const bool allowClipboardShortcuts =
+		controlHeld &&
+		!m_transformGizmo.isUsing() &&
+		!rightMouseDown &&
+		!editingImGuiValue &&
+		!typingInImGui &&
+		!popupIsOpen;
+
+	if (allowClipboardShortcuts)
+	{
+		if (m_inputSystem->isKeyPressed(
+			KeyCode::C
+		))
+		{
+			copySelectedObject();
+		}
+		else if (m_inputSystem->isKeyPressed(
+			KeyCode::V
+		))
+		{
+			pasteCopiedObject();
 		}
 	}
 

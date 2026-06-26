@@ -1,4 +1,5 @@
 #include <DX3D/Graphics/MeshMerger.h>
+#include <DX3D/Math/Vec3.h>
 #include <DX3D/Math/Vec4.h>
 
 dx3d::MeshData dx3d::mergeMeshes(
@@ -46,6 +47,26 @@ dx3d::MeshData dx3d::mergeMeshes(
 		const MeshData& sourceMesh =
 			*source.meshData;
 
+		// Positions use the complete source transform.
+		//
+		// Normals must use the inverse-transpose of the
+		// source transform so non-uniform scaling does not
+		// distort the lighting direction.
+		const Mat4x4 inverseTransform =
+			Mat4x4::inverse(source.transform);
+
+		// With the engine's row-vector convention,
+		// multiplying by inverse-transpose can be performed
+		// using the rows of the inverse matrix.
+		const Vec4 inverseRow0 =
+			inverseTransform.row(0);
+
+		const Vec4 inverseRow1 =
+			inverseTransform.row(1);
+
+		const Vec4 inverseRow2 =
+			inverseTransform.row(2);
+
 		// The indices of this mesh must be moved forward
 		// by the number of vertices already added.
 		const ui32 vertexOffset =
@@ -56,6 +77,7 @@ dx3d::MeshData dx3d::mergeMeshes(
 		for (const auto& sourceVertex :
 			sourceMesh.vertices)
 		{
+			// Position uses W = 1 so translation is included.
 			const Vec4 transformedPosition =
 				source.transform.transform(
 					{
@@ -63,6 +85,34 @@ dx3d::MeshData dx3d::mergeMeshes(
 						sourceVertex.position.y,
 						sourceVertex.position.z,
 						1.0f
+					}
+				);
+
+			// Normal uses the inverse-transpose matrix.
+			// Translation is not included.
+			const Vec3 transformedNormal =
+				Vec3::normalize(
+					{
+						sourceVertex.normal.x *
+							inverseRow0.x +
+						sourceVertex.normal.y *
+							inverseRow0.y +
+						sourceVertex.normal.z *
+							inverseRow0.z,
+
+						sourceVertex.normal.x *
+							inverseRow1.x +
+						sourceVertex.normal.y *
+							inverseRow1.y +
+						sourceVertex.normal.z *
+							inverseRow1.z,
+
+						sourceVertex.normal.x *
+							inverseRow2.x +
+						sourceVertex.normal.y *
+							inverseRow2.y +
+						sourceVertex.normal.z *
+							inverseRow2.z
 					}
 				);
 
@@ -75,6 +125,9 @@ dx3d::MeshData dx3d::mergeMeshes(
 				transformedPosition.y,
 				transformedPosition.z
 			};
+
+			combinedVertex.normal =
+				transformedNormal;
 
 			combinedMesh.vertices.push_back(
 				combinedVertex

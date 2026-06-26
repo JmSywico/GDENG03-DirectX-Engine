@@ -1,5 +1,4 @@
 #pragma once
-#pragma once
 
 #include <DX3D/Core/Core.h>
 #include <DX3D/Math/Vec3.h>
@@ -13,6 +12,10 @@ namespace dx3d
 	{
 		Vec3 position{};
 		Vec4 color{};
+
+		// Direction the surface faces.
+		// Required for lighting calculations.
+		Vec3 normal{};
 	};
 
 	struct MeshData
@@ -22,7 +25,8 @@ namespace dx3d
 
 		bool empty() const noexcept
 		{
-			return vertices.empty() || indices.empty();
+			return vertices.empty() ||
+				indices.empty();
 		}
 
 		void clear()

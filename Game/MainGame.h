@@ -16,6 +16,15 @@ private:
 	void spawnCircle();
 
 	dx3d::GameObject* m_editorCamera{};
+	/*dx3d::GameObject* m_warpCube{};
+
+	dx3d::f32 m_warpElapsedTime{ 0.0f };
+	bool m_warpFinished{ false };*/
+
+	dx3d::GameObject* m_animatedCube{};
+
+	dx3d::f32 m_animationProgress{ 0.0f };
+	dx3d::f32 m_animationDirection{ 1.0f };
 
 	dx3d::f32 m_cameraYaw{ 0.0f };
 	dx3d::f32 m_cameraPitch{ 0.45f };

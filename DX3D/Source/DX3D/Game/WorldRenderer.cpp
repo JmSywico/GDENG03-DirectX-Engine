@@ -204,6 +204,28 @@ void dx3d::WorldRenderer::render(
 	auto numComponents = 0u;
 	ConstantData data{};
 
+	// Simple directional light.
+//
+// XYZ describes the direction from the surface
+// toward the light. W is unused.
+	data.lightDirection =
+	{
+		-0.5f,
+		1.0f,
+		-0.3f,
+		0.0f
+	};
+
+	// RGB is the white light color.
+	// W is the ambient-light strength.
+	data.lightColorAndAmbient =
+	{
+		1.0f,
+		1.0f,
+		1.0f,
+		0.20f
+	};
+
 	{
 		auto components =
 			world.getComponents<CameraComponent>(numComponents);

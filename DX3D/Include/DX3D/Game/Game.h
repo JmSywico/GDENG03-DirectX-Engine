@@ -1,15 +1,17 @@
 #pragma once
 
+#include <DX3D/Graphics/MeshData.h>
+#include <DX3D/Math/Vec3.h>
 #include <DX3D/Core/Base.h>
 #include <DX3D/Core/Core.h>
 #include <DX3D/Editor/TransformGizmo.h>
 
+#include <string>
 #include <chrono>
 #include <vector>
 
 namespace dx3d
 {
-	struct MeshData;
 	class Game
 	{
 		dx3d_disable_copy_and_move(Game)
@@ -38,6 +40,44 @@ namespace dx3d
 		};*/
 
 	private:
+		enum class CopiedObjectType
+		{
+			None,
+			Cube,
+			Plane,
+			CombinedMesh
+		};
+
+		struct ObjectCopyData
+		{
+			bool isValid{ false };
+
+			CopiedObjectType type{
+				CopiedObjectType::None
+			};
+
+			std::string sourceName{};
+
+			Vec3 position{};
+			Vec3 rotation{};
+
+			Vec3 scale{
+				1.0f,
+				1.0f,
+				1.0f
+			};
+
+			// Used only when the copied object contains
+			// a CombinedMeshComponent.
+			MeshData meshData{};
+
+			// Used to name repeated pasted copies.
+			ui32 pasteCount{};
+		};
+
+	private:
+
+
 		void onInternalUpdate();
 
 		bool isObjectSelected(
@@ -71,6 +111,12 @@ namespace dx3d
 
 		void mergeSelectedObjects();
 
+		bool canCopySelectedObject() const noexcept;
+
+		void copySelectedObject();
+
+		void pasteCopiedObject();
+
 
 	private:
 		UniquePtr<Logger> m_logger{};
@@ -83,6 +129,8 @@ namespace dx3d
 
 		GameObject* m_selectedObject{};
 		std::vector<GameObject*> m_selectedObjects{};
+
+		ObjectCopyData m_objectClipboard{};
 
 		TransformGizmo m_transformGizmo{};
 

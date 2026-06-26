@@ -34,6 +34,15 @@ namespace dx3d
 			Mat4x4 world{};
 			Mat4x4 view{};
 			Mat4x4 proj{};
+
+			// XYZ stores the direction from the surface
+			// toward the directional light.
+			// W is unused.
+			Vec4 lightDirection{};
+
+			// RGB stores the light color.
+			// W stores the ambient-light strength.
+			Vec4 lightColorAndAmbient{};
 		};
 
 		struct CombinedMeshRenderResources

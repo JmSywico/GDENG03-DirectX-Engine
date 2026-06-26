@@ -6,6 +6,7 @@
 
 #include <imgui.h>
 
+#include <string>
 #include <cmath>
 #include <random>
 
@@ -78,9 +79,117 @@ void MainGame::onCreate()
 		{ 0.45f, 0.0f, 0.0f }
 	);
 
-	// Cube
-	auto cube =
+/*	// Create one uniformly scaled cube at the center.
+	m_warpCube =
 		world.createGameObject<dx3d::GameObject>();
+
+	m_warpCube->setName(
+		"Warping Cube"
+	);
+
+	m_warpCube->createOrGetComponent<
+		dx3d::CubeComponent>();
+
+	m_warpCube->getTransform().setPosition(
+		{ 0.0f, 0.0f, 0.0f }
+	);
+
+	m_warpCube->getTransform().setRotation(
+		{ 0.0f, 0.0f, 0.0f }
+	);
+
+	// Initial uniform cube scale.
+	m_warpCube->getTransform().setScale(
+		{ 1.0f, 1.0f, 1.0f }
+	);*/
+
+/*	// Create 50 cubes at random positions.
+	std::random_device randomDevice;
+	std::mt19937 randomGenerator(
+		randomDevice()
+	);
+
+	std::uniform_real_distribution<dx3d::f32>
+		positionXDistribution(
+			-5.0f,
+			5.0f
+		);
+
+	std::uniform_real_distribution<dx3d::f32>
+		positionYDistribution(
+			-2.5f,
+			2.5f
+		);
+
+	std::uniform_real_distribution<dx3d::f32>
+		positionZDistribution(
+			0.0f,
+			10.0f
+		);
+
+	std::uniform_real_distribution<dx3d::f32>
+		rotationDistribution(
+			0.0f,
+			2.0f * dx3d::MathUtils::PI
+		);
+
+	constexpr dx3d::ui32 cubeCount = 50;
+
+	for (
+		dx3d::ui32 cubeIndex = 0;
+		cubeIndex < cubeCount;
+		++cubeIndex
+		)
+	{
+		auto* cube =
+			world.createGameObject<
+			dx3d::GameObject>();
+
+		cube->setName(
+			"Cube " +
+			std::to_string(cubeIndex + 1)
+		);
+
+		cube->createOrGetComponent<
+			dx3d::CubeComponent>();
+
+		cube->getTransform().setPosition(
+			{
+				positionXDistribution(
+					randomGenerator
+				),
+				positionYDistribution(
+					randomGenerator
+				),
+				positionZDistribution(
+					randomGenerator
+				)
+			}
+		);
+
+		// Give every cube a random starting orientation.
+		cube->getTransform().setRotation(
+			{
+				rotationDistribution(
+					randomGenerator
+				),
+				rotationDistribution(
+					randomGenerator
+				),
+				rotationDistribution(
+					randomGenerator
+				)
+			}
+		);
+
+		cube->getTransform().setScale(
+			{ 0.6f, 0.6f, 0.6f }
+		);
+	}*/
+
+	// Cube
+	//auto cube =
+/*		world.createGameObject<dx3d::GameObject>();
 
 	cube->setName("Cube");
 
@@ -99,10 +208,35 @@ void MainGame::onCreate()
 
 	cube->getTransform().setScale(
 		{ 1.0f, 1.0f, 1.0f }
+	);*/
+
+	// Single rotating white cube
+		// Single animated rainbow cube
+		m_animatedCube =
+		world.createGameObject<dx3d::GameObject>();
+
+	m_animatedCube->setName(
+		"Animated Rainbow Cube"
+	);
+
+	m_animatedCube->createOrGetComponent<
+		dx3d::CubeComponent>();
+
+	// Starting point of the animation.
+	m_animatedCube->getTransform().setPosition(
+		{ -1.5f, 0.0f, 0.0f }
+	);
+
+	m_animatedCube->getTransform().setRotation(
+		{ 0.0f, 0.55f, 0.0f }
+	);
+
+	m_animatedCube->getTransform().setScale(
+		{ 1.0f, 1.0f, 1.0f }
 	);
 
 	// Ground plane
-	auto plane =
+	/*auto plane =
 		world.createGameObject<dx3d::GameObject>();
 
 	plane->setName("Plane");
@@ -116,7 +250,7 @@ void MainGame::onCreate()
 
 	plane->getTransform().setScale(
 		{ 10.0f, 1.0f, 10.0f }
-	);
+	);*/
 
 	getInputSystem().setCursorLocked(false);
 	getInputSystem().setCursorVisible(true);
@@ -134,21 +268,230 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		return;
 	}
 
+/*	// Continuously rotate every cube around X, Y, and Z.
+	dx3d::ui32 currentCubeCount = 0;
+
+	auto cubeComponents =
+		getWorld().getComponents<
+		dx3d::CubeComponent>(
+			currentCubeCount
+		);
+
+	for (
+		dx3d::ui32 cubeIndex = 0;
+		cubeIndex < currentCubeCount;
+		++cubeIndex
+		)
+	{
+		auto* cubeComponent =
+			cubeComponents[cubeIndex];
+
+		if (!cubeComponent)
+			continue;
+
+		auto& cubeTransform =
+			cubeComponent
+			->getGameObject()
+			.getTransform();
+
+		auto rotation =
+			cubeTransform.getRotation();
+
+		const dx3d::f32 speedOffset =
+			static_cast<dx3d::f32>(
+				cubeIndex
+				) * 0.01f;
+
+		rotation.x +=
+			(0.6f + speedOffset) *
+			deltaTime;
+
+		rotation.y +=
+			(0.9f + speedOffset * 1.5f) *
+			deltaTime;
+
+		rotation.z +=
+			(1.2f + speedOffset * 2.0f) *
+			deltaTime;
+
+		cubeTransform.setRotation(
+			rotation
+		);
+	}*/
+
+	// Continuously rotate the cube on the X, Y, and Z axes.
+/*	if (m_rotatingCube)
+	{
+		auto rotation =
+			m_rotatingCube->getTransform().getRotation();
+
+		rotation.x += 0.7f * deltaTime;
+		rotation.y += 1.0f * deltaTime;
+		rotation.z += 1.3f * deltaTime;
+
+		m_rotatingCube->getTransform().setRotation(
+			rotation
+		);
+	}*/
+
+	// Move the cube along X and Y while uniformly scaling it.
+	if (m_animatedCube)
+	{
+		// Controls how quickly interpolation moves from 0 to 1.
+		constexpr dx3d::f32 animationSpeed = 0.4f;
+
+		m_animationProgress +=
+			m_animationDirection *
+			animationSpeed *
+			deltaTime;
+
+		// Reverse the animation at both endpoints.
+		if (m_animationProgress >= 1.0f)
+		{
+			m_animationProgress = 1.0f;
+			m_animationDirection = -1.0f;
+		}
+		else if (m_animationProgress <= 0.0f)
+		{
+			m_animationProgress = 0.0f;
+			m_animationDirection = 1.0f;
+		}
+
+		const dx3d::f32 t =
+			m_animationProgress;
+
+		// Starting and ending positions.
+		const dx3d::Vec3 startPosition
+		{
+			-1.5f,
+			0.0f,
+			0.0f
+		};
+
+		const dx3d::Vec3 endPosition
+		{
+			1.5f,
+			2.0f,
+			0.0f
+		};
+
+		// Linear interpolation:
+		// result = start + (end - start) * t
+		const dx3d::Vec3 currentPosition
+		{
+			startPosition.x +
+				(endPosition.x - startPosition.x) * t,
+
+			startPosition.y +
+				(endPosition.y - startPosition.y) * t,
+
+			startPosition.z +
+				(endPosition.z - startPosition.z) * t
+		};
+
+		// Uniformly interpolate from 1.0 to 0.25.
+		constexpr dx3d::f32 startingScale = 1.0f;
+		constexpr dx3d::f32 endingScale = 0.25f;
+
+		const dx3d::f32 currentScale =
+			startingScale +
+			(endingScale - startingScale) * t;
+
+		auto& cubeTransform =
+			m_animatedCube->getTransform();
+
+		cubeTransform.setPosition(
+			currentPosition
+		);
+
+		cubeTransform.setScale(
+			{
+				currentScale,
+				currentScale,
+				currentScale
+			}
+		);
+	}
+
+	// Warp the uniformly scaled cube into a horizontal plane.
+/*if (m_warpCube && !m_warpFinished)
+{
+	m_warpElapsedTime += deltaTime;
+
+
+	constexpr dx3d::f32 holdDuration =
+		1.0f;
+
+	constexpr dx3d::f32 warpDuration =
+		3.0f;
+
+	dx3d::f32 warpProgress =
+		(m_warpElapsedTime - holdDuration) /
+		warpDuration;
+
+	if (warpProgress < 0.0f)
+	{
+		warpProgress = 0.0f;
+	}
+
+	if (warpProgress >= 1.0f)
+	{
+		warpProgress = 1.0f;
+		m_warpFinished = true;
+	}
+
+	// a more natural warping appearance.
+	const dx3d::f32 smoothProgress =
+		warpProgress *
+		warpProgress *
+		(3.0f - 2.0f * warpProgress);
+
+	const dx3d::Vec3 cubeScale
+	{
+		1.0f,
+		1.0f,
+		1.0f
+	};
+
+	// X and Z become larger while Y becomes very thin.
+	const dx3d::Vec3 planeScale
+	{
+		4.0f,
+		0.05f,
+		3.0f
+	};
+
+	const dx3d::Vec3 currentScale
+	{
+		cubeScale.x +
+			(planeScale.x - cubeScale.x) *
+			smoothProgress,
+
+		cubeScale.y +
+			(planeScale.y - cubeScale.y) *
+			smoothProgress,
+
+		cubeScale.z +
+			(planeScale.z - cubeScale.z) *
+			smoothProgress
+	};
+
+	m_warpCube->getTransform().setScale(
+		currentScale
+	);
+}*/
+
 	if (!m_editorCamera)
 		return;
 
 	bool imguiWantsMouse = false;
 	bool imguiWantsKeyboard = false;
-
-	// Check that ImGui has already been initialized before accessing its IO.
 	if (ImGui::GetCurrentContext() != nullptr)
 	{
 		const ImGuiIO& io = ImGui::GetIO();
 
 		imguiWantsMouse = io.WantCaptureMouse;
 
-		// WantTextInput is included so movement also stops while
-		// typing into an Inspector input field.
 		imguiWantsKeyboard =
 			io.WantCaptureKeyboard ||
 			io.WantTextInput;
@@ -163,8 +506,7 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 	const bool rightMouseDown =
 		input.isKeyDown(dx3d::KeyCode::MouseRight);
 
-	// Begin camera control only when the right-click did not
-	// begin over an ImGui window or control.
+
 	if (rightMousePressed &&
 		!imguiWantsMouse &&
 		!m_isCameraControlActive)
@@ -175,10 +517,7 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		input.setCursorLocked(true);
 	}
 
-	// End camera control when right mouse is released.
-	//
-	// The !rightMouseDown check also protects against cases where
-	// the release event is missed, such as losing window focus.
+
 	if (m_isCameraControlActive &&
 		(rightMouseReleased || !rightMouseDown))
 	{
@@ -188,13 +527,13 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		input.setCursorVisible(true);
 	}
 
-	// Right-clicking an ImGui window will never activate this.
+
 	if (!m_isCameraControlActive)
 		return;
 
 	auto& transform = m_editorCamera->getTransform();
 
-	// Ignore the first mouse delta when camera control begins.
+
 	if (!rightMousePressed)
 	{
 		const auto mouseDelta = input.getMouseDelta();
@@ -205,7 +544,7 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		m_cameraPitch +=
 			mouseDelta.y * m_cameraLookSpeed;
 
-		// Prevent the camera from turning upside down.
+
 		constexpr dx3d::f32 minimumPitch = -1.5f;
 		constexpr dx3d::f32 maximumPitch = 1.5f;
 
@@ -224,8 +563,6 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		);
 	}
 
-	// Do not use keyboard movement while ImGui is accepting
-	// keyboard input, such as while editing an Inspector value.
 	if (imguiWantsKeyboard)
 		return;
 
@@ -244,7 +581,7 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 	const dx3d::Vec3 forward = transform.forward();
 	const dx3d::Vec3 right = transform.right();
 
-	// Forward and backward.
+
 	if (input.isKeyDown(dx3d::KeyCode::W))
 	{
 		movement.x += forward.x;
@@ -259,7 +596,6 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		movement.z -= forward.z;
 	}
 
-	// Left and right.
 	if (input.isKeyDown(dx3d::KeyCode::D))
 	{
 		movement.x += right.x;
@@ -274,7 +610,7 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		movement.z -= right.z;
 	}
 
-	// World-space vertical movement.
+
 	if (input.isKeyDown(dx3d::KeyCode::E))
 	{
 		movement.y += 1.0f;
@@ -292,7 +628,6 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 			movement.z * movement.z
 		);
 
-	// Normalize so diagonal movement is not faster.
 	if (movementLength > 0.0001f)
 	{
 		movement.x /= movementLength;
