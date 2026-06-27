@@ -7,6 +7,7 @@
 
 namespace dx3d
 {
+	class ShadowMap;
 	class GraphicsDevice final: public Base, public std::enable_shared_from_this<GraphicsDevice>
 	{
 	public:
@@ -21,6 +22,10 @@ namespace dx3d
 		RefPtr<VertexShaderSignature> createVertexShaderSignature(const VertexShaderSignatureDesc& desc);
 		RefPtr<ConstantBuffer> createConstantBuffer(const ConstantBufferDesc& desc);
 		RefPtr<IndexBuffer> createIndexBuffer(const IndexBufferDesc& desc);
+
+		RefPtr<ShadowMap> createShadowMap(
+			const ShadowMapDesc& desc
+		);
 
 		void executeCommandList(DeviceContext& context);
 	private:

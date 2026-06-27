@@ -93,6 +93,103 @@ namespace dx3d
 			return res;
 		}
 
+		static Mat4x4 lookAtLH(
+			const Vec3& eye,
+			const Vec3& target,
+			const Vec3& up
+		) noexcept
+		{
+			f32 forwardX = target.x - eye.x;
+			f32 forwardY = target.y - eye.y;
+			f32 forwardZ = target.z - eye.z;
+
+			const f32 forwardLength = std::sqrt(
+				forwardX * forwardX +
+				forwardY * forwardY +
+				forwardZ * forwardZ
+			);
+
+			if (forwardLength <= 0.000001f)
+				return Mat4x4::identity();
+
+			forwardX /= forwardLength;
+			forwardY /= forwardLength;
+			forwardZ /= forwardLength;
+
+			f32 rightX =
+				up.y * forwardZ -
+				up.z * forwardY;
+
+			f32 rightY =
+				up.z * forwardX -
+				up.x * forwardZ;
+
+			f32 rightZ =
+				up.x * forwardY -
+				up.y * forwardX;
+
+			const f32 rightLength = std::sqrt(
+				rightX * rightX +
+				rightY * rightY +
+				rightZ * rightZ
+			);
+
+			if (rightLength <= 0.000001f)
+				return Mat4x4::identity();
+
+			rightX /= rightLength;
+			rightY /= rightLength;
+			rightZ /= rightLength;
+
+			const f32 correctedUpX =
+				forwardY * rightZ -
+				forwardZ * rightY;
+
+			const f32 correctedUpY =
+				forwardZ * rightX -
+				forwardX * rightZ;
+
+			const f32 correctedUpZ =
+				forwardX * rightY -
+				forwardY * rightX;
+
+			Mat4x4 result{};
+
+			result.m_data[0][0] = rightX;
+			result.m_data[0][1] = correctedUpX;
+			result.m_data[0][2] = forwardX;
+
+			result.m_data[1][0] = rightY;
+			result.m_data[1][1] = correctedUpY;
+			result.m_data[1][2] = forwardY;
+
+			result.m_data[2][0] = rightZ;
+			result.m_data[2][1] = correctedUpZ;
+			result.m_data[2][2] = forwardZ;
+
+			result.m_data[3][0] = -(
+				rightX * eye.x +
+				rightY * eye.y +
+				rightZ * eye.z
+				);
+
+			result.m_data[3][1] = -(
+				correctedUpX * eye.x +
+				correctedUpY * eye.y +
+				correctedUpZ * eye.z
+				);
+
+			result.m_data[3][2] = -(
+				forwardX * eye.x +
+				forwardY * eye.y +
+				forwardZ * eye.z
+				);
+
+			result.m_data[3][3] = 1.0f;
+
+			return result;
+		}
+
 		static Mat4x4 perspectiveFovLH(f32 fov, f32 aspect, f32 zNear, f32 zFar) noexcept
 		{
 			assert(fov > 0.001f && "perspectiveFovLH: fov must be greater than 0 radians");

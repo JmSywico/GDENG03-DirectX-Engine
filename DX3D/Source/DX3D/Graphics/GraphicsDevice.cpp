@@ -8,6 +8,7 @@
 #include <DX3D/Graphics/IndexBuffer.h>
 #include <DX3D/Graphics/VertexShaderSignature.h>
 #include <DX3D/Graphics/ConstantBuffer.h>
+#include <DX3D/Graphics/ShadowMap.h>
 
 using namespace dx3d;
 
@@ -79,6 +80,17 @@ RefPtr<ConstantBuffer> dx3d::GraphicsDevice::createConstantBuffer(const Constant
 RefPtr<IndexBuffer> dx3d::GraphicsDevice::createIndexBuffer(const IndexBufferDesc& desc)
 {
 	return std::make_shared<IndexBuffer>(desc, getGraphicsResourceDesc());
+}
+
+dx3d::RefPtr<dx3d::ShadowMap>
+dx3d::GraphicsDevice::createShadowMap(
+	const ShadowMapDesc& desc
+)
+{
+	return std::make_shared<ShadowMap>(
+		desc,
+		getGraphicsResourceDesc()
+	);
 }
 
 void dx3d::GraphicsDevice::executeCommandList(DeviceContext& context)

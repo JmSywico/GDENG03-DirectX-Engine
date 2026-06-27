@@ -84,7 +84,11 @@ namespace dx3d
 		ui32 indexListSize{};
 	};
 
-
+	struct ShadowMapDesc
+	{
+		ui32 width{ 2048 };
+		ui32 height{ 2048 };
+	};
 
 	struct GameContext
 	{

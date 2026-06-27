@@ -4,6 +4,7 @@
 #include <DX3D/Graphics/VertexBuffer.h>
 #include <DX3D/Graphics/IndexBuffer.h>
 #include <DX3D/Graphics/ConstantBuffer.h>
+#include <DX3D/Graphics/ShadowMap.h>
 
 dx3d::DeviceContext::DeviceContext(const GraphicsResourceDesc& gDesc): GraphicsResource(gDesc)
 {
@@ -20,6 +21,81 @@ void dx3d::DeviceContext::clearAndSetBackBuffer(const SwapChain& swapChain, cons
 	m_context->ClearRenderTargetView(rtv, fColor);
 	m_context->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
 	m_context->OMSetRenderTargets(1, &rtv, dsv);
+}
+
+void dx3d::DeviceContext::beginShadowPass(
+	const ShadowMap& shadowMap
+)
+{
+	ID3D11ShaderResourceView* nullResource = nullptr;
+
+	m_context->PSSetShaderResources(
+		0,
+		1,
+		&nullResource
+	);
+
+	auto depthStencilView =
+		shadowMap.m_depthStencilView.Get();
+
+	m_context->ClearDepthStencilView(
+		depthStencilView,
+		D3D11_CLEAR_DEPTH,
+		1.0f,
+		0
+	);
+
+	m_context->OMSetRenderTargets(
+		0,
+		nullptr,
+		depthStencilView
+	);
+
+	D3D11_VIEWPORT viewport{};
+
+	viewport.TopLeftX = 0.0f;
+	viewport.TopLeftY = 0.0f;
+
+	viewport.Width =
+		static_cast<f32>(
+			shadowMap.m_width
+			);
+
+	viewport.Height =
+		static_cast<f32>(
+			shadowMap.m_height
+			);
+
+	viewport.MinDepth = 0.0f;
+	viewport.MaxDepth = 1.0f;
+
+	m_context->RSSetViewports(
+		1,
+		&viewport
+	);
+}
+
+void dx3d::DeviceContext::setShadowMap(
+	const ShadowMap& shadowMap
+)
+{
+	auto shaderResourceView =
+		shadowMap.m_shaderResourceView.Get();
+
+	auto samplerState =
+		shadowMap.m_samplerState.Get();
+
+	m_context->PSSetShaderResources(
+		0,
+		1,
+		&shaderResourceView
+	);
+
+	m_context->PSSetSamplers(
+		0,
+		1,
+		&samplerState
+	);
 }
 
 void dx3d::DeviceContext::setGraphicsPipelineState(const GraphicsPipelineState& pipeline)

@@ -33,6 +33,24 @@ namespace dx3d
 		
 		UniquePtr<WorldRenderer> m_worldRenderer{};
 
+<<<<<<< Updated upstream
+=======
+		GameObject* m_selectedObject{};
+		std::vector<GameObject*> m_selectedObjects{};
+
+		ObjectCopyData m_objectClipboard{};
+
+		TransformGizmo m_transformGizmo{};
+
+		ui32 m_cubeCounter{ 0 };
+		ui32 m_planeCounter{ 0 };
+
+		// Current transform gizmo mode.
+	/*	GizmoOperation m_gizmoOperation{
+			GizmoOperation::Translate
+		};*/
+
+>>>>>>> Stashed changes
 		bool m_isRunning{ true };
 
 		std::chrono::steady_clock::time_point m_previousTime{};

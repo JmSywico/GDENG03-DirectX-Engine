@@ -7,7 +7,14 @@
 
 namespace dx3d
 {
+<<<<<<< Updated upstream
 	class WorldRenderer final: public Base
+=======
+	class ShadowMap;
+	class CombinedMeshComponent;
+
+	class WorldRenderer final : public Base
+>>>>>>> Stashed changes
 	{
 	public:
 		explicit WorldRenderer(const WorldRendererDesc& desc);
@@ -25,12 +32,31 @@ namespace dx3d
 			Mat4x4 world{};
 			Mat4x4 view{};
 			Mat4x4 proj{};
+<<<<<<< Updated upstream
+=======
+
+			Vec4 lightDirection{};
+			Vec4 lightColorAndAmbient{};
+
+			Mat4x4 inverseWorld{};
+
+			Mat4x4 lightView{};
+			Mat4x4 lightProj{};
+		};
+
+		struct CombinedMeshRenderResources
+		{
+			RefPtr<VertexBuffer> vertexBuffer{};
+			RefPtr<IndexBuffer> indexBuffer{};
+			ui32 meshRevision{};
+>>>>>>> Stashed changes
 		};
 
 	private:
 		GraphicsDevice& m_graphicsDevice;
 		RefPtr<DeviceContext> m_deviceContext{};
 		RefPtr<GraphicsPipelineState> m_pipeline{};
+		RefPtr<ShadowMap> m_shadowMap{};
 
 		RefPtr<VertexBuffer> m_cubeVertexBuffer{};
 		RefPtr<IndexBuffer> m_cubeIndexBuffer{};
