@@ -1,16 +1,21 @@
 #pragma once
+
 #include <DX3D/Window/Window.h>
 
 namespace dx3d
 {
-	class Display final: public Window
+	class Display final : public Window
 	{
 	public:
-		explicit Display(const DisplayDesc& desc);
+		explicit Display(
+			const DisplayDesc& desc
+		);
+
+		bool update();
 
 		SwapChain& getSwapChain() noexcept;
+
 	private:
 		RefPtr<SwapChain> m_swapChain{};
 	};
 }
-

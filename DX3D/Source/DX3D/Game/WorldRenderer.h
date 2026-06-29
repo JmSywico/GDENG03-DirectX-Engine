@@ -11,9 +11,11 @@
 
 namespace dx3d
 {
+	class ShadowMap;
 	class CombinedMeshComponent;
 
-	class WorldRenderer final : public Base
+	class WorldRenderer final :
+		public Base
 	{
 	public:
 		explicit WorldRenderer(
@@ -35,14 +37,13 @@ namespace dx3d
 			Mat4x4 view{};
 			Mat4x4 proj{};
 
-			// XYZ stores the direction from the surface
-			// toward the directional light.
-			// W is unused.
 			Vec4 lightDirection{};
-
-			// RGB stores the light color.
-			// W stores the ambient-light strength.
 			Vec4 lightColorAndAmbient{};
+
+			Mat4x4 inverseWorld{};
+
+			Mat4x4 lightView{};
+			Mat4x4 lightProj{};
 		};
 
 		struct CombinedMeshRenderResources
@@ -54,8 +55,10 @@ namespace dx3d
 
 	private:
 		GraphicsDevice& m_graphicsDevice;
+
 		RefPtr<DeviceContext> m_deviceContext{};
 		RefPtr<GraphicsPipelineState> m_pipeline{};
+		RefPtr<ShadowMap> m_shadowMap{};
 
 		RefPtr<VertexBuffer> m_cubeVertexBuffer{};
 		RefPtr<IndexBuffer> m_cubeIndexBuffer{};

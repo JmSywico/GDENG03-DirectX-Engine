@@ -1,21 +1,27 @@
 #pragma once
+
 #include <DX3D/Core/Base.h>
 #include <DX3D/Core/Common.h>
 
-
 namespace dx3d
 {
-	class Window: public Base
+	class Window : public Base
 	{
 	public:
-		explicit Window(const WindowDesc& desc);
+		explicit Window(
+			const WindowDesc& desc
+		);
+
 		virtual ~Window() override;
 
 		void* getNativeHandle() const noexcept;
-		dx3d::Rect getClientAreaInScreenSpace();
+
+		Rect getClientSize() const noexcept;
+
+		Rect getClientAreaInScreenSpace();
+
 	protected:
 		void* m_handle{};
 		Rect m_size{};
 	};
 }
-

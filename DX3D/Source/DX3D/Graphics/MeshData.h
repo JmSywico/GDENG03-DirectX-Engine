@@ -12,9 +12,6 @@ namespace dx3d
 	{
 		Vec3 position{};
 		Vec4 color{};
-
-		// Direction the surface faces.
-		// Required for lighting calculations.
 		Vec3 normal{};
 	};
 

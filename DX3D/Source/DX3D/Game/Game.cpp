@@ -11,6 +11,7 @@
 #include <DX3D/Game/World.h>
 #include <DX3D/Game/GameObject.h>
 #include <DX3D/Game/WorldRenderer.h>
+#include <DX3D/Game/SceneSerializer.h>
 #include <DX3D/Editor/ViewportPicker.h>
 
 #include <DX3D/Component/CubeComponent.h>
@@ -18,6 +19,7 @@
 #include <DX3D/Component/TransformComponent.h>
 #include <DX3D/Component/CameraComponent.h>
 #include <DX3D/Component/CombinedMeshComponent.h>
+#include <DX3D/Component/DirectionalLightComponent.h>
 
 #include <string>
 #include <vector>
@@ -34,7 +36,7 @@
 
 dx3d::Game::Game(const GameDesc& desc)
 {
-	m_logger = std::make_unique<Logger>(desc.logLevel);	
+	m_logger = std::make_unique<Logger>(desc.logLevel);
 
 	DX3DLogInfo("GDENG03 | DirectX Game Engine");
 	DX3DLogInfo("--------------------------------------");
@@ -877,6 +879,91 @@ void dx3d::Game::handleViewportPicking(
 	}
 }
 
+void dx3d::Game::createNewScene()
+{
+	SceneSerializer::clear(
+		*m_world
+	);
+
+	clearSelection();
+
+	m_objectClipboard =
+		ObjectCopyData{};
+
+	m_cubeCounter = 0;
+	m_planeCounter = 0;
+
+	m_sceneStatusMessage =
+		"New scene created";
+}
+
+void dx3d::Game::saveScene()
+{
+	const bool saved =
+		SceneSerializer::save(
+			*m_world,
+			"Scene.dx3dscene"
+		);
+
+	if (saved)
+	{
+		m_sceneStatusMessage =
+			"Saved: Scene.dx3dscene";
+
+		DX3DLogInfo(
+			"Scene saved."
+		);
+	}
+	else
+	{
+		m_sceneStatusMessage =
+			"Save failed";
+
+		DX3DLogError(
+			"Scene save failed."
+		);
+	}
+}
+
+void dx3d::Game::loadScene()
+{
+	const SceneLoadResult result =
+		SceneSerializer::load(
+			*m_world,
+			"Scene.dx3dscene"
+		);
+
+	if (!result.success)
+	{
+		m_sceneStatusMessage =
+			"Load failed or file not found";
+
+		DX3DLogError(
+			"Scene load failed."
+		);
+
+		return;
+	}
+
+	clearSelection();
+
+	m_objectClipboard =
+		ObjectCopyData{};
+
+	m_cubeCounter =
+		result.cubeCount;
+
+	m_planeCounter =
+		result.planeCount;
+
+	m_sceneStatusMessage =
+		"Loaded: Scene.dx3dscene";
+
+	DX3DLogInfo(
+		"Scene loaded."
+	);
+}
+
 void dx3d::Game::onInternalUpdate()
 {
 	auto currentTime = std::chrono::steady_clock::now();
@@ -889,6 +976,15 @@ void dx3d::Game::onInternalUpdate()
 	const auto deltaTime = delta.count();
 
 	m_inputSystem->update();
+
+	if (!m_display->update())
+	{
+		return;
+	}
+
+	m_inputSystem->setCursorLockArea(
+		m_display->getClientAreaInScreenSpace()
+	);
 
 	// Begin the ImGui frame.
 	ImGui_ImplDX11_NewFrame();
@@ -917,18 +1013,32 @@ void dx3d::Game::onInternalUpdate()
 	{
 		if (ImGui::BeginMenu("File"))
 		{
-			ImGui::MenuItem(
-				"New Scene",
-				nullptr,
-				false,
-				false
-			);
+			if (ImGui::MenuItem(
+				"New Scene"
+			))
+			{
+				createNewScene();
+			}
 
-			ImGui::MenuItem(
-				"Save Scene",
-				nullptr,
-				false,
-				false
+			if (ImGui::MenuItem(
+				"Save Scene"
+			))
+			{
+				saveScene();
+			}
+
+			if (ImGui::MenuItem(
+				"Load Scene"
+			))
+			{
+				loadScene();
+			}
+
+			ImGui::Separator();
+
+			ImGui::TextDisabled(
+				"%s",
+				m_sceneStatusMessage.c_str()
 			);
 
 			ImGui::EndMenu();
@@ -943,11 +1053,18 @@ void dx3d::Game::onInternalUpdate()
 				auto* cube =
 					m_world->createGameObject<GameObject>();
 
-				cube->setName(
-					"Cube (" +
-					std::to_string(m_cubeCounter) +
-					")"
-				);
+				if (m_cubeCounter == 1)
+				{
+					cube->setName("Cube");
+				}
+				else
+				{
+					cube->setName(
+						"Cube (" +
+						std::to_string(m_cubeCounter) +
+						")"
+					);
+				}
 
 				cube->createOrGetComponent<
 					CubeComponent>();
@@ -976,11 +1093,18 @@ void dx3d::Game::onInternalUpdate()
 				auto* plane =
 					m_world->createGameObject<GameObject>();
 
-				plane->setName(
-					"Plane (" +
-					std::to_string(m_planeCounter) +
-					")"
-				);
+				if (m_planeCounter == 1)
+				{
+					plane->setName("Plane");
+				}
+				else
+				{
+					plane->setName(
+						"Plane (" +
+						std::to_string(m_planeCounter) +
+						")"
+					);
+				}
 
 				plane->createOrGetComponent<
 					PlaneComponent>();
@@ -1000,6 +1124,76 @@ void dx3d::Game::onInternalUpdate()
 				);
 
 				selectOnly(plane);
+			}
+
+			ui32 directionalLightCount = 0;
+
+			m_world->getComponents<
+				DirectionalLightComponent
+			>(
+				directionalLightCount
+			);
+
+			const bool canCreateDirectionalLight =
+				directionalLightCount == 0;
+
+			if (ImGui::MenuItem(
+				"Create Directional Light",
+				nullptr,
+				false,
+				canCreateDirectionalLight
+			))
+			{
+				auto* lightObject =
+					m_world->createGameObject<GameObject>();
+
+				lightObject->setName(
+					"Directional Light"
+				);
+
+				auto* lightComponent =
+					lightObject->createOrGetComponent<
+					DirectionalLightComponent
+					>();
+
+				lightComponent->setColor(
+					{ 1.0f, 1.0f, 1.0f }
+				);
+
+				lightComponent->setIntensity(
+					1.0f
+				);
+
+				lightComponent->setAmbientStrength(
+					0.20f
+				);
+
+				lightComponent->setShadowArea(
+					30.0f
+				);
+
+				lightComponent->setCastShadows(
+					true
+				);
+
+				auto& lightTransform =
+					lightObject->getTransform();
+
+				lightTransform.setPosition(
+					{ 0.0f, 3.0f, 0.0f }
+				);
+
+				lightTransform.setRotation(
+					{ 1.04f, 1.03f, 0.0f }
+				);
+
+				lightTransform.setScale(
+					{ 1.0f, 1.0f, 1.0f }
+				);
+
+				selectOnly(
+					lightObject
+				);
 			}
 
 			ImGui::Separator();
@@ -1322,6 +1516,108 @@ void dx3d::Game::onInternalUpdate()
 				}
 			);
 		}
+
+		if (auto* directionalLight =
+			m_selectedObject->getComponent<
+			DirectionalLightComponent
+			>())
+		{
+			ImGui::Spacing();
+			ImGui::Separator();
+			ImGui::Text("Directional Light");
+			ImGui::Spacing();
+
+			Vec3 lightColor =
+				directionalLight->getColor();
+
+			float colorValues[3]
+			{
+				lightColor.x,
+				lightColor.y,
+				lightColor.z
+			};
+
+			if (ImGui::ColorEdit3(
+				"Color",
+				colorValues
+			))
+			{
+				directionalLight->setColor(
+					{
+						colorValues[0],
+						colorValues[1],
+						colorValues[2]
+					}
+				);
+			}
+
+			float intensity =
+				directionalLight->getIntensity();
+
+			if (ImGui::DragFloat(
+				"Intensity",
+				&intensity,
+				0.05f,
+				0.0f,
+				10.0f
+			))
+			{
+				directionalLight->setIntensity(
+					intensity
+				);
+			}
+
+			float ambientStrength =
+				directionalLight->
+				getAmbientStrength();
+
+			if (ImGui::SliderFloat(
+				"Ambient Strength",
+				&ambientStrength,
+				0.0f,
+				1.0f
+			))
+			{
+				directionalLight->
+					setAmbientStrength(
+						ambientStrength
+					);
+			}
+
+			float shadowArea =
+				directionalLight->
+				getShadowArea();
+
+			if (ImGui::DragFloat(
+				"Shadow Area",
+				&shadowArea,
+				0.5f,
+				1.0f,
+				200.0f
+			))
+			{
+				directionalLight->
+					setShadowArea(
+						shadowArea
+					);
+			}
+
+			bool castShadows =
+				directionalLight->
+				getCastShadows();
+
+			if (ImGui::Checkbox(
+				"Cast Shadows",
+				&castShadows
+			))
+			{
+				directionalLight->
+					setCastShadows(
+						castShadows
+					);
+			}
+		}
+
 	}
 
 	ImGui::End();

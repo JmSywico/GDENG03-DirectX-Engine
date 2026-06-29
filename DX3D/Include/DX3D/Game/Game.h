@@ -12,6 +12,9 @@
 
 namespace dx3d
 {
+	class GameObject;
+	class CameraComponent;
+
 	class Game
 	{
 		dx3d_disable_copy_and_move(Game)
@@ -30,14 +33,6 @@ namespace dx3d
 		virtual void onUpdate(f32 deltaTime) {}
 
 		void requestExit() noexcept;
-
-	private:
-		/*enum class GizmoOperation
-		{
-			Translate,
-			Rotate,
-			Scale
-		};*/
 
 	private:
 		enum class CopiedObjectType
@@ -67,17 +62,12 @@ namespace dx3d
 				1.0f
 			};
 
-			// Used only when the copied object contains
-			// a CombinedMeshComponent.
 			MeshData meshData{};
 
-			// Used to name repeated pasted copies.
 			ui32 pasteCount{};
 		};
 
 	private:
-
-
 		void onInternalUpdate();
 
 		bool isObjectSelected(
@@ -117,6 +107,11 @@ namespace dx3d
 
 		void pasteCopiedObject();
 
+		void createNewScene();
+
+		void saveScene();
+
+		void loadScene();
 
 	private:
 		UniquePtr<Logger> m_logger{};
@@ -134,13 +129,13 @@ namespace dx3d
 
 		TransformGizmo m_transformGizmo{};
 
-		ui32 m_cubeCounter{ 1 };
-		ui32 m_planeCounter{ 1 };
+		ui32 m_cubeCounter{ 0 };
+		ui32 m_planeCounter{ 0 };
 
-		// Current transform gizmo mode.
-	/*	GizmoOperation m_gizmoOperation{
-			GizmoOperation::Translate
-		};*/
+		std::string m_sceneStatusMessage
+		{
+			"Scene file: Scene.dx3dscene"
+		};
 
 		bool m_isRunning{ true };
 

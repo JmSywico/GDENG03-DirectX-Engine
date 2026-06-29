@@ -176,16 +176,19 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="DX3D\Include\DX3D\Game\SceneSerializer.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\CameraComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\CircleComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\CombinedMeshComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\CubeComponent.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Component\DirectionalLightComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\PlaneComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\TransformComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Game\Component.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Game\WorldRenderer.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Graphics\MeshMerger.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Graphics\PrimitiveMeshData.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Graphics\ShadowMap.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Input\InputSystem.cpp" />
     <ClCompile Include="DX3D\Source\Editor\ViewportPicker.cpp" />
     <ClCompile Include="Game\Objects\Player.cpp" />
@@ -214,11 +217,13 @@
     <ClInclude Include="DX3D\Include\DX3D\Component\CameraComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\CubeComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\CircleComponent.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Component\DirectionalLightComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\PlaneComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\TransformComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Core\Identifiable.h" />
     <ClInclude Include="DX3D\Include\DX3D\Editor\ViewportPicker.h" />
     <ClInclude Include="DX3D\Include\DX3D\Game\Component.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Game\SceneSerializer.h" />
     <ClInclude Include="DX3D\Include\DX3D\Input\InputSystem.h" />
     <ClInclude Include="DX3D\Include\DX3D\Math\MathUtils.h" />
     <ClInclude Include="DX3D\Include\DX3D\Math\Vec2.h" />
@@ -227,6 +232,7 @@
     <ClInclude Include="DX3D\Source\DX3D\Graphics\MeshData.h" />
     <ClInclude Include="DX3D\Source\DX3D\Graphics\MeshMerger.h" />
     <ClInclude Include="DX3D\Source\DX3D\Graphics\PrimitiveMeshData.h" />
+    <ClInclude Include="DX3D\Source\DX3D\Graphics\ShadowMap.h" />
     <ClInclude Include="Game\Objects\Player.h" />
     <ClInclude Include="DX3D\Include\DX3D\Game\GameObject.h" />
     <ClInclude Include="DX3D\Include\DX3D\Game\World.h" />

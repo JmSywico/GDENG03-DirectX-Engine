@@ -1,4 +1,5 @@
 #include <DX3D/Game/WorldRenderer.h>
+
 #include <DX3D/Graphics/GraphicsDevice.h>
 #include <DX3D/Graphics/DeviceContext.h>
 #include <DX3D/Graphics/SwapChain.h>
@@ -6,9 +7,9 @@
 #include <DX3D/Graphics/IndexBuffer.h>
 #include <DX3D/Graphics/MeshData.h>
 #include <DX3D/Graphics/PrimitiveMeshData.h>
+#include <DX3D/Graphics/ShadowMap.h>
 
 #include <DX3D/Game/World.h>
-#include <DX3D/Game/Component.h>
 #include <DX3D/Game/GameObject.h>
 
 #include <DX3D/Component/TransformComponent.h>
@@ -17,59 +18,98 @@
 #include <DX3D/Component/CircleComponent.h>
 #include <DX3D/Component/CameraComponent.h>
 #include <DX3D/Component/CombinedMeshComponent.h>
+#include <DX3D/Component/DirectionalLightComponent.h>
 
-#include <DX3D/Math/Vec3.h>
+#include <DX3D/Math/MathUtils.h>
+
 #include <fstream>
 #include <ranges>
 #include <vector>
 #include <cmath>
 #include <unordered_set>
 
-dx3d::WorldRenderer::WorldRenderer(const WorldRendererDesc& desc)
+dx3d::WorldRenderer::WorldRenderer(
+	const WorldRendererDesc& desc
+)
 	: Base(desc.base),
 	m_graphicsDevice(desc.engine)
 {
-	auto& device = m_graphicsDevice;
-	m_deviceContext = device.createDeviceContext();
+	auto& device =
+		m_graphicsDevice;
 
-	constexpr char shaderFilePath[] = "DX3D/Assets/Shaders/Basic.hlsl";
+	m_deviceContext =
+		device.createDeviceContext();
 
-	std::ifstream shaderStream(shaderFilePath);
+	m_shadowMap =
+		device.createShadowMap(
+			{
+				2048,
+				2048
+			}
+		);
+
+	constexpr char shaderFilePath[] =
+		"DX3D/Assets/Shaders/Basic.hlsl";
+
+	std::ifstream shaderStream(
+		shaderFilePath
+	);
 
 	if (!shaderStream)
-		DX3DLogThrowError("Failed to open shader file.");
+	{
+		DX3DLogThrowError(
+			"Failed to open shader file."
+		);
+	}
 
-	std::string shaderFileData{
-		std::istreambuf_iterator<char>(shaderStream),
+	std::string shaderFileData
+	{
+		std::istreambuf_iterator<char>(
+			shaderStream
+		),
 		std::istreambuf_iterator<char>()
 	};
 
-	auto shaderSourceCode = shaderFileData.c_str();
-	auto shaderSourceCodeSize = shaderFileData.length();
+	const char* shaderSourceCode =
+		shaderFileData.c_str();
 
-	auto vs = device.compileShader(
-		{
-			shaderFilePath,
-			shaderSourceCode,
-			shaderSourceCodeSize,
-			"VSMain",
-			ShaderType::VertexShader
-		}
-	);
+	const size_t shaderSourceCodeSize =
+		shaderFileData.length();
 
-	auto ps = device.compileShader(
-		{
-			shaderFilePath,
-			shaderSourceCode,
-			shaderSourceCodeSize,
-			"PSMain",
-			ShaderType::PixelShader
-		}
-	);
+	auto vertexShader =
+		device.compileShader(
+			{
+				shaderFilePath,
+				shaderSourceCode,
+				shaderSourceCodeSize,
+				"VSMain",
+				ShaderType::VertexShader
+			}
+		);
 
-	auto vsSig = device.createVertexShaderSignature({ vs });
+	auto pixelShader =
+		device.compileShader(
+			{
+				shaderFilePath,
+				shaderSourceCode,
+				shaderSourceCodeSize,
+				"PSMain",
+				ShaderType::PixelShader
+			}
+		);
 
-	m_pipeline = device.createGraphicsPipelineState({ *vsSig, *ps });
+	auto vertexSignature =
+		device.createVertexShaderSignature(
+			{ vertexShader }
+		);
+
+	m_pipeline =
+		device.createGraphicsPipelineState(
+			{
+				*vertexSignature,
+				*pixelShader
+			}
+		);
 
 	const auto& cubeMesh =
 		getCubeMeshData();
@@ -95,10 +135,6 @@ dx3d::WorldRenderer::WorldRenderer(const WorldRendererDesc& desc)
 			}
 		);
 
-	m_cb = device.createConstantBuffer(
-		{ {}, sizeof(ConstantData) }
-	);
-
 	const auto& planeMesh =
 		getPlaneMeshData();
 
@@ -123,61 +159,94 @@ dx3d::WorldRenderer::WorldRenderer(const WorldRendererDesc& desc)
 			}
 		);
 
-	constexpr dx3d::ui32 circleSegments = 64;
+	constexpr ui32 circleSegments = 64;
 
-	std::vector<MeshVertex> circleVertices;
-	std::vector<dx3d::ui32> circleIndices;
+	std::vector<MeshVertex>
+		circleVertices{};
 
+	std::vector<ui32>
+		circleIndices{};
 
 	circleVertices.push_back(
 		{
 			{ 0.0f, 0.0f, 0.0f },
-			{ 1.0f, 1.0f, 1.0f, 1.0f }
+			{ 1.0f, 1.0f, 1.0f, 1.0f },
+			{ 0.0f, 0.0f, -1.0f }
 		}
 	);
 
-
-	for (dx3d::ui32 i = 0; i <= circleSegments; ++i)
+	for (
+		ui32 i = 0;
+		i <= circleSegments;
+		++i
+		)
 	{
-		const dx3d::f32 angle =
-			(static_cast<dx3d::f32>(i) /
-				static_cast<dx3d::f32>(circleSegments))
-			* 2.0f
-			* dx3d::MathUtils::PI;
+		const f32 angle =
+			(
+				static_cast<f32>(i) /
+				static_cast<f32>(
+					circleSegments
+					)
+				) *
+			2.0f *
+			MathUtils::PI;
 
-		const dx3d::f32 x = std::cos(angle) * 0.5f;
-		const dx3d::f32 y = std::sin(angle) * 0.5f;
+		const f32 x =
+			std::cos(angle) *
+			0.5f;
+
+		const f32 y =
+			std::sin(angle) *
+			0.5f;
 
 		circleVertices.push_back(
 			{
 				{ x, y, 0.0f },
-				{ 1.0f, 1.0f, 1.0f, 1.0f }
+				{ 1.0f, 1.0f, 1.0f, 1.0f },
+				{ 0.0f, 0.0f, -1.0f }
 			}
 		);
 	}
 
-
-	for (dx3d::ui32 i = 1; i <= circleSegments; ++i)
+	for (
+		ui32 i = 1;
+		i <= circleSegments;
+		++i
+		)
 	{
 		circleIndices.push_back(0);
 		circleIndices.push_back(i + 1);
 		circleIndices.push_back(i);
 	}
 
-	m_circleVertexBuffer = device.createVertexBuffer(
-		{
-			circleVertices.data(),
-			static_cast<dx3d::ui32>(circleVertices.size()),
-			sizeof(MeshVertex)
-		}
-	);
+	m_circleVertexBuffer =
+		device.createVertexBuffer(
+			{
+				circleVertices.data(),
+				static_cast<ui32>(
+					circleVertices.size()
+				),
+				sizeof(MeshVertex)
+			}
+		);
 
-	m_circleIndexBuffer = device.createIndexBuffer(
-		{
-			circleIndices.data(),
-			static_cast<dx3d::ui32>(circleIndices.size())
-		}
-	);
+	m_circleIndexBuffer =
+		device.createIndexBuffer(
+			{
+				circleIndices.data(),
+				static_cast<ui32>(
+					circleIndices.size()
+				)
+			}
+		);
+
+	m_cb =
+		device.createConstantBuffer(
+			{
+				{},
+				sizeof(ConstantData)
+			}
+		);
 }
 
 dx3d::WorldRenderer::~WorldRenderer()
@@ -189,180 +258,246 @@ void dx3d::WorldRenderer::render(
 	f32 deltaTime
 )
 {
-	auto size = swapChain.getSize();
+	const Rect size =
+		swapChain.getSize();
 
-	auto& context = *m_deviceContext;
+	auto& context =
+		*m_deviceContext;
 
-	context.clearAndSetBackBuffer(
-		swapChain,
-		{ 0.08f, 0.10f, 0.14f, 1.0f }
-	);
+	ui32 numComponents = 0;
 
-	context.setGraphicsPipelineState(*m_pipeline);
-	context.setViewportSize(size);
-
-	auto numComponents = 0u;
 	ConstantData data{};
 
-	// Simple directional light.
-//
-// XYZ describes the direction from the surface
-// toward the light. W is unused.
-	data.lightDirection =
+	Vec3 directionToLight =
+		Vec3::normalize(
+			{
+				-0.5f,
+				1.0f,
+				-0.3f
+			}
+		);
+
+	Vec3 lightColor
 	{
-		-0.5f,
 		1.0f,
-		-0.3f,
-		0.0f
+		1.0f,
+		1.0f
 	};
 
-	// RGB is the white light color.
-	// W is the ambient-light strength.
-	data.lightColorAndAmbient =
-	{
-		1.0f,
-		1.0f,
-		1.0f,
-		0.20f
-	};
+	f32 lightIntensity = 1.0f;
+	f32 ambientStrength = 0.20f;
+	f32 shadowArea = 30.0f;
+
+	bool castShadows = true;
 
 	{
 		auto components =
-			world.getComponents<CameraComponent>(numComponents);
+			world.getComponents<
+			DirectionalLightComponent
+			>(
+				numComponents
+			);
 
-		for (auto i : std::views::iota(0u, numComponents))
+		for (
+			auto i :
+			std::views::iota(
+				0u,
+				numComponents
+			)
+			)
 		{
-			auto component = components[i];
+			auto* lightComponent =
+				components[i];
 
-			data.view = component->getViewMatrix();
+			if (!lightComponent)
+				continue;
 
-			component->setViewportSize(size);
+			auto& lightTransform =
+				lightComponent->
+				getGameObject().
+				getTransform();
 
-			data.proj = component->getProjectionMatrix();
+			const Vec3 lightForward =
+				lightTransform.forward();
+
+			directionToLight =
+				Vec3::normalize(
+					{
+						-lightForward.x,
+						-lightForward.y,
+						-lightForward.z
+					}
+				);
+
+			lightColor =
+				lightComponent->getColor();
+
+			lightIntensity =
+				lightComponent->getIntensity();
+
+			ambientStrength =
+				lightComponent->
+				getAmbientStrength();
+
+			shadowArea =
+				lightComponent->
+				getShadowArea();
+
+			castShadows =
+				lightComponent->
+				getCastShadows();
 
 			break;
 		}
 	}
 
+	data.lightDirection =
+	{
+		directionToLight.x,
+		directionToLight.y,
+		directionToLight.z,
+		castShadows ? 1.0f : 0.0f
+	};
+
+	data.lightColorAndAmbient =
+	{
+		lightColor.x * lightIntensity,
+		lightColor.y * lightIntensity,
+		lightColor.z * lightIntensity,
+		ambientStrength
+	};
+
+	const Vec3 lightTarget
+	{
+		0.0f,
+		0.0f,
+		0.0f
+	};
+
+	const f32 lightDistance =
+		15.0f;
+
+	const Vec3 lightPosition
+	{
+		lightTarget.x +
+			directionToLight.x *
+				lightDistance,
+
+		lightTarget.y +
+			directionToLight.y *
+				lightDistance,
+
+		lightTarget.z +
+			directionToLight.z *
+				lightDistance
+	};
+
+	const Vec3 lightUp =
+		std::fabs(
+			directionToLight.y
+		) > 0.99f
+		?
+		Vec3{ 0.0f, 0.0f, 1.0f }
+		:
+		Vec3{ 0.0f, 1.0f, 0.0f };
+
+	data.lightView =
+		Mat4x4::lookAtLH(
+			lightPosition,
+			lightTarget,
+			lightUp
+		);
+
+	data.lightProj =
+		Mat4x4::orthoLH(
+			shadowArea,
+			shadowArea,
+			0.1f,
+			50.0f
+		);
+
+	Mat4x4 cameraView =
+		Mat4x4::identity();
+
+	Mat4x4 cameraProjection =
+		Mat4x4::identity();
+
 	{
 		auto components =
-			world.getComponents<CubeComponent>(numComponents);
-
-		for (auto i : std::views::iota(0u, numComponents))
-		{
-			auto component = components[i];
-
-			auto& transform =
-				component->getGameObject().getTransform();
-
-			data.world = transform.getAffineWorldMatrix();
-
-			auto& cb = *m_cb;
-
-			context.updateConstantBuffer(cb, &data);
-
-			auto& vb = *m_cubeVertexBuffer;
-			auto& ib = *m_cubeIndexBuffer;
-
-			context.setVertexBuffer(vb);
-			context.setConstantBuffer(cb);
-			context.setIndexBuffer(ib);
-
-			context.drawIndexedTriangleList(
-				ib.getIndexListSize(),
-				0u,
-				0u
-			);
-		}
-	}
-
-	{
-		auto components =
-			world.getComponents<PlaneComponent>(numComponents);
-
-		for (auto i : std::views::iota(0u, numComponents))
-		{
-			auto component = components[i];
-
-			auto& transform =
-				component->getGameObject().getTransform();
-
-			data.world = transform.getAffineWorldMatrix();
-
-			auto& cb = *m_cb;
-
-			context.updateConstantBuffer(cb, &data);
-
-			auto& vb = *m_planeVertexBuffer;
-			auto& ib = *m_planeIndexBuffer;
-
-			context.setVertexBuffer(vb);
-			context.setConstantBuffer(cb);
-			context.setIndexBuffer(ib);
-
-			context.drawIndexedTriangleList(
-				ib.getIndexListSize(),
-				0u,
-				0u
-			);
-		}
-	}
-
-	{
-		auto components =
-			world.getComponents<CircleComponent>(numComponents);
-
-		for (auto i : std::views::iota(0u, numComponents))
-		{
-			auto component = components[i];
-
-			auto& transform =
-				component->getGameObject().getTransform();
-
-			data.world = transform.getAffineWorldMatrix();
-
-			auto& cb = *m_cb;
-
-			context.updateConstantBuffer(cb, &data);
-
-			auto& vb = *m_circleVertexBuffer;
-			auto& ib = *m_circleIndexBuffer;
-
-			context.setVertexBuffer(vb);
-			context.setConstantBuffer(cb);
-			context.setIndexBuffer(ib);
-
-			context.drawIndexedTriangleList(
-				ib.getIndexListSize(),
-				0u,
-				0u
-			);
-		}
-	}
-	{
-		auto components =
-			world.getComponents<CombinedMeshComponent>(
+			world.getComponents<
+			CameraComponent
+			>(
 				numComponents
 			);
 
-		std::unordered_set<
-			const CombinedMeshComponent*
-		> activeCombinedMeshes{};
-
-		activeCombinedMeshes.reserve(numComponents);
-
-		for (auto i : std::views::iota(0u, numComponents))
+		for (
+			auto i :
+			std::views::iota(
+				0u,
+				numComponents
+			)
+			)
 		{
-			auto* component = components[i];
+			auto* component =
+				components[i];
 
 			if (!component)
 				continue;
 
-			activeCombinedMeshes.insert(component);
+			component->setViewportSize(
+				size
+			);
+
+			cameraView =
+				component->getViewMatrix();
+
+			cameraProjection =
+				component->getProjectionMatrix();
+
+			break;
+		}
+	}
+
+	std::unordered_set<
+		const CombinedMeshComponent*
+	> activeCombinedMeshes{};
+
+	{
+		auto components =
+			world.getComponents<
+			CombinedMeshComponent
+			>(
+				numComponents
+			);
+
+		activeCombinedMeshes.reserve(
+			numComponents
+		);
+
+		for (
+			auto i :
+			std::views::iota(
+				0u,
+				numComponents
+			)
+			)
+		{
+			auto* component =
+				components[i];
+
+			if (!component)
+				continue;
+
+			activeCombinedMeshes.insert(
+				component
+			);
 
 			if (!component->hasMeshData())
 			{
-				m_combinedMeshResources.erase(component);
+				m_combinedMeshResources.erase(
+					component
+				);
+
 				continue;
 			}
 
@@ -370,7 +505,9 @@ void dx3d::WorldRenderer::render(
 				component->getMeshData();
 
 			auto& renderResources =
-				m_combinedMeshResources[component];
+				m_combinedMeshResources[
+					component
+				];
 
 			const bool needsBufferRebuild =
 				!renderResources.vertexBuffer ||
@@ -378,84 +515,316 @@ void dx3d::WorldRenderer::render(
 				renderResources.meshRevision !=
 				component->getMeshRevision();
 
-			if (needsBufferRebuild)
-			{
-				renderResources.vertexBuffer =
-					m_graphicsDevice.createVertexBuffer(
-						{
-							meshData.vertices.data(),
-							static_cast<ui32>(
-								meshData.vertices.size()
-							),
-							sizeof(MeshVertex)
-						}
-					);
+			if (!needsBufferRebuild)
+				continue;
 
-				renderResources.indexBuffer =
-					m_graphicsDevice.createIndexBuffer(
-						{
-							meshData.indices.data(),
-							static_cast<ui32>(
-								meshData.indices.size()
-							)
-						}
-					);
+			renderResources.vertexBuffer =
+				m_graphicsDevice.
+				createVertexBuffer(
+					{
+						meshData.vertices.data(),
+						static_cast<ui32>(
+							meshData.vertices.size()
+						),
+						sizeof(MeshVertex)
+					}
+				);
 
-				renderResources.meshRevision =
-					component->getMeshRevision();
-			}
+			renderResources.indexBuffer =
+				m_graphicsDevice.
+				createIndexBuffer(
+					{
+						meshData.indices.data(),
+						static_cast<ui32>(
+							meshData.indices.size()
+						)
+					}
+				);
 
-			auto& transform =
-				component->getGameObject().getTransform();
+			renderResources.meshRevision =
+				component->getMeshRevision();
+		}
+	}
 
+	for (
+		auto it =
+		m_combinedMeshResources.begin();
+
+		it !=
+		m_combinedMeshResources.end();
+		)
+	{
+		if (
+			activeCombinedMeshes.find(
+				it->first
+			) ==
+			activeCombinedMeshes.end()
+			)
+		{
+			it =
+				m_combinedMeshResources.erase(
+					it
+				);
+		}
+		else
+		{
+			++it;
+		}
+	}
+
+	auto drawObject =
+		[&](
+			TransformComponent& transform,
+			VertexBuffer& vertexBuffer,
+			IndexBuffer& indexBuffer
+			)
+		{
 			data.world =
 				transform.getAffineWorldMatrix();
 
-			auto& cb = *m_cb;
+			data.inverseWorld =
+				Mat4x4::inverse(
+					data.world
+				);
+
+			auto& constantBuffer =
+				*m_cb;
 
 			context.updateConstantBuffer(
-				cb,
+				constantBuffer,
 				&data
 			);
 
-			auto& vertexBuffer =
-				*renderResources.vertexBuffer;
+			context.setVertexBuffer(
+				vertexBuffer
+			);
 
-			auto& indexBuffer =
-				*renderResources.indexBuffer;
+			context.setIndexBuffer(
+				indexBuffer
+			);
 
-			context.setVertexBuffer(vertexBuffer);
-			context.setConstantBuffer(cb);
-			context.setIndexBuffer(indexBuffer);
+			context.setConstantBuffer(
+				constantBuffer
+			);
 
 			context.drawIndexedTriangleList(
 				indexBuffer.getIndexListSize(),
 				0u,
 				0u
 			);
-		}
+		};
 
-		// Delete cached GPU resources belonging to components
-		// that no longer exist in the World.
-		for (
-			auto it = m_combinedMeshResources.begin();
-			it != m_combinedMeshResources.end();
-			)
+	auto drawSceneGeometry =
+		[&]()
 		{
-			if (
-				activeCombinedMeshes.find(it->first) ==
-				activeCombinedMeshes.end()
-				)
 			{
-				it = m_combinedMeshResources.erase(it);
+				auto components =
+					world.getComponents<
+					CubeComponent
+					>(
+						numComponents
+					);
+
+				for (
+					auto i :
+					std::views::iota(
+						0u,
+						numComponents
+					)
+					)
+				{
+					auto* component =
+						components[i];
+
+					if (!component)
+						continue;
+
+					drawObject(
+						component->
+						getGameObject().
+						getTransform(),
+						*m_cubeVertexBuffer,
+						*m_cubeIndexBuffer
+					);
+				}
 			}
-			else
+
 			{
-				++it;
+				auto components =
+					world.getComponents<
+					PlaneComponent
+					>(
+						numComponents
+					);
+
+				for (
+					auto i :
+					std::views::iota(
+						0u,
+						numComponents
+					)
+					)
+				{
+					auto* component =
+						components[i];
+
+					if (!component)
+						continue;
+
+					drawObject(
+						component->
+						getGameObject().
+						getTransform(),
+						*m_planeVertexBuffer,
+						*m_planeIndexBuffer
+					);
+				}
 			}
-		}
+
+			{
+				auto components =
+					world.getComponents<
+					CircleComponent
+					>(
+						numComponents
+					);
+
+				for (
+					auto i :
+					std::views::iota(
+						0u,
+						numComponents
+					)
+					)
+				{
+					auto* component =
+						components[i];
+
+					if (!component)
+						continue;
+
+					drawObject(
+						component->
+						getGameObject().
+						getTransform(),
+						*m_circleVertexBuffer,
+						*m_circleIndexBuffer
+					);
+				}
+			}
+
+			{
+				auto components =
+					world.getComponents<
+					CombinedMeshComponent
+					>(
+						numComponents
+					);
+
+				for (
+					auto i :
+					std::views::iota(
+						0u,
+						numComponents
+					)
+					)
+				{
+					auto* component =
+						components[i];
+
+					if (
+						!component ||
+						!component->hasMeshData()
+						)
+					{
+						continue;
+					}
+
+					auto resourceIterator =
+						m_combinedMeshResources.find(
+							component
+						);
+
+					if (
+						resourceIterator ==
+						m_combinedMeshResources.end()
+						)
+					{
+						continue;
+					}
+
+					auto& renderResources =
+						resourceIterator->second;
+
+					if (
+						!renderResources.vertexBuffer ||
+						!renderResources.indexBuffer
+						)
+					{
+						continue;
+					}
+
+					drawObject(
+						component->
+						getGameObject().
+						getTransform(),
+						*renderResources.vertexBuffer,
+						*renderResources.indexBuffer
+					);
+				}
+			}
+		};
+
+	if (castShadows)
+	{
+		context.beginShadowPass(
+			*m_shadowMap
+		);
+
+		context.setGraphicsPipelineState(
+			*m_pipeline
+		);
+
+		data.view =
+			data.lightView;
+
+		data.proj =
+			data.lightProj;
+
+		drawSceneGeometry();
 	}
 
-	m_graphicsDevice.executeCommandList(context);
-	//swapChain.present();
+	context.clearAndSetBackBuffer(
+		swapChain,
+		{
+			0.08f,
+			0.10f,
+			0.14f,
+			1.0f
+		}
+	);
+
+	context.setGraphicsPipelineState(
+		*m_pipeline
+	);
+
+	context.setViewportSize(
+		size
+	);
+
+	context.setShadowMap(
+		*m_shadowMap
+	);
+
+	data.view =
+		cameraView;
+
+	data.proj =
+		cameraProjection;
+
+	drawSceneGeometry();
+
+	m_graphicsDevice.executeCommandList(
+		context
+	);
 }

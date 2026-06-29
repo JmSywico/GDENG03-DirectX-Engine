@@ -84,7 +84,11 @@ namespace dx3d
 		ui32 indexListSize{};
 	};
 
-
+	struct ShadowMapDesc
+	{
+		ui32 width{ 2048 };
+		ui32 height{ 2048 };
+	};
 
 	struct GameContext
 	{
@@ -97,7 +101,7 @@ namespace dx3d
 		Logger::LogLevel logLevel = Logger::LogLevel::Error;
 	};
 
-	struct WorldDesc 
+	struct WorldDesc
 	{
 		BaseDesc base;
 		GameContext gameContext;
@@ -132,7 +136,6 @@ namespace dx3d
 		O, P, Q, R, S, T, U,
 		V, W, X, Y, Z,
 
-
 		Num0,
 		Num1,
 		Num2,
@@ -144,7 +147,6 @@ namespace dx3d
 		Num8,
 		Num9,
 
-
 		Escape,
 		Shift,
 		Space,
@@ -152,11 +154,9 @@ namespace dx3d
 		Backspace,
 		Delete,
 
-
 		MouseLeft,
 		MouseRight,
 		MouseMiddle,
-
 
 		Up,
 		Down,
@@ -170,5 +170,4 @@ namespace dx3d
 	{
 		BaseDesc base;
 	};
-
 }
