@@ -32,6 +32,95 @@
 #include <imgui_impl_win32.h>
 #include <imgui_impl_dx11.h>
 
+namespace
+{
+	ImVec4 rgba(
+		int red,
+		int green,
+		int blue,
+		int alpha = 255
+	)
+	{
+		return ImVec4(
+			red / 255.0f,
+			green / 255.0f,
+			blue / 255.0f,
+			alpha / 255.0f
+		);
+	}
+
+	void applyWorkbenchStyle()
+	{
+		ImGuiStyle& style = ImGui::GetStyle();
+
+		style.WindowPadding = ImVec2(10.0f, 9.0f);
+		style.FramePadding = ImVec2(7.0f, 4.0f);
+		style.CellPadding = ImVec2(7.0f, 5.0f);
+		style.ItemSpacing = ImVec2(7.0f, 6.0f);
+		style.ItemInnerSpacing = ImVec2(5.0f, 4.0f);
+		style.ScrollbarSize = 11.0f;
+		style.GrabMinSize = 8.0f;
+		style.WindowBorderSize = 1.0f;
+		style.ChildBorderSize = 1.0f;
+		style.PopupBorderSize = 1.0f;
+		style.FrameBorderSize = 0.0f;
+		style.TabBorderSize = 0.0f;
+		style.WindowRounding = 2.0f;
+		style.ChildRounding = 2.0f;
+		style.FrameRounding = 2.0f;
+		style.PopupRounding = 2.0f;
+		style.ScrollbarRounding = 2.0f;
+		style.GrabRounding = 1.0f;
+		style.TabRounding = 2.0f;
+		style.WindowTitleAlign = ImVec2(0.0f, 0.5f);
+
+		auto* colors = style.Colors;
+		colors[ImGuiCol_Text] = rgba(220, 224, 219);
+		colors[ImGuiCol_TextDisabled] = rgba(119, 129, 126);
+		colors[ImGuiCol_WindowBg] = rgba(20, 25, 27, 247);
+		colors[ImGuiCol_ChildBg] = rgba(17, 22, 24, 235);
+		colors[ImGuiCol_PopupBg] = rgba(24, 30, 31, 252);
+		colors[ImGuiCol_Border] = rgba(55, 66, 66);
+		colors[ImGuiCol_BorderShadow] = rgba(0, 0, 0, 0);
+		colors[ImGuiCol_FrameBg] = rgba(31, 38, 39);
+		colors[ImGuiCol_FrameBgHovered] = rgba(42, 53, 52);
+		colors[ImGuiCol_FrameBgActive] = rgba(52, 67, 64);
+		colors[ImGuiCol_TitleBg] = rgba(17, 22, 24);
+		colors[ImGuiCol_TitleBgActive] = rgba(23, 30, 31);
+		colors[ImGuiCol_TitleBgCollapsed] = rgba(17, 22, 24);
+		colors[ImGuiCol_MenuBarBg] = rgba(14, 19, 21);
+		colors[ImGuiCol_ScrollbarBg] = rgba(15, 20, 22);
+		colors[ImGuiCol_ScrollbarGrab] = rgba(55, 65, 64);
+		colors[ImGuiCol_ScrollbarGrabHovered] = rgba(70, 83, 80);
+		colors[ImGuiCol_ScrollbarGrabActive] = rgba(91, 108, 102);
+		colors[ImGuiCol_CheckMark] = rgba(114, 211, 174);
+		colors[ImGuiCol_SliderGrab] = rgba(96, 177, 148);
+		colors[ImGuiCol_SliderGrabActive] = rgba(126, 226, 189);
+		colors[ImGuiCol_Button] = rgba(36, 45, 45);
+		colors[ImGuiCol_ButtonHovered] = rgba(51, 65, 62);
+		colors[ImGuiCol_ButtonActive] = rgba(65, 88, 79);
+		colors[ImGuiCol_Header] = rgba(45, 64, 59);
+		colors[ImGuiCol_HeaderHovered] = rgba(56, 78, 71);
+		colors[ImGuiCol_HeaderActive] = rgba(67, 94, 84);
+		colors[ImGuiCol_Separator] = rgba(49, 60, 60);
+		colors[ImGuiCol_SeparatorHovered] = rgba(89, 150, 129);
+		colors[ImGuiCol_SeparatorActive] = rgba(114, 211, 174);
+		colors[ImGuiCol_ResizeGrip] = rgba(70, 91, 84, 90);
+		colors[ImGuiCol_ResizeGripHovered] = rgba(114, 211, 174, 160);
+		colors[ImGuiCol_ResizeGripActive] = rgba(114, 211, 174, 220);
+		colors[ImGuiCol_Tab] = rgba(24, 31, 32);
+		colors[ImGuiCol_TabHovered] = rgba(48, 66, 62);
+		colors[ImGuiCol_TabActive] = rgba(39, 55, 51);
+		colors[ImGuiCol_DockingPreview] = rgba(114, 211, 174, 115);
+		colors[ImGuiCol_TableHeaderBg] = rgba(26, 34, 35);
+		colors[ImGuiCol_TableBorderStrong] = rgba(55, 66, 66);
+		colors[ImGuiCol_TableBorderLight] = rgba(40, 49, 49);
+		colors[ImGuiCol_TableRowBgAlt] = rgba(255, 255, 255, 7);
+		colors[ImGuiCol_TextSelectedBg] = rgba(80, 151, 126, 110);
+		colors[ImGuiCol_NavHighlight] = rgba(114, 211, 174, 180);
+	}
+}
+
 
 
 dx3d::Game::Game(const GameDesc& desc)
@@ -56,6 +145,27 @@ dx3d::Game::Game(const GameDesc& desc)
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
 	ImGui::StyleColorsDark();
+	applyWorkbenchStyle();
+
+	// Prefer the native Windows variable UI face. Keep startup resilient on
+	// older Windows installations where this font is not present.
+	ImFont* editorFont = io.Fonts->AddFontFromFileTTF(
+		"C:\\Windows\\Fonts\\SegUIVar.ttf",
+		16.0f
+	);
+
+	if (!editorFont)
+	{
+		editorFont = io.Fonts->AddFontFromFileTTF(
+			"C:\\Windows\\Fonts\\segoeui.ttf",
+			16.0f
+		);
+	}
+
+	if (editorFont)
+	{
+		io.FontDefault = editorFont;
+	}
 
 	if (!ImGui_ImplWin32_Init(
 		m_display->getNativeHandle()
@@ -1291,8 +1401,16 @@ void dx3d::Game::onInternalUpdate()
 	const ImVec2 workSize =
 		viewport->WorkSize;
 
-	constexpr float panelWidth = 280.0f;
-	constexpr float outlinerHeight = 220.0f;
+	const float panelWidth = std::clamp(
+		workSize.x * 0.245f,
+		300.0f,
+		380.0f
+	);
+	const float elementsHeight = std::clamp(
+		workSize.y * 0.38f,
+		210.0f,
+		340.0f
+	);
 
 	CameraComponent* editorCameraComponent = nullptr;
 
@@ -1330,7 +1448,7 @@ void dx3d::Game::onInternalUpdate()
 		gizmoViewport
 	);
 
-	// Scene Outliner begins here.
+	// A simple scene element list keeps selection immediate and unobtrusive.
 	ImGui::SetNextWindowPos(
 		{
 			workPosition.x + workSize.x - panelWidth,
@@ -1342,25 +1460,24 @@ void dx3d::Game::onInternalUpdate()
 	ImGui::SetNextWindowSize(
 		{
 			panelWidth,
-			outlinerHeight
+			elementsHeight
 		},
 		ImGuiCond_Always
 	);
 
-	ImGui::Begin("Scene Outliner");
+	ImGui::Begin("ELEMENTS##Workbench");
 
 	const auto objects = m_world->getGameObjects();
+
+	ImGui::TextDisabled("%zu IN SCENE", objects.size());
+	ImGui::Separator();
 
 	for (auto* object : objects)
 	{
 		if (!object)
 			continue;
 
-		const bool isSelected =
-			isObjectSelected(object);
-
-		// Allows objects to have duplicate visible names
-		// while still having unique ImGui identifiers.
+		const bool isSelected = isObjectSelected(object);
 		ImGui::PushID(object);
 
 		if (ImGui::Selectable(
@@ -1368,17 +1485,10 @@ void dx3d::Game::onInternalUpdate()
 			isSelected
 		))
 		{
-			const bool controlHeld =
-				ImGui::GetIO().KeyCtrl;
-
-			if (controlHeld)
-			{
+			if (ImGui::GetIO().KeyCtrl)
 				toggleObjectSelection(object);
-			}
 			else
-			{
 				selectOnly(object);
-			}
 		}
 
 		ImGui::PopID();
@@ -1389,7 +1499,7 @@ void dx3d::Game::onInternalUpdate()
 	ImGui::SetNextWindowPos(
 		{
 			workPosition.x + workSize.x - panelWidth,
-			workPosition.y + outlinerHeight
+			workPosition.y + elementsHeight
 		},
 		ImGuiCond_Always
 	);
@@ -1397,25 +1507,24 @@ void dx3d::Game::onInternalUpdate()
 	ImGui::SetNextWindowSize(
 		{
 			panelWidth,
-			workSize.y - outlinerHeight
+			workSize.y - elementsHeight
 		},
 		ImGuiCond_Always
 	);
 
-	ImGui::Begin("Inspector Window");
+	ImGui::Begin("INSPECTOR##Workbench");
 
 	if (!m_selectedObject)
 	{
 		ImGui::TextDisabled(
-			"No object selected. Select an object in the Scene Outliner."
+			"Select an element to inspect its state."
 		);
 	}
 	else
 	{
-		ImGui::Text("Selected Object");
-		ImGui::Separator();
-
-		ImGui::Text(
+		ImGui::TextDisabled("ACTIVE OBJECT");
+		ImGui::TextColored(
+			rgba(114, 211, 174),
 			"%s",
 			m_selectedObject->getName().c_str()
 		);
@@ -1437,10 +1546,12 @@ void dx3d::Game::onInternalUpdate()
 			break;
 		}
 
+		ImGui::SameLine();
 		ImGui::TextDisabled(
-			"Gizmo Mode: %s",
+			"  /  %s",
 			gizmoModeName
 		);
+		ImGui::Separator();
 
 		auto& transform =
 			m_selectedObject->getTransform();
@@ -1470,6 +1581,7 @@ void dx3d::Game::onInternalUpdate()
 			scale.z
 		};
 
+		ImGui::TextDisabled("TRANSFORM FLOW  /  LOCAL STATE");
 		ImGui::Spacing();
 
 		if (ImGui::DragFloat3(
