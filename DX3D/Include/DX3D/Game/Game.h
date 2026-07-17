@@ -10,6 +10,9 @@
 #include <chrono>
 #include <vector>
 
+#include <d3d11.h>
+#include <wrl.h>
+
 namespace dx3d
 {
 	class GameObject;
@@ -107,6 +110,7 @@ namespace dx3d
 
 		void pasteCopiedObject();
 
+		bool loadCreditsLogo();
 		void createNewScene();
 
 		void saveScene();
@@ -128,6 +132,17 @@ namespace dx3d
 		ObjectCopyData m_objectClipboard{};
 
 		TransformGizmo m_transformGizmo{};
+
+		bool m_showCreditsWindow = false;
+
+		bool m_showColorPickerWindow = false;
+
+		Microsoft::WRL::ComPtr<
+			ID3D11ShaderResourceView
+		> m_creditsLogo{};
+
+		f32 m_creditsLogoWidth{};
+		f32 m_creditsLogoHeight{};
 
 		ui32 m_cubeCounter{ 0 };
 		ui32 m_planeCounter{ 0 };

@@ -263,6 +263,9 @@
     <ClInclude Include="Game\MainGame.h" />
     <ClInclude Include="DX3D\Include\DX3D\Editor\TransformGizmo.h" />
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="DX3D\Assets\Images\Dlsu.png" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -27,6 +27,9 @@
 #include <limits>
 #include <cmath>
 #include <iterator>
+#include <wincodec.h>
+
+#pragma comment(lib, "windowscodecs.lib")
 
 #include <imgui.h>
 #include <imgui_impl_win32.h>
@@ -75,6 +78,8 @@ dx3d::Game::Game(const GameDesc& desc)
 			"ImGui DirectX 11 initialization failed."
 		);
 	}
+
+	loadCreditsLogo();
 
 	m_inputSystem->setCursorLockArea(m_display->getClientAreaInScreenSpace());
 
@@ -879,6 +884,294 @@ void dx3d::Game::handleViewportPicking(
 	}
 }
 
+bool dx3d::Game::loadCreditsLogo()
+{
+	struct ComScope
+	{
+		bool shouldUninitialize{ false };
+
+		~ComScope()
+		{
+			if (shouldUninitialize)
+			{
+				CoUninitialize();
+			}
+		}
+	};
+
+	ComScope comScope{};
+
+	const HRESULT comResult =
+		CoInitializeEx(
+			nullptr,
+			COINIT_MULTITHREADED
+		);
+
+	if (SUCCEEDED(comResult))
+	{
+		comScope.shouldUninitialize = true;
+	}
+	else if (comResult != RPC_E_CHANGED_MODE)
+	{
+		DX3DLogError(
+			"Failed to initialize COM for the credits logo."
+		);
+
+		return false;
+	}
+
+	Microsoft::WRL::ComPtr<
+		IWICImagingFactory
+	> imagingFactory{};
+
+	HRESULT result =
+		CoCreateInstance(
+			CLSID_WICImagingFactory,
+			nullptr,
+			CLSCTX_INPROC_SERVER,
+			IID_PPV_ARGS(
+				imagingFactory.GetAddressOf()
+			)
+		);
+
+	if (FAILED(result))
+	{
+		DX3DLogError(
+			"Failed to create the WIC imaging factory."
+		);
+
+		return false;
+	}
+
+	Microsoft::WRL::ComPtr<
+		IWICBitmapDecoder
+	> decoder{};
+
+	const wchar_t* logoPaths[]
+	{
+		L"Assets\\Images\\Dlsu.png",
+		L"DX3D\\Assets\\Images\\Dlsu.png"
+	};
+
+	for (const wchar_t* logoPath : logoPaths)
+	{
+		decoder.Reset();
+
+		result =
+			imagingFactory->CreateDecoderFromFilename(
+				logoPath,
+				nullptr,
+				GENERIC_READ,
+				WICDecodeMetadataCacheOnLoad,
+				decoder.GetAddressOf()
+			);
+
+		if (SUCCEEDED(result))
+		{
+			break;
+		}
+	}
+
+	if (FAILED(result))
+	{
+		DX3DLogError(
+			"Failed to find or open the credits logo."
+		);
+
+		return false;
+	}
+
+	Microsoft::WRL::ComPtr<
+		IWICBitmapFrameDecode
+	> frame{};
+
+	result =
+		decoder->GetFrame(
+			0,
+			frame.GetAddressOf()
+		);
+
+	if (FAILED(result))
+	{
+		DX3DLogError(
+			"Failed to read the credits logo frame."
+		);
+
+		return false;
+	}
+
+	UINT width{};
+	UINT height{};
+
+	result =
+		frame->GetSize(
+			&width,
+			&height
+		);
+
+	if (FAILED(result) ||
+		width == 0 ||
+		height == 0)
+	{
+		DX3DLogError(
+			"Failed to read the credits logo size."
+		);
+
+		return false;
+	}
+
+	Microsoft::WRL::ComPtr<
+		IWICFormatConverter
+	> converter{};
+
+	result =
+		imagingFactory->CreateFormatConverter(
+			converter.GetAddressOf()
+		);
+
+	if (FAILED(result))
+	{
+		DX3DLogError(
+			"Failed to create the logo format converter."
+		);
+
+		return false;
+	}
+
+	result =
+		converter->Initialize(
+			frame.Get(),
+			GUID_WICPixelFormat32bppRGBA,
+			WICBitmapDitherTypeNone,
+			nullptr,
+			0.0,
+			WICBitmapPaletteTypeCustom
+		);
+
+	if (FAILED(result))
+	{
+		DX3DLogError(
+			"Failed to convert the credits logo."
+		);
+
+		return false;
+	}
+
+	const UINT bytesPerPixel = 4;
+	const UINT rowPitch =
+		width * bytesPerPixel;
+
+	std::vector<unsigned char> pixels(
+		static_cast<size_t>(rowPitch) *
+		static_cast<size_t>(height)
+	);
+
+	result =
+		converter->CopyPixels(
+			nullptr,
+			rowPitch,
+			static_cast<UINT>(
+				pixels.size()
+				),
+			pixels.data()
+		);
+
+	if (FAILED(result))
+	{
+		DX3DLogError(
+			"Failed to copy the credits logo pixels."
+		);
+
+		return false;
+	}
+
+	D3D11_TEXTURE2D_DESC textureDescription{};
+
+	textureDescription.Width = width;
+	textureDescription.Height = height;
+	textureDescription.MipLevels = 1;
+	textureDescription.ArraySize = 1;
+
+	textureDescription.Format =
+		DXGI_FORMAT_R8G8B8A8_UNORM;
+
+	textureDescription.SampleDesc.Count = 1;
+
+	textureDescription.Usage =
+		D3D11_USAGE_DEFAULT;
+
+	textureDescription.BindFlags =
+		D3D11_BIND_SHADER_RESOURCE;
+
+	D3D11_SUBRESOURCE_DATA textureData{};
+
+	textureData.pSysMem =
+		pixels.data();
+
+	textureData.SysMemPitch =
+		rowPitch;
+
+	Microsoft::WRL::ComPtr<
+		ID3D11Texture2D
+	> texture{};
+
+	ID3D11Device* device =
+		m_graphicsDevice->getD3DDevice();
+
+	if (!device)
+	{
+		DX3DLogError(
+			"DirectX device is unavailable while loading the logo."
+		);
+
+		return false;
+	}
+
+	result =
+		device->CreateTexture2D(
+			&textureDescription,
+			&textureData,
+			texture.GetAddressOf()
+		);
+
+	if (FAILED(result))
+	{
+		DX3DLogError(
+			"Failed to create the credits logo texture."
+		);
+
+		return false;
+	}
+
+	result =
+		device->CreateShaderResourceView(
+			texture.Get(),
+			nullptr,
+			m_creditsLogo.ReleaseAndGetAddressOf()
+		);
+
+	if (FAILED(result))
+	{
+		DX3DLogError(
+			"Failed to create the credits logo resource view."
+		);
+
+		return false;
+	}
+
+	m_creditsLogoWidth =
+		static_cast<f32>(width);
+
+	m_creditsLogoHeight =
+		static_cast<f32>(height);
+
+	DX3DLogInfo(
+		"Credits logo loaded."
+	);
+
+	return true;
+}
+
 void dx3d::Game::createNewScene()
 {
 	SceneSerializer::clear(
@@ -1279,7 +1572,151 @@ void dx3d::Game::onInternalUpdate()
 			ImGui::EndMenu();
 		}
 
+		if (ImGui::BeginMenu("Tools"))
+		{
+			if (ImGui::MenuItem("Color Picker"))
+			{
+				m_showColorPickerWindow = true;
+			}
+
+			ImGui::EndMenu();
+		}
+
+		if (ImGui::BeginMenu("About"))
+		{
+			if (ImGui::MenuItem("Credits"))
+			{
+				m_showCreditsWindow = true;
+			}
+
+			ImGui::EndMenu();
+		}
+
 		ImGui::EndMainMenuBar();
+	}
+
+	if (m_showCreditsWindow)
+	{
+		ImGui::SetNextWindowSize(
+			ImVec2(610.0f, 400.0f),
+			ImGuiCond_FirstUseEver
+		);
+
+		if (ImGui::Begin(
+			"Credits",
+			&m_showCreditsWindow
+		))
+		{
+			ImGui::TextUnformatted("About");
+			ImGui::Spacing();
+
+			if (m_creditsLogo &&
+				m_creditsLogoWidth > 0.0f &&
+				m_creditsLogoHeight > 0.0f)
+			{
+				constexpr f32 logoWidth = 180.0f;
+
+				const f32 logoHeight =
+					logoWidth *
+					(m_creditsLogoHeight /
+						m_creditsLogoWidth);
+
+				const f32 availableWidth =
+					ImGui::GetContentRegionAvail().x;
+
+				const f32 logoPositionX =
+					ImGui::GetCursorPosX() +
+					std::max(
+						0.0f,
+						(availableWidth - logoWidth) *
+						0.5f
+					);
+
+				ImGui::SetCursorPosX(
+					logoPositionX
+				);
+
+				ImGui::Image(
+					(ImTextureID)m_creditsLogo.Get(),
+					ImVec2(
+						logoWidth,
+						logoHeight
+					)
+				);
+
+				ImGui::Spacing();
+				ImGui::Separator();
+				ImGui::Spacing();
+			}
+
+			ImGui::TextUnformatted(
+				"Direct X 11 Game Engine v1.0"
+			);
+
+			ImGui::TextUnformatted(
+				"Developed by: Jm Sy-wico"
+			);
+
+			ImGui::TextUnformatted(
+				"July 14, 2026"
+			);
+
+			ImGui::TextUnformatted(
+				"GDENG03 X21"
+			);
+		}
+
+		ImGui::End();
+	}
+
+	if (m_showColorPickerWindow)
+	{
+		ImGui::SetNextWindowSize(
+			ImVec2(360.0f, 430.0f),
+			ImGuiCond_FirstUseEver
+		);
+
+		if (ImGui::Begin(
+			"Color Picker",
+			&m_showColorPickerWindow
+		))
+		{
+			static float placeholderColor[4]
+			{
+				1.0f,
+				0.0f,
+				0.0f,
+				1.0f
+			};
+
+			ImGui::TextUnformatted(
+				"Color Picker Placeholder"
+			);
+
+			ImGui::Separator();
+			ImGui::Spacing();
+
+			ImGui::BeginDisabled();
+
+			ImGui::ColorPicker4(
+				"##PlaceholderColorPicker",
+				placeholderColor,
+				ImGuiColorEditFlags_AlphaBar |
+				ImGuiColorEditFlags_DisplayRGB
+			);
+
+			ImGui::Spacing();
+
+			ImGui::InputFloat4(
+				"RGBA",
+				placeholderColor,
+				"%.2f"
+			);
+
+			ImGui::EndDisabled();
+		}
+
+		ImGui::End();
 	}
 
 	const ImGuiViewport* viewport =
