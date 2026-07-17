@@ -104,8 +104,6 @@ void dx3d::World::destroyGameObjectInternal(GameObject* object)
 	if (!object)
 		return;
 
-	// Remove every component belonging to this object
-	// from the World's component lists.
 	for (auto& [componentTypeId, component] : object->m_components)
 	{
 		auto componentListIt = m_components.find(componentTypeId);
@@ -130,7 +128,6 @@ void dx3d::World::destroyGameObjectInternal(GameObject* object)
 		}
 	}
 
-	// Make sure the transform is not waiting in the dirty list.
 	m_dirtyTransforms.erase(
 		std::remove(
 			m_dirtyTransforms.begin(),
@@ -140,7 +137,6 @@ void dx3d::World::destroyGameObjectInternal(GameObject* object)
 		m_dirtyTransforms.end()
 	);
 
-	// Remove and delete the actual GameObject.
 	auto objectListIt = m_objects.find(object->getTypeId());
 
 	if (objectListIt == m_objects.end())

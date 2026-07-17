@@ -33,8 +33,6 @@ private:
 	dx3d::f32 m_cameraFastSpeed{ 12.0f };
 	dx3d::f32 m_cameraLookSpeed{ 0.0025f };
 
-	// True only when right mouse camera control was started
-	// outside an ImGui window.
 	bool m_isCameraControlActive{ false };
 
 	struct CircleData

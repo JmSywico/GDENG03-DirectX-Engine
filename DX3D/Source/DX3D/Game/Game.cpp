@@ -136,7 +136,6 @@ dx3d::Game::Game(const GameDesc& desc)
 	m_world = std::make_unique<World>(WorldDesc{ BaseDesc{*m_logger}, GameContext{*m_inputSystem} });
 	m_worldRenderer = std::make_unique<WorldRenderer>(WorldRendererDesc{ {*m_logger},*m_graphicsDevice });
 
-	// Initialize Dear ImGui.
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 
@@ -147,8 +146,6 @@ dx3d::Game::Game(const GameDesc& desc)
 	ImGui::StyleColorsDark();
 	applyWorkbenchStyle();
 
-	// Prefer the native Windows variable UI face. Keep startup resilient on
-	// older Windows installations where this font is not present.
 	ImFont* editorFont = io.Fonts->AddFontFromFileTTF(
 		"C:\\Windows\\Fonts\\SegUIVar.ttf",
 		16.0f
@@ -328,7 +325,6 @@ dx3d::Game::getObjectMeshData(
 	if (!object)
 		return nullptr;
 
-	// Check custom combined meshes first.
 	if (auto* combinedComponent =
 		object->getComponent<CombinedMeshComponent>())
 	{
@@ -363,8 +359,6 @@ bool dx3d::Game::canMergeSelectedObjects() const noexcept
 		if (!object)
 			return false;
 
-		// The editor camera and unsupported object types
-		// cannot participate in a mesh merge.
 		if (object->getComponent<CameraComponent>())
 			return false;
 
@@ -406,7 +400,6 @@ void dx3d::Game::mergeSelectedObjects()
 	if (combinedMesh.empty())
 		return;
 
-	// Calculate a bounding-box center for the new pivot.
 	Vec3 minimum =
 		combinedMesh.vertices.front().position;
 
@@ -444,8 +437,7 @@ void dx3d::Game::mergeSelectedObjects()
 		(minimum.z + maximum.z) * 0.5f
 	};
 
-	// The vertices are currently in world space.
-	// Move them relative to the new object's centered pivot.
+
 	for (auto& vertex : combinedMesh.vertices)
 	{
 		vertex.position.x -= mergedPivot.x;
@@ -453,8 +445,6 @@ void dx3d::Game::mergeSelectedObjects()
 		vertex.position.z -= mergedPivot.z;
 	}
 
-	// Keep a copy because selection will be replaced after
-	// creating the merged object.
 	const std::vector<GameObject*> originalObjects =
 		m_selectedObjects;
 
@@ -485,8 +475,6 @@ void dx3d::Game::mergeSelectedObjects()
 		{ 1.0f, 1.0f, 1.0f }
 	);
 
-	// Queue the original objects for removal only after
-	// the new merged object was created successfully.
 	for (auto* originalObject : originalObjects)
 	{
 		m_world->destroyGameObject(
@@ -494,8 +482,7 @@ void dx3d::Game::mergeSelectedObjects()
 		);
 	}
 
-	// Remove every old pointer from editor selection and
-	// make the new combined object active.
+
 	selectOnly(mergedObject);
 }
 
@@ -504,7 +491,6 @@ bool dx3d::Game::canCopySelectedObject() const noexcept
 	if (!m_selectedObject)
 		return false;
 
-	// Do not allow the editor camera to be copied.
 	if (m_selectedObject->getComponent<
 		CameraComponent>())
 	{
@@ -556,8 +542,6 @@ void dx3d::Game::copySelectedObject()
 	copiedData.scale =
 		transform.getScale();
 
-	// Combined meshes must copy their complete custom
-	// vertex and index data.
 	if (auto* combinedComponent =
 		m_selectedObject->getComponent<
 		CombinedMeshComponent>())
@@ -587,7 +571,6 @@ void dx3d::Game::copySelectedObject()
 		return;
 	}
 
-	// A new copy operation restarts the pasted-object count.
 	copiedData.pasteCount = 0;
 
 	m_objectClipboard =
@@ -655,7 +638,6 @@ void dx3d::Game::pasteCopiedObject()
 		pastedName
 	);
 
-	// Preserve the exact transform of the copied object.
 	auto& pastedTransform =
 		pastedObject->getTransform();
 
@@ -671,7 +653,6 @@ void dx3d::Game::pasteCopiedObject()
 		m_objectClipboard.scale
 	);
 
-	// Automatically select the newly pasted object.
 	selectOnly(
 		pastedObject
 	);
@@ -701,7 +682,6 @@ void dx3d::Game::handleViewportPicking(
 	if (rightMouseDown)
 		return;
 
-	// A gizmo click must not trigger object picking.
 	if (m_transformGizmo.isUsing() ||
 		m_transformGizmo.getHoveredAxis() !=
 		TransformGizmo::Axis::None)
@@ -709,7 +689,6 @@ void dx3d::Game::handleViewportPicking(
 		return;
 	}
 
-	// Do not pick through editor windows or menus.
 	if (ImGui::GetIO().WantCaptureMouse)
 		return;
 
@@ -732,9 +711,6 @@ void dx3d::Game::handleViewportPicking(
 		viewportArea.height
 	};
 
-	// Finds the closest hit from one ray.
-	// planeObjectsOnly determines whether this pass searches
-	// planes or all other mesh objects.
 	auto findClosestHit =
 		[&](
 			const PickingRay& ray,
@@ -810,8 +786,6 @@ void dx3d::Game::handleViewportPicking(
 		f32 y{};
 	};
 
-	// The first sample is the exact cursor position.
-	// The other samples provide a small selection tolerance.
 	constexpr f32 pickingRadius = 6.0f;
 	constexpr f32 diagonalRadius = 4.25f;
 
@@ -838,7 +812,6 @@ void dx3d::Game::handleViewportPicking(
 	f32 bestMeshDistance =
 		std::numeric_limits<f32>::max();
 
-	// Planes are only selected using the exact center ray.
 	GameObject* centerPlaneObject = nullptr;
 
 	f32 centerPlaneDistance =
@@ -873,8 +846,6 @@ void dx3d::Game::handleViewportPicking(
 		f32 planeDistance =
 			std::numeric_limits<f32>::max();
 
-		// Search cubes, merged objects, and other
-		// non-plane mesh objects.
 		findClosestHit(
 			pickingRay,
 			false,
@@ -882,7 +853,6 @@ void dx3d::Game::handleViewportPicking(
 			meshDistance
 		);
 
-		// Search normal PlaneComponent objects separately.
 		findClosestHit(
 			pickingRay,
 			true,
@@ -890,9 +860,6 @@ void dx3d::Game::handleViewportPicking(
 			planeDistance
 		);
 
-		// Remember the plane directly beneath the cursor.
-		// Nearby offset rays should not make the plane
-		// selection itself oversized.
 		if (offsetIndex == 0)
 		{
 			centerPlaneObject =
@@ -905,8 +872,6 @@ void dx3d::Game::handleViewportPicking(
 		if (!meshObject)
 			continue;
 
-		// Do not select a mesh that is hidden behind a plane
-		// along the same sample ray.
 		const bool meshIsVisible =
 			!planeObject ||
 			meshDistance <= planeDistance + 0.0001f;
@@ -950,14 +915,11 @@ void dx3d::Game::handleViewportPicking(
 
 	if (bestMeshObject)
 	{
-		// Prefer a nearby visible cube or merged mesh.
 		closestObject =
 			bestMeshObject;
 	}
 	else if (centerPlaneObject)
 	{
-		// The plane remains the fallback when no smaller
-		// mesh was found near the cursor.
 		closestObject =
 			centerPlaneObject;
 	}
@@ -1108,14 +1070,13 @@ void dx3d::Game::onInternalUpdate()
 
 	m_world->update(deltaTime);
 
-	// Render the 3D scene first.
 	m_worldRenderer->render(
 		*m_world,
 		m_display->getSwapChain(),
 		deltaTime
 	);
 
-	// --------------------
+// --------------------
 // Main editor menu
 // --------------------
 
@@ -1448,7 +1409,6 @@ void dx3d::Game::onInternalUpdate()
 		gizmoViewport
 	);
 
-	// A simple scene element list keeps selection immediate and unobtrusive.
 	ImGui::SetNextWindowPos(
 		{
 			workPosition.x + workSize.x - panelWidth,
@@ -1739,7 +1699,7 @@ void dx3d::Game::onInternalUpdate()
 		gizmoViewport
 	);
 
-	// --------------------------------------------------
+// --------------------------------------------------
 // Transform gizmo mode shortcuts
 // --------------------------------------------------
 
@@ -1791,7 +1751,7 @@ void dx3d::Game::onInternalUpdate()
 		}
 	}
 
-	// --------------------------------------------------
+// --------------------------------------------------
 // Object clipboard shortcuts
 // Ctrl + C = copy active object
 // Ctrl + V = paste copied object
@@ -1824,7 +1784,6 @@ void dx3d::Game::onInternalUpdate()
 		}
 	}
 
-	// Delete the selected scene object using the keyboard.
 	const bool deletePressed =
 		m_inputSystem->isKeyPressed(KeyCode::Delete);
 
@@ -1853,7 +1812,6 @@ void dx3d::Game::onInternalUpdate()
 		);
 	}
 
-	// Render the UI over the 3D scene.
 	ImGui::Render();
 
 	m_graphicsDevice->bindBackBuffer(
@@ -1864,6 +1822,5 @@ void dx3d::Game::onInternalUpdate()
 		ImGui::GetDrawData()
 	);
 
-	// Present only after both the scene and UI are rendered.
 	m_display->getSwapChain().present();
 }
