@@ -2,6 +2,7 @@
 #include <DX3D/Game/GameObject.h>
 #include <DX3D/Game/Component.h>
 #include <DX3D/Component/TransformComponent.h>
+#include <DX3D/Component/RigidBodyComponent.h>
 #include <algorithm>
 
 dx3d::World::World(const WorldDesc& desc) : Base(desc.base), m_gameContext(desc.gameContext)
@@ -44,13 +45,97 @@ void dx3d::World::update(f32 deltaTime)
 		{
 			object->onUpdate(deltaTime);
 		}
-	}	
+	}
+
+	if (m_physicsEnabled)
+	{
+		m_physicsSystem.update(
+			*this,
+			deltaTime
+		);
+	}
 
 	for (auto& comp : m_dirtyTransforms)
 	{
 		comp->updateWorldMatrix();
 	}
 	m_dirtyTransforms.clear();
+}
+
+void dx3d::World::setPhysicsEnabled(
+	bool enabled
+) noexcept
+{
+	if (enabled &&
+		!m_physicsHasStarted)
+	{
+		ui32 rigidBodyCount = 0;
+
+		RigidBodyComponent* const* rigidBodies =
+			getComponents<RigidBodyComponent>(
+				rigidBodyCount
+			);
+
+		for (ui32 index = 0;
+			index < rigidBodyCount;
+			++index)
+		{
+			if (!rigidBodies[index])
+				continue;
+
+			rigidBodies[index]->
+				captureInitialState();
+		}
+
+		m_physicsHasStarted = true;
+	}
+
+	m_physicsEnabled = enabled;
+
+	if (!enabled)
+	{
+		m_physicsSystem.resetAccumulator();
+	}
+}
+
+bool dx3d::World::isPhysicsEnabled() const noexcept
+{
+	return m_physicsEnabled;
+}
+
+void dx3d::World::stopPhysics() noexcept
+{
+	m_physicsEnabled = false;
+
+	if (m_physicsHasStarted)
+	{
+		ui32 rigidBodyCount = 0;
+
+		RigidBodyComponent* const* rigidBodies =
+			getComponents<RigidBodyComponent>(
+				rigidBodyCount
+			);
+
+		for (ui32 index = 0;
+			index < rigidBodyCount;
+			++index)
+		{
+			if (!rigidBodies[index])
+				continue;
+
+			rigidBodies[index]->
+				restoreInitialState();
+		}
+	}
+
+	m_physicsSystem.resetAccumulator();
+
+	m_physicsHasStarted = false;
+}
+
+bool dx3d::World::hasPhysicsStarted() const noexcept
+{
+	return m_physicsHasStarted;
 }
 
 dx3d::GameObject* dx3d::World::createGameObjectInternal(UniquePtr<GameObject>& object)

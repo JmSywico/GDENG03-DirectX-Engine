@@ -183,6 +183,7 @@
     <ClCompile Include="DX3D\Source\DX3D\Component\CubeComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\DirectionalLightComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\PlaneComponent.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Component\RigidBodyComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\TransformComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Game\Component.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Game\WorldRenderer.cpp" />
@@ -190,6 +191,7 @@
     <ClCompile Include="DX3D\Source\DX3D\Graphics\PrimitiveMeshData.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Graphics\ShadowMap.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Input\InputSystem.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Physics\PhysicsSysterm.cpp" />
     <ClCompile Include="DX3D\Source\Editor\ViewportPicker.cpp" />
     <ClCompile Include="Game\Objects\Player.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Game\GameObject.cpp" />
@@ -219,6 +221,7 @@
     <ClInclude Include="DX3D\Include\DX3D\Component\CircleComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\DirectionalLightComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\PlaneComponent.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Component\RigidBodyComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\TransformComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Core\Identifiable.h" />
     <ClInclude Include="DX3D\Include\DX3D\Editor\ViewportPicker.h" />
@@ -227,6 +230,7 @@
     <ClInclude Include="DX3D\Include\DX3D\Input\InputSystem.h" />
     <ClInclude Include="DX3D\Include\DX3D\Math\MathUtils.h" />
     <ClInclude Include="DX3D\Include\DX3D\Math\Vec2.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Physics\PhysicsSystem.h" />
     <ClInclude Include="DX3D\Source\DX3D\Component\CombinedMeshComponent.h" />
     <ClInclude Include="DX3D\Source\DX3D\Game\WorldRenderer.h" />
     <ClInclude Include="DX3D\Source\DX3D\Graphics\MeshData.h" />

@@ -3,6 +3,7 @@
 #include <DX3D/Core/Common.h>
 #include <DX3D/Core/Base.h>
 #include <DX3D/Core/Identifiable.h>
+#include <DX3D/Physics/PhysicsSystem.h>
 
 #include <unordered_map>
 #include <vector>
@@ -42,6 +43,16 @@ namespace dx3d
 		}
 
 		void update(f32 deltaTime);
+
+		void setPhysicsEnabled(
+			bool enabled
+		) noexcept;
+
+		bool isPhysicsEnabled() const noexcept;
+
+		void stopPhysics() noexcept;
+
+		bool hasPhysicsStarted() const noexcept;
 
 		void destroyGameObject(GameObject* object);
 
@@ -83,6 +94,11 @@ namespace dx3d
 
 	private:
 		GameContext m_gameContext;
+
+		PhysicsSystem m_physicsSystem{};
+
+		bool m_physicsEnabled{ false };
+		bool m_physicsHasStarted{ false };
 
 		std::unordered_map<
 			size_t,

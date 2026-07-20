@@ -20,6 +20,7 @@
 #include <DX3D/Component/CameraComponent.h>
 #include <DX3D/Component/CombinedMeshComponent.h>
 #include <DX3D/Component/DirectionalLightComponent.h>
+#include <DX3D/Component/RigidBodyComponent.h>
 
 #include <string>
 #include <vector>
@@ -1174,6 +1175,8 @@ bool dx3d::Game::loadCreditsLogo()
 
 void dx3d::Game::createNewScene()
 {
+	m_world->stopPhysics();
+
 	SceneSerializer::clear(
 		*m_world
 	);
@@ -1220,6 +1223,8 @@ void dx3d::Game::saveScene()
 
 void dx3d::Game::loadScene()
 {
+	m_world->stopPhysics();
+
 	const SceneLoadResult result =
 		SceneSerializer::load(
 			*m_world,
@@ -1304,6 +1309,57 @@ void dx3d::Game::onInternalUpdate()
 
 	if (ImGui::BeginMainMenuBar())
 	{
+		const bool physicsIsPlaying =
+			m_world->isPhysicsEnabled();
+
+		const bool physicsHasStarted =
+			m_world->hasPhysicsStarted();
+
+		ImGui::BeginDisabled(
+			physicsIsPlaying
+		);
+
+		if (ImGui::Button("Play"))
+		{
+			m_world->setPhysicsEnabled(
+				true
+			);
+		}
+
+		ImGui::EndDisabled();
+
+		ImGui::SameLine();
+
+		ImGui::BeginDisabled(
+			!physicsIsPlaying
+		);
+
+		if (ImGui::Button("Pause"))
+		{
+			m_world->setPhysicsEnabled(
+				false
+			);
+		}
+
+		ImGui::EndDisabled();
+
+		ImGui::SameLine();
+
+		ImGui::BeginDisabled(
+			!physicsHasStarted
+		);
+
+		if (ImGui::Button("Stop"))
+		{
+			m_world->stopPhysics();
+		}
+
+		ImGui::EndDisabled();
+
+		ImGui::SameLine();
+		ImGui::Separator();
+		ImGui::SameLine();
+
 		if (ImGui::BeginMenu("File"))
 		{
 			if (ImGui::MenuItem(
@@ -1378,6 +1434,176 @@ void dx3d::Game::onInternalUpdate()
 
 				selectOnly(cube);
 			}
+
+			ImGui::Separator();
+
+			static int physicsCubeSpawnCount = 20;
+
+			const bool physicsSimulationStarted =
+				m_world->hasPhysicsStarted();
+
+			ImGui::BeginDisabled(
+				physicsSimulationStarted
+			);
+
+			ImGui::SetNextItemWidth(120.0f);
+
+			if (ImGui::InputInt(
+				"Physics Cube Count",
+				&physicsCubeSpawnCount
+			))
+			{
+				physicsCubeSpawnCount =
+					std::clamp(
+						physicsCubeSpawnCount,
+						1,
+						100
+					);
+			}
+
+			if (ImGui::MenuItem("Spawn Physics Cubes"))
+			{
+				physicsCubeSpawnCount =
+					std::clamp(
+						physicsCubeSpawnCount,
+						1,
+						100
+					);
+
+				GameObject* lastCreatedCube = nullptr;
+
+				for (int cubeIndex = 0;
+					cubeIndex < physicsCubeSpawnCount;
+					++cubeIndex)
+				{
+					++m_cubeCounter;
+
+					auto* cube =
+						m_world->createGameObject<
+						GameObject>();
+
+					cube->setName(
+						"Physics Cube (" +
+						std::to_string(
+							m_cubeCounter
+						) +
+						")"
+					);
+
+					cube->createOrGetComponent<
+						CubeComponent>();
+
+					auto* rigidBody =
+						cube->createOrGetComponent<
+						RigidBodyComponent>();
+
+					const int clusterColumns = 3;
+					const int clusterRows = 3;
+
+					const int column =
+						cubeIndex % clusterColumns;
+
+					const int row =
+						(cubeIndex / clusterColumns) % clusterRows;
+
+					const int layer =
+						cubeIndex / (clusterColumns * clusterRows);
+
+					const f32 spacingX = 0.22f;
+					const f32 spacingZ = 0.22f;
+					const f32 layerHeight = 0.22f;
+
+					const f32 spawnX =
+						(
+							static_cast<f32>(column) -
+							static_cast<f32>(clusterColumns - 1) * 0.5f
+							) * spacingX;
+
+					const f32 spawnZ =
+						(
+							static_cast<f32>(row) -
+							static_cast<f32>(clusterRows - 1) * 0.5f
+							) * spacingZ;
+
+					const f32 spawnY =
+						5.8f +
+						static_cast<f32>(layer) * layerHeight;
+
+					const f32 horizontalVelocityX =
+						(
+							static_cast<f32>(column) -
+							static_cast<f32>(clusterColumns - 1) * 0.5f
+							) * 2.0f;
+
+					const f32 horizontalVelocityZ =
+						(
+							static_cast<f32>(row) -
+							static_cast<f32>(clusterRows - 1) * 0.5f
+							) * 2.0f;
+
+					rigidBody->setVelocity(
+						{
+							horizontalVelocityX,
+							0.0f,
+							horizontalVelocityZ
+						}
+					);
+
+					rigidBody->setAngularVelocity(
+						{
+							0.8f +
+								static_cast<f32>(cubeIndex % 4) * 0.2f,
+							0.7f +
+								static_cast<f32>(cubeIndex % 3) * 0.2f,
+							0.6f +
+								static_cast<f32>(cubeIndex % 5) * 0.15f
+						}
+					);
+
+					rigidBody->setRestitution(
+						0.65f
+					);
+
+					rigidBody->setFriction(
+						0.05f
+					);
+
+					cube->getTransform().setPosition(
+						{
+							spawnX,
+							spawnY,
+							spawnZ
+						}
+					);
+
+					cube->getTransform().setRotation(
+						{
+							0.15f * static_cast<f32>(cubeIndex % 5),
+							0.22f * static_cast<f32>((cubeIndex + 2) % 6),
+							0.18f * static_cast<f32>((cubeIndex + 1) % 4)
+						}
+					);
+
+					cube->getTransform().setScale(
+						{
+							1.0f,
+							1.0f,
+							1.0f
+						}
+					);
+
+					lastCreatedCube = cube;
+				}
+
+				if (lastCreatedCube)
+				{
+					selectOnly(
+						lastCreatedCube
+					);
+				}
+			}
+
+			ImGui::EndDisabled();
 
 			if (ImGui::MenuItem("Create Plane"))
 			{
