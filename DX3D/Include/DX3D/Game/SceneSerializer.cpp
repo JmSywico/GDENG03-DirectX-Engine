@@ -8,6 +8,7 @@
 #include <DX3D/Component/PlaneComponent.h>
 #include <DX3D/Component/CombinedMeshComponent.h>
 #include <DX3D/Component/DirectionalLightComponent.h>
+#include <DX3D/Component/RigidBodyComponent.h>
 #include <DX3D/Component/TransformComponent.h>
 
 #include <DX3D/Graphics/MeshData.h>
@@ -35,7 +36,8 @@ namespace
 		'E'
 	};
 
-	constexpr dx3d::ui32 sceneVersion = 1;
+	constexpr dx3d::ui32 sceneVersion = 3;
+	constexpr dx3d::ui32 minimumSupportedSceneVersion = 1;
 	constexpr dx3d::ui32 maximumObjectCount = 100000;
 	constexpr dx3d::ui32 maximumStringLength = 1024 * 1024;
 	constexpr dx3d::ui32 maximumVertexCount = 10000000;
@@ -65,6 +67,23 @@ namespace
 		};
 
 		dx3d::MeshData meshData{};
+
+		bool hasRigidBody{ false };
+		dx3d::Vec3 rigidBodyVelocity{};
+		dx3d::Vec3 rigidBodyAngularVelocity{};
+		dx3d::f32 rigidBodyMass{ 1.0f };
+		dx3d::f32 rigidBodyRestitution{ 0.45f };
+		dx3d::f32 rigidBodyFriction{ 0.20f };
+		bool rigidBodyUseGravity{ true };
+		bool rigidBodyIsStatic{ false };
+		dx3d::Vec3 rigidBodyColliderSize
+		{
+			1.0f,
+			1.0f,
+			1.0f
+		};
+		dx3d::Vec3 rigidBodyColliderOffset{};
+		bool rigidBodyColliderUsesTransformScale{ true };
 
 		dx3d::Vec3 lightColor
 		{
@@ -213,6 +232,40 @@ namespace
 			readValue(stream, value.x) &&
 			readValue(stream, value.y) &&
 			readValue(stream, value.z);
+	}
+
+	bool writeBool(
+		std::ofstream& stream,
+		bool value
+	)
+	{
+		const dx3d::ui32 storedValue =
+			value ? 1u : 0u;
+
+		return writeValue(
+			stream,
+			storedValue
+		);
+	}
+
+	bool readBool(
+		std::ifstream& stream,
+		bool& value
+	)
+	{
+		dx3d::ui32 storedValue = 0;
+
+		if (!readValue(
+			stream,
+			storedValue
+		))
+		{
+			return false;
+		}
+
+		value = storedValue != 0;
+
+		return true;
 	}
 
 	bool writeVec4(
@@ -511,6 +564,74 @@ namespace
 			return false;
 		}
 
+		auto* rigidBody =
+			object->getComponent<
+			dx3d::RigidBodyComponent
+			>();
+
+		if (!writeBool(
+			stream,
+			rigidBody != nullptr
+		))
+		{
+			return false;
+		}
+
+		if (rigidBody)
+		{
+			if (
+				!writeVec3(
+					stream,
+					rigidBody->getVelocity()
+				) ||
+				!writeVec3(
+					stream,
+					rigidBody->
+					getAngularVelocity()
+				) ||
+				!writeValue(
+					stream,
+					rigidBody->getMass()
+				) ||
+				!writeValue(
+					stream,
+					rigidBody->
+					getRestitution()
+				) ||
+				!writeValue(
+					stream,
+					rigidBody->getFriction()
+				) ||
+				!writeBool(
+					stream,
+					rigidBody->
+					getUseGravity()
+				) ||
+				!writeBool(
+					stream,
+					rigidBody->getStatic()
+				) ||
+				!writeVec3(
+					stream,
+					rigidBody->
+					getColliderSize()
+				) ||
+				!writeVec3(
+					stream,
+					rigidBody->
+					getColliderOffset()
+				) ||
+				!writeBool(
+					stream,
+					rigidBody->
+					getColliderUsesTransformScale()
+				)
+				)
+			{
+				return false;
+			}
+		}
+
 		switch (type)
 		{
 		case SceneObjectType::Cube:
@@ -580,7 +701,8 @@ namespace
 
 	bool readSceneObject(
 		std::ifstream& stream,
-		SerializedSceneObject& object
+		SerializedSceneObject& object,
+		dx3d::ui32 storedVersion
 	)
 	{
 		dx3d::ui32 storedType = 0;
@@ -633,6 +755,83 @@ namespace
 			)
 		{
 			return false;
+		}
+
+		if (storedVersion >= 2)
+		{
+			if (!readBool(
+				stream,
+				object.hasRigidBody
+			))
+			{
+				return false;
+			}
+
+			if (object.hasRigidBody)
+			{
+				if (
+					!readVec3(
+						stream,
+						object.
+						rigidBodyVelocity
+					) ||
+					!readVec3(
+						stream,
+						object.
+						rigidBodyAngularVelocity
+					) ||
+					!readValue(
+						stream,
+						object.rigidBodyMass
+					) ||
+					!readValue(
+						stream,
+						object.
+						rigidBodyRestitution
+					) ||
+					!readValue(
+						stream,
+						object.rigidBodyFriction
+					) ||
+					!readBool(
+						stream,
+						object.
+						rigidBodyUseGravity
+					) ||
+					!readBool(
+						stream,
+						object.
+						rigidBodyIsStatic
+					)
+					)
+				{
+					return false;
+				}
+
+				if (storedVersion >= 3)
+				{
+					if (
+						!readVec3(
+							stream,
+							object.
+							rigidBodyColliderSize
+						) ||
+						!readVec3(
+							stream,
+							object.
+							rigidBodyColliderOffset
+						) ||
+						!readBool(
+							stream,
+							object.
+							rigidBodyColliderUsesTransformScale
+						)
+						)
+					{
+						return false;
+					}
+				}
+			}
 		}
 
 		switch (object.type)
@@ -768,6 +967,61 @@ namespace
 
 			break;
 		}
+		}
+
+		if (data.hasRigidBody)
+		{
+			auto* rigidBody =
+				object->createOrGetComponent<
+				dx3d::RigidBodyComponent
+				>();
+
+			rigidBody->setVelocity(
+				data.rigidBodyVelocity
+			);
+
+			rigidBody->setAngularVelocity(
+				data.
+				rigidBodyAngularVelocity
+			);
+
+			rigidBody->setMass(
+				data.rigidBodyMass
+			);
+
+			rigidBody->setRestitution(
+				data.
+				rigidBodyRestitution
+			);
+
+			rigidBody->setFriction(
+				data.rigidBodyFriction
+			);
+
+			rigidBody->setUseGravity(
+				data.
+				rigidBodyUseGravity
+			);
+
+			rigidBody->setStatic(
+				data.rigidBodyIsStatic
+			);
+
+			rigidBody->setColliderSize(
+				data.
+				rigidBodyColliderSize
+			);
+
+			rigidBody->setColliderOffset(
+				data.
+				rigidBodyColliderOffset
+			);
+
+			rigidBody->
+				setColliderUsesTransformScale(
+					data.
+					rigidBodyColliderUsesTransformScale
+				);
 		}
 
 		auto& transform =
@@ -947,7 +1201,9 @@ dx3d::SceneSerializer::load(
 		}
 
 		if (
-			storedVersion != sceneVersion ||
+			storedVersion <
+			minimumSupportedSceneVersion ||
+			storedVersion > sceneVersion ||
 			objectCount > maximumObjectCount
 			)
 		{
@@ -967,7 +1223,8 @@ dx3d::SceneSerializer::load(
 		{
 			if (!readSceneObject(
 				stream,
-				object
+				object,
+				storedVersion
 			))
 			{
 				return result;

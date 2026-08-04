@@ -11,33 +11,7 @@ dx3d::World::World(const WorldDesc& desc) : Base(desc.base), m_gameContext(desc.
 
 void dx3d::World::update(f32 deltaTime)
 {
-	if (m_events.size())
-	{
-		std::swap(m_events, m_eventsSwapBuffer);
-		std::swap(m_pendingObjects, m_pendingObjectsSwapBuffer);
-	
-		for (auto& e : m_eventsSwapBuffer)
-		{
-			auto objTypeId = e.object->getTypeId();
-			auto pendingObjIndex = e.pendingObjectIndex;
-
-			if (e.eventType == EventType::Create)
-			{
-				auto& obj = m_pendingObjectsSwapBuffer[pendingObjIndex];
-				auto ptr = obj.get();
-
-				m_objects[objTypeId].push_back(std::move(obj));
-				ptr->onCreate();
-			}
-			else if (e.eventType == EventType::Destroy)
-			{
-				destroyGameObjectInternal(e.object);
-			}
-		}
-
-		m_pendingObjectsSwapBuffer.clear();
-		m_eventsSwapBuffer.clear();
-	}
+	flushGameObjectEvents();
 
 	for (auto&& [typeId, objects] : m_objects)
 	{
@@ -60,6 +34,59 @@ void dx3d::World::update(f32 deltaTime)
 		comp->updateWorldMatrix();
 	}
 	m_dirtyTransforms.clear();
+}
+
+void dx3d::World::flushGameObjectEvents()
+{
+	if (!m_events.size())
+		return;
+
+	std::swap(
+		m_events,
+		m_eventsSwapBuffer
+	);
+
+	std::swap(
+		m_pendingObjects,
+		m_pendingObjectsSwapBuffer
+	);
+
+	for (auto& e : m_eventsSwapBuffer)
+	{
+		auto objTypeId =
+			e.object->getTypeId();
+
+		auto pendingObjIndex =
+			e.pendingObjectIndex;
+
+		if (e.eventType ==
+			EventType::Create)
+		{
+			auto& obj =
+				m_pendingObjectsSwapBuffer
+				[pendingObjIndex];
+
+			auto ptr =
+				obj.get();
+
+			m_objects[objTypeId].
+				push_back(
+					std::move(obj)
+				);
+
+			ptr->onCreate();
+		}
+		else if (e.eventType ==
+			EventType::Destroy)
+		{
+			destroyGameObjectInternal(
+				e.object
+			);
+		}
+	}
+
+	m_pendingObjectsSwapBuffer.clear();
+	m_eventsSwapBuffer.clear();
 }
 
 void dx3d::World::setPhysicsEnabled(

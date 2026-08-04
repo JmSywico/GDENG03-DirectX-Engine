@@ -44,6 +44,8 @@ namespace dx3d
 
 		void update(f32 deltaTime);
 
+		void flushGameObjectEvents();
+
 		void setPhysicsEnabled(
 			bool enabled
 		) noexcept;

@@ -40,6 +40,322 @@
 #include <imgui_impl_dx11.h>
 
 
+namespace
+{
+	constexpr dx3d::f32 DebugMinimumHalfExtent = 0.001f;
+	constexpr dx3d::f32 DebugPlaneHalfThickness = 0.05f;
+	constexpr dx3d::f32 SnapshotFloatEpsilon = 0.0001f;
+	constexpr size_t MaximumUndoHistory = 64;
+
+	struct DebugScreenPoint
+	{
+		dx3d::f32 x{};
+		dx3d::f32 y{};
+	};
+
+	bool projectDebugPoint(
+		const dx3d::Vec3& worldPosition,
+		const dx3d::Mat4x4& viewProjectionMatrix,
+		const dx3d::TransformGizmo::ViewportArea& viewportArea,
+		DebugScreenPoint& screenPosition
+	) noexcept
+	{
+		const dx3d::Vec4 worldPoint
+		{
+			worldPosition.x,
+			worldPosition.y,
+			worldPosition.z,
+			1.0f
+		};
+
+		const dx3d::Vec4 clipPosition =
+			viewProjectionMatrix.transform(
+				worldPoint
+			);
+
+		if (clipPosition.w <= 0.001f)
+			return false;
+
+		const dx3d::f32 inverseW =
+			1.0f / clipPosition.w;
+
+		const dx3d::f32 normalizedX =
+			clipPosition.x * inverseW;
+
+		const dx3d::f32 normalizedY =
+			clipPosition.y * inverseW;
+
+		const dx3d::f32 normalizedZ =
+			clipPosition.z * inverseW;
+
+		if (normalizedZ < 0.0f ||
+			normalizedZ > 1.0f)
+		{
+			return false;
+		}
+
+		screenPosition.x =
+			viewportArea.x +
+			(normalizedX * 0.5f + 0.5f) *
+			viewportArea.width;
+
+		screenPosition.y =
+			viewportArea.y +
+			(-normalizedY * 0.5f + 0.5f) *
+			viewportArea.height;
+
+		return true;
+	}
+
+	dx3d::Vec3 transformDebugPoint(
+		const dx3d::Mat4x4& matrix,
+		const dx3d::Vec3& point
+	) noexcept
+	{
+		const dx3d::Vec4 transformed =
+			matrix.transform(
+				{
+					point.x,
+					point.y,
+					point.z,
+					1.0f
+				}
+			);
+
+		return
+		{
+			transformed.x,
+			transformed.y,
+			transformed.z
+		};
+	}
+
+	void drawProjectedBox(
+		ImDrawList& drawList,
+		const dx3d::Mat4x4& rigidWorldMatrix,
+		const dx3d::Vec3& localCenter,
+		const dx3d::Vec3& halfExtents,
+		const dx3d::Mat4x4& viewProjectionMatrix,
+		const dx3d::TransformGizmo::ViewportArea& viewportArea,
+		ImU32 color,
+		float thickness
+	)
+	{
+		const dx3d::Vec3 localCorners[8]
+		{
+			{
+				localCenter.x - halfExtents.x,
+				localCenter.y - halfExtents.y,
+				localCenter.z - halfExtents.z
+			},
+			{
+				localCenter.x + halfExtents.x,
+				localCenter.y - halfExtents.y,
+				localCenter.z - halfExtents.z
+			},
+			{
+				localCenter.x + halfExtents.x,
+				localCenter.y + halfExtents.y,
+				localCenter.z - halfExtents.z
+			},
+			{
+				localCenter.x - halfExtents.x,
+				localCenter.y + halfExtents.y,
+				localCenter.z - halfExtents.z
+			},
+			{
+				localCenter.x - halfExtents.x,
+				localCenter.y - halfExtents.y,
+				localCenter.z + halfExtents.z
+			},
+			{
+				localCenter.x + halfExtents.x,
+				localCenter.y - halfExtents.y,
+				localCenter.z + halfExtents.z
+			},
+			{
+				localCenter.x + halfExtents.x,
+				localCenter.y + halfExtents.y,
+				localCenter.z + halfExtents.z
+			},
+			{
+				localCenter.x - halfExtents.x,
+				localCenter.y + halfExtents.y,
+				localCenter.z + halfExtents.z
+			}
+		};
+
+		DebugScreenPoint screenCorners[8]{};
+		bool visibleCorners[8]{};
+
+		for (dx3d::ui32 index = 0;
+			index < 8;
+			++index)
+		{
+			const dx3d::Vec3 worldCorner =
+				transformDebugPoint(
+					rigidWorldMatrix,
+					localCorners[index]
+				);
+
+			visibleCorners[index] =
+				projectDebugPoint(
+					worldCorner,
+					viewProjectionMatrix,
+					viewportArea,
+					screenCorners[index]
+				);
+		}
+
+		const dx3d::ui32 edges[12][2]
+		{
+			{ 0, 1 },
+			{ 1, 2 },
+			{ 2, 3 },
+			{ 3, 0 },
+			{ 4, 5 },
+			{ 5, 6 },
+			{ 6, 7 },
+			{ 7, 4 },
+			{ 0, 4 },
+			{ 1, 5 },
+			{ 2, 6 },
+			{ 3, 7 }
+		};
+
+		for (const auto& edge : edges)
+		{
+			const dx3d::ui32 startIndex =
+				edge[0];
+
+			const dx3d::ui32 endIndex =
+				edge[1];
+
+			if (!visibleCorners[startIndex] ||
+				!visibleCorners[endIndex])
+			{
+				continue;
+			}
+
+			drawList.AddLine(
+				{
+					screenCorners[startIndex].x,
+					screenCorners[startIndex].y
+				},
+				{
+					screenCorners[endIndex].x,
+					screenCorners[endIndex].y
+				},
+				IM_COL32(0, 0, 0, 180),
+				thickness + 2.0f
+			);
+
+			drawList.AddLine(
+				{
+					screenCorners[startIndex].x,
+					screenCorners[startIndex].y
+				},
+				{
+					screenCorners[endIndex].x,
+					screenCorners[endIndex].y
+				},
+				color,
+				thickness
+			);
+		}
+	}
+
+	bool areFloatsEqual(
+		dx3d::f32 lhs,
+		dx3d::f32 rhs
+	) noexcept
+	{
+		return std::fabs(lhs - rhs) <=
+			SnapshotFloatEpsilon;
+	}
+
+	bool areVec2Equal(
+		const dx3d::Vec2& lhs,
+		const dx3d::Vec2& rhs
+	) noexcept
+	{
+		return
+			areFloatsEqual(lhs.x, rhs.x) &&
+			areFloatsEqual(lhs.y, rhs.y);
+	}
+
+	bool areVec3Equal(
+		const dx3d::Vec3& lhs,
+		const dx3d::Vec3& rhs
+	) noexcept
+	{
+		return
+			areFloatsEqual(lhs.x, rhs.x) &&
+			areFloatsEqual(lhs.y, rhs.y) &&
+			areFloatsEqual(lhs.z, rhs.z);
+	}
+
+	bool areVec4Equal(
+		const dx3d::Vec4& lhs,
+		const dx3d::Vec4& rhs
+	) noexcept
+	{
+		return
+			areFloatsEqual(lhs.x, rhs.x) &&
+			areFloatsEqual(lhs.y, rhs.y) &&
+			areFloatsEqual(lhs.z, rhs.z) &&
+			areFloatsEqual(lhs.w, rhs.w);
+	}
+
+	bool areMeshDataEqual(
+		const dx3d::MeshData& lhs,
+		const dx3d::MeshData& rhs
+	) noexcept
+	{
+		if (lhs.indices != rhs.indices ||
+			lhs.vertices.size() !=
+			rhs.vertices.size())
+		{
+			return false;
+		}
+
+		for (size_t index = 0;
+			index < lhs.vertices.size();
+			++index)
+		{
+			const auto& lhsVertex =
+				lhs.vertices[index];
+
+			const auto& rhsVertex =
+				rhs.vertices[index];
+
+			if (
+				!areVec3Equal(
+					lhsVertex.position,
+					rhsVertex.position
+				) ||
+				!areVec4Equal(
+					lhsVertex.color,
+					rhsVertex.color
+				) ||
+				!areVec3Equal(
+					lhsVertex.normal,
+					rhsVertex.normal
+				) ||
+				!areVec2Equal(
+					lhsVertex.texCoord,
+					rhsVertex.texCoord
+				)
+				)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+}
+
 
 dx3d::Game::Game(const GameDesc& desc)
 {
@@ -316,6 +632,10 @@ void dx3d::Game::mergeSelectedObjects()
 	if (combinedMesh.empty())
 		return;
 
+	pushUndoSnapshot(
+		captureEditorSnapshot()
+	);
+
 	// Calculate a bounding-box center for the new pivot.
 	Vec3 minimum =
 		combinedMesh.vertices.front().position;
@@ -497,6 +817,35 @@ void dx3d::Game::copySelectedObject()
 		return;
 	}
 
+	if (auto* rigidBody =
+		m_selectedObject->getComponent<
+		RigidBodyComponent>())
+	{
+		copiedData.hasRigidBody = true;
+		copiedData.rigidBodyVelocity =
+			rigidBody->getVelocity();
+		copiedData.rigidBodyAngularVelocity =
+			rigidBody->getAngularVelocity();
+		copiedData.rigidBodyMass =
+			rigidBody->getMass();
+		copiedData.rigidBodyRestitution =
+			rigidBody->getRestitution();
+		copiedData.rigidBodyFriction =
+			rigidBody->getFriction();
+		copiedData.rigidBodyUseGravity =
+			rigidBody->getUseGravity();
+		copiedData.rigidBodyIsStatic =
+			rigidBody->getStatic();
+		copiedData.rigidBodyColliderSize =
+			rigidBody->getColliderSize();
+		copiedData.rigidBodyColliderOffset =
+			rigidBody->getColliderOffset();
+		copiedData.
+			rigidBodyColliderUsesTransformScale =
+			rigidBody->
+			getColliderUsesTransformScale();
+	}
+
 	// A new copy operation restarts the pasted-object count.
 	copiedData.pasteCount = 0;
 
@@ -508,6 +857,10 @@ void dx3d::Game::pasteCopiedObject()
 {
 	if (!m_objectClipboard.isValid)
 		return;
+
+	pushUndoSnapshot(
+		captureEditorSnapshot()
+	);
 
 	auto* pastedObject =
 		m_world->createGameObject<GameObject>();
@@ -543,6 +896,64 @@ void dx3d::Game::pasteCopiedObject()
 			pastedObject
 		);
 		return;
+	}
+
+	if (m_objectClipboard.hasRigidBody)
+	{
+		auto* rigidBody =
+			pastedObject->createOrGetComponent<
+			RigidBodyComponent>();
+
+		rigidBody->setVelocity(
+			m_objectClipboard.
+			rigidBodyVelocity
+		);
+
+		rigidBody->setAngularVelocity(
+			m_objectClipboard.
+			rigidBodyAngularVelocity
+		);
+
+		rigidBody->setMass(
+			m_objectClipboard.
+			rigidBodyMass
+		);
+
+		rigidBody->setRestitution(
+			m_objectClipboard.
+			rigidBodyRestitution
+		);
+
+		rigidBody->setFriction(
+			m_objectClipboard.
+			rigidBodyFriction
+		);
+
+		rigidBody->setUseGravity(
+			m_objectClipboard.
+			rigidBodyUseGravity
+		);
+
+		rigidBody->setStatic(
+			m_objectClipboard.
+			rigidBodyIsStatic
+		);
+
+		rigidBody->setColliderSize(
+			m_objectClipboard.
+			rigidBodyColliderSize
+		);
+
+		rigidBody->setColliderOffset(
+			m_objectClipboard.
+			rigidBodyColliderOffset
+		);
+
+		rigidBody->
+			setColliderUsesTransformScale(
+				m_objectClipboard.
+				rigidBodyColliderUsesTransformScale
+			);
 	}
 
 	++m_objectClipboard.pasteCount;
@@ -584,6 +995,936 @@ void dx3d::Game::pasteCopiedObject()
 	// Automatically select the newly pasted object.
 	selectOnly(
 		pastedObject
+	);
+}
+
+void dx3d::Game::drawPhysicsDebugOverlay(
+	CameraComponent* camera,
+	const TransformGizmo::ViewportArea& viewportArea
+)
+{
+	if (!m_showPhysicsDebugOverlay ||
+		!camera ||
+		viewportArea.width <= 0.0f ||
+		viewportArea.height <= 0.0f)
+	{
+		return;
+	}
+
+	const Mat4x4 viewProjectionMatrix =
+		camera->getViewMatrix() *
+		camera->getProjectionMatrix();
+
+	ImDrawList* drawList =
+		ImGui::GetBackgroundDrawList();
+
+	if (!drawList)
+		return;
+
+	drawList->PushClipRect(
+		{
+			viewportArea.x,
+			viewportArea.y
+		},
+		{
+			viewportArea.x +
+			viewportArea.width,
+			viewportArea.y +
+			viewportArea.height
+		},
+		true
+	);
+
+	ui32 planeCount = 0;
+
+	PlaneComponent* const* planes =
+		m_world->getComponents<
+		PlaneComponent
+		>(
+			planeCount
+		);
+
+	for (ui32 index = 0;
+		index < planeCount;
+		++index)
+	{
+		auto* plane =
+			planes[index];
+
+		if (!plane)
+			continue;
+
+		auto& object =
+			plane->getGameObject();
+
+		const bool selected =
+			isObjectSelected(
+				&object
+			);
+
+		if (m_showOnlySelectedPhysicsDebug &&
+			!selected)
+		{
+			continue;
+		}
+
+		auto& transform =
+			object.getTransform();
+
+		const Vec3 scale =
+			transform.getScale();
+
+		const Vec3 halfExtents
+		{
+			std::max(
+				std::fabs(scale.x) * 0.5f,
+				DebugMinimumHalfExtent
+			),
+			DebugPlaneHalfThickness,
+			std::max(
+				std::fabs(scale.z) * 0.5f,
+				DebugMinimumHalfExtent
+			)
+		};
+
+		drawProjectedBox(
+			*drawList,
+			transform.getRigidWorldMatrix(),
+			{
+				0.0f,
+				-DebugPlaneHalfThickness,
+				0.0f
+			},
+			halfExtents,
+			viewProjectionMatrix,
+			viewportArea,
+			selected
+			? IM_COL32(255, 220, 70, 255)
+			: IM_COL32(80, 170, 255, 220),
+			selected ? 2.5f : 1.25f
+		);
+	}
+
+	ui32 rigidBodyCount = 0;
+
+	RigidBodyComponent* const* rigidBodies =
+		m_world->getComponents<
+		RigidBodyComponent
+		>(
+			rigidBodyCount
+		);
+
+	for (ui32 index = 0;
+		index < rigidBodyCount;
+		++index)
+	{
+		auto* rigidBody =
+			rigidBodies[index];
+
+		if (!rigidBody)
+			continue;
+
+		auto& object =
+			rigidBody->getGameObject();
+
+		const bool selected =
+			isObjectSelected(
+				&object
+			);
+
+		if (m_showOnlySelectedPhysicsDebug &&
+			!selected)
+		{
+			continue;
+		}
+
+		if (!object.getComponent<
+			CubeComponent>())
+		{
+			continue;
+		}
+
+		auto& transform =
+			object.getTransform();
+
+		const Vec3 colliderSize =
+			rigidBody->
+			getEffectiveColliderSize();
+
+		const Vec3 halfExtents
+		{
+			std::max(
+				std::fabs(colliderSize.x) * 0.5f,
+				DebugMinimumHalfExtent
+			),
+			std::max(
+				std::fabs(colliderSize.y) * 0.5f,
+				DebugMinimumHalfExtent
+			),
+			std::max(
+				std::fabs(colliderSize.z) * 0.5f,
+				DebugMinimumHalfExtent
+			)
+		};
+
+		const ImU32 bodyColor =
+			selected
+			? IM_COL32(255, 220, 70, 255)
+			: rigidBody->getStatic()
+			? IM_COL32(80, 170, 255, 220)
+			: IM_COL32(60, 220, 110, 220);
+
+		drawProjectedBox(
+			*drawList,
+			transform.getRigidWorldMatrix(),
+			rigidBody->getColliderOffset(),
+			halfExtents,
+			viewProjectionMatrix,
+			viewportArea,
+			bodyColor,
+			selected ? 2.5f : 1.25f
+		);
+	}
+
+	drawList->PopClipRect();
+}
+
+dx3d::Game::EditorSnapshot
+dx3d::Game::captureEditorSnapshot() const
+{
+	EditorSnapshot snapshot{};
+
+	snapshot.cubeCounter =
+		m_cubeCounter;
+
+	snapshot.planeCounter =
+		m_planeCounter;
+
+	snapshot.sceneStatusMessage =
+		m_sceneStatusMessage;
+
+	for (auto* selectedObject :
+		m_selectedObjects)
+	{
+		if (!selectedObject)
+			continue;
+
+		snapshot.selectedNames.
+			push_back(
+				selectedObject->getName()
+			);
+	}
+
+	std::sort(
+		snapshot.selectedNames.begin(),
+		snapshot.selectedNames.end()
+	);
+
+	for (auto* object :
+		m_world->getGameObjects())
+	{
+		if (!object)
+			continue;
+
+		if (object->getComponent<
+			CameraComponent>())
+		{
+			continue;
+		}
+
+		ObjectSnapshot objectSnapshot{};
+		bool canSnapshotObject = false;
+
+		if (auto* combinedMesh =
+			object->getComponent<
+			CombinedMeshComponent>())
+		{
+			if (!combinedMesh->hasMeshData())
+				continue;
+
+			objectSnapshot.type =
+				SnapshotObjectType::
+				CombinedMesh;
+
+			objectSnapshot.meshData =
+				combinedMesh->getMeshData();
+
+			canSnapshotObject = true;
+		}
+		else if (auto* model =
+			object->getComponent<
+			ModelComponent>())
+		{
+			if (!model->hasMeshData())
+				continue;
+
+			objectSnapshot.type =
+				SnapshotObjectType::Model;
+
+			objectSnapshot.meshData =
+				model->getMeshData();
+
+			objectSnapshot.modelPath =
+				model->getModelPath();
+
+			objectSnapshot.texturePath =
+				model->getTexturePath();
+
+			canSnapshotObject = true;
+		}
+		else if (object->getComponent<
+			CubeComponent>())
+		{
+			objectSnapshot.type =
+				SnapshotObjectType::Cube;
+
+			canSnapshotObject = true;
+		}
+		else if (object->getComponent<
+			PlaneComponent>())
+		{
+			objectSnapshot.type =
+				SnapshotObjectType::Plane;
+
+			canSnapshotObject = true;
+		}
+		else if (auto* light =
+			object->getComponent<
+			DirectionalLightComponent>())
+		{
+			objectSnapshot.type =
+				SnapshotObjectType::
+				DirectionalLight;
+
+			objectSnapshot.lightColor =
+				light->getColor();
+
+			objectSnapshot.lightIntensity =
+				light->getIntensity();
+
+			objectSnapshot.ambientStrength =
+				light->getAmbientStrength();
+
+			objectSnapshot.shadowArea =
+				light->getShadowArea();
+
+			objectSnapshot.castShadows =
+				light->getCastShadows();
+
+			canSnapshotObject = true;
+		}
+
+		if (!canSnapshotObject)
+			continue;
+
+		objectSnapshot.name =
+			object->getName();
+
+		auto& transform =
+			object->getTransform();
+
+		objectSnapshot.position =
+			transform.getPosition();
+
+		objectSnapshot.rotation =
+			transform.getRotation();
+
+		objectSnapshot.scale =
+			transform.getScale();
+
+		if (auto* rigidBody =
+			object->getComponent<
+			RigidBodyComponent>())
+		{
+			auto& rigidBodySnapshot =
+				objectSnapshot.rigidBody;
+
+			rigidBodySnapshot.isPresent = true;
+			rigidBodySnapshot.velocity =
+				rigidBody->getVelocity();
+			rigidBodySnapshot.angularVelocity =
+				rigidBody->getAngularVelocity();
+			rigidBodySnapshot.mass =
+				rigidBody->getMass();
+			rigidBodySnapshot.restitution =
+				rigidBody->getRestitution();
+			rigidBodySnapshot.friction =
+				rigidBody->getFriction();
+			rigidBodySnapshot.useGravity =
+				rigidBody->getUseGravity();
+			rigidBodySnapshot.isStatic =
+				rigidBody->getStatic();
+			rigidBodySnapshot.colliderSize =
+				rigidBody->getColliderSize();
+			rigidBodySnapshot.colliderOffset =
+				rigidBody->getColliderOffset();
+			rigidBodySnapshot.
+				colliderUsesTransformScale =
+				rigidBody->
+				getColliderUsesTransformScale();
+		}
+
+		snapshot.objects.push_back(
+			objectSnapshot
+		);
+	}
+
+	std::sort(
+		snapshot.objects.begin(),
+		snapshot.objects.end(),
+		[](
+			const ObjectSnapshot& lhs,
+			const ObjectSnapshot& rhs
+			)
+		{
+			if (lhs.name != rhs.name)
+				return lhs.name < rhs.name;
+
+			if (lhs.type != rhs.type)
+			{
+				return static_cast<int>(
+					lhs.type
+				) <
+					static_cast<int>(
+						rhs.type
+					);
+			}
+
+			if (!areVec3Equal(
+				lhs.position,
+				rhs.position
+			))
+			{
+				if (!areFloatsEqual(
+					lhs.position.x,
+					rhs.position.x
+				))
+				{
+					return lhs.position.x <
+						rhs.position.x;
+				}
+
+				if (!areFloatsEqual(
+					lhs.position.y,
+					rhs.position.y
+				))
+				{
+					return lhs.position.y <
+						rhs.position.y;
+				}
+
+				return lhs.position.z <
+					rhs.position.z;
+			}
+
+			return false;
+		}
+	);
+
+	return snapshot;
+}
+
+void dx3d::Game::restoreEditorSnapshot(
+	const EditorSnapshot& snapshot
+)
+{
+	m_isRestoringEditorSnapshot = true;
+	m_hasPendingUndoSnapshot = false;
+	m_skipUndoTrackingThisFrame = true;
+
+	m_world->stopPhysics();
+
+	clearSelection();
+
+	SceneSerializer::clear(
+		*m_world
+	);
+
+	m_world->flushGameObjectEvents();
+
+	for (const auto& objectSnapshot :
+		snapshot.objects)
+	{
+		auto* object =
+			m_world->createGameObject<
+			GameObject>();
+
+		if (!object)
+			continue;
+
+		object->setName(
+			objectSnapshot.name
+		);
+
+		switch (objectSnapshot.type)
+		{
+		case SnapshotObjectType::Cube:
+			object->createOrGetComponent<
+				CubeComponent>();
+			break;
+
+		case SnapshotObjectType::Plane:
+			object->createOrGetComponent<
+				PlaneComponent>();
+			break;
+
+		case SnapshotObjectType::CombinedMesh:
+		{
+			auto* combinedMesh =
+				object->createOrGetComponent<
+				CombinedMeshComponent>();
+
+			combinedMesh->setMeshData(
+				objectSnapshot.meshData
+			);
+
+			break;
+		}
+
+		case SnapshotObjectType::Model:
+		{
+			auto* model =
+				object->createOrGetComponent<
+				ModelComponent>();
+
+			model->setMeshData(
+				objectSnapshot.meshData
+			);
+
+			model->setModelPath(
+				objectSnapshot.modelPath
+			);
+
+			model->setTexturePath(
+				objectSnapshot.texturePath
+			);
+
+			break;
+		}
+
+		case SnapshotObjectType::DirectionalLight:
+		{
+			auto* light =
+				object->createOrGetComponent<
+				DirectionalLightComponent>();
+
+			light->setColor(
+				objectSnapshot.lightColor
+			);
+
+			light->setIntensity(
+				objectSnapshot.lightIntensity
+			);
+
+			light->setAmbientStrength(
+				objectSnapshot.
+				ambientStrength
+			);
+
+			light->setShadowArea(
+				objectSnapshot.shadowArea
+			);
+
+			light->setCastShadows(
+				objectSnapshot.castShadows
+			);
+
+			break;
+		}
+		}
+
+		if (objectSnapshot.
+			rigidBody.isPresent)
+		{
+			auto* rigidBody =
+				object->createOrGetComponent<
+				RigidBodyComponent>();
+
+			const auto& rigidBodySnapshot =
+				objectSnapshot.rigidBody;
+
+			rigidBody->setVelocity(
+				rigidBodySnapshot.velocity
+			);
+
+			rigidBody->setAngularVelocity(
+				rigidBodySnapshot.
+				angularVelocity
+			);
+
+			rigidBody->setMass(
+				rigidBodySnapshot.mass
+			);
+
+			rigidBody->setRestitution(
+				rigidBodySnapshot.
+				restitution
+			);
+
+			rigidBody->setFriction(
+				rigidBodySnapshot.friction
+			);
+
+			rigidBody->setUseGravity(
+				rigidBodySnapshot.
+				useGravity
+			);
+
+			rigidBody->setStatic(
+				rigidBodySnapshot.isStatic
+			);
+
+			rigidBody->setColliderSize(
+				rigidBodySnapshot.
+				colliderSize
+			);
+
+			rigidBody->setColliderOffset(
+				rigidBodySnapshot.
+				colliderOffset
+			);
+
+			rigidBody->
+				setColliderUsesTransformScale(
+					rigidBodySnapshot.
+					colliderUsesTransformScale
+				);
+		}
+
+		auto& transform =
+			object->getTransform();
+
+		transform.setPosition(
+			objectSnapshot.position
+		);
+
+		transform.setRotation(
+			objectSnapshot.rotation
+		);
+
+		transform.setScale(
+			objectSnapshot.scale
+		);
+	}
+
+	m_world->flushGameObjectEvents();
+
+	m_cubeCounter =
+		snapshot.cubeCounter;
+
+	m_planeCounter =
+		snapshot.planeCounter;
+
+	m_sceneStatusMessage =
+		snapshot.sceneStatusMessage;
+
+	for (auto* object :
+		m_world->getGameObjects())
+	{
+		if (!object)
+			continue;
+
+		if (
+			std::find(
+				snapshot.selectedNames.begin(),
+				snapshot.selectedNames.end(),
+				object->getName()
+			) ==
+			snapshot.selectedNames.end()
+			)
+		{
+			continue;
+		}
+
+		if (!m_selectedObject)
+		{
+			selectOnly(object);
+		}
+		else
+		{
+			toggleObjectSelection(object);
+		}
+	}
+
+	m_isRestoringEditorSnapshot = false;
+}
+
+bool dx3d::Game::areEditorSnapshotsEqual(
+	const EditorSnapshot& lhs,
+	const EditorSnapshot& rhs
+) const noexcept
+{
+	if (
+		lhs.cubeCounter != rhs.cubeCounter ||
+		lhs.planeCounter != rhs.planeCounter ||
+		lhs.objects.size() != rhs.objects.size()
+		)
+	{
+		return false;
+	}
+
+	for (size_t index = 0;
+		index < lhs.objects.size();
+		++index)
+	{
+		const auto& lhsObject =
+			lhs.objects[index];
+
+		const auto& rhsObject =
+			rhs.objects[index];
+
+		if (
+			lhsObject.type != rhsObject.type ||
+			lhsObject.name != rhsObject.name ||
+			!areVec3Equal(
+				lhsObject.position,
+				rhsObject.position
+			) ||
+			!areVec3Equal(
+				lhsObject.rotation,
+				rhsObject.rotation
+			) ||
+			!areVec3Equal(
+				lhsObject.scale,
+				rhsObject.scale
+			) ||
+			lhsObject.modelPath !=
+			rhsObject.modelPath ||
+			lhsObject.texturePath !=
+			rhsObject.texturePath ||
+			!areMeshDataEqual(
+				lhsObject.meshData,
+				rhsObject.meshData
+			) ||
+			!areVec3Equal(
+				lhsObject.lightColor,
+				rhsObject.lightColor
+			) ||
+			!areFloatsEqual(
+				lhsObject.lightIntensity,
+				rhsObject.lightIntensity
+			) ||
+			!areFloatsEqual(
+				lhsObject.ambientStrength,
+				rhsObject.ambientStrength
+			) ||
+			!areFloatsEqual(
+				lhsObject.shadowArea,
+				rhsObject.shadowArea
+			) ||
+			lhsObject.castShadows !=
+			rhsObject.castShadows
+			)
+		{
+			return false;
+		}
+
+		const auto& lhsBody =
+			lhsObject.rigidBody;
+
+		const auto& rhsBody =
+			rhsObject.rigidBody;
+
+		if (
+			lhsBody.isPresent !=
+			rhsBody.isPresent
+			)
+		{
+			return false;
+		}
+
+		if (!lhsBody.isPresent)
+			continue;
+
+		if (
+			!areVec3Equal(
+				lhsBody.velocity,
+				rhsBody.velocity
+			) ||
+			!areVec3Equal(
+				lhsBody.angularVelocity,
+				rhsBody.angularVelocity
+			) ||
+			!areFloatsEqual(
+				lhsBody.mass,
+				rhsBody.mass
+			) ||
+			!areFloatsEqual(
+				lhsBody.restitution,
+				rhsBody.restitution
+			) ||
+			!areFloatsEqual(
+				lhsBody.friction,
+				rhsBody.friction
+			) ||
+			lhsBody.useGravity !=
+			rhsBody.useGravity ||
+			lhsBody.isStatic !=
+			rhsBody.isStatic ||
+			!areVec3Equal(
+				lhsBody.colliderSize,
+				rhsBody.colliderSize
+			) ||
+			!areVec3Equal(
+				lhsBody.colliderOffset,
+				rhsBody.colliderOffset
+			) ||
+			lhsBody.
+			colliderUsesTransformScale !=
+			rhsBody.
+			colliderUsesTransformScale
+			)
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+void dx3d::Game::pushUndoSnapshot(
+	const EditorSnapshot& snapshot
+)
+{
+	if (m_isRestoringEditorSnapshot)
+		return;
+
+	if (!m_undoStack.empty() &&
+		areEditorSnapshotsEqual(
+			m_undoStack.back(),
+			snapshot
+		))
+	{
+		return;
+	}
+
+	m_undoStack.push_back(
+		snapshot
+	);
+
+	if (m_undoStack.size() >
+		MaximumUndoHistory)
+	{
+		m_undoStack.erase(
+			m_undoStack.begin()
+		);
+	}
+
+	m_redoStack.clear();
+}
+
+void dx3d::Game::beginPendingUndoSnapshot(
+	const EditorSnapshot& snapshot
+)
+{
+	if (m_isRestoringEditorSnapshot ||
+		m_world->isPhysicsEnabled() ||
+		m_hasPendingUndoSnapshot)
+	{
+		return;
+	}
+
+	m_pendingUndoSnapshot =
+		snapshot;
+
+	m_hasPendingUndoSnapshot = true;
+}
+
+void dx3d::Game::commitPendingUndoSnapshot(
+	const EditorSnapshot& currentSnapshot,
+	bool editorStillActive
+)
+{
+	if (!m_hasPendingUndoSnapshot ||
+		editorStillActive)
+	{
+		return;
+	}
+
+	if (!areEditorSnapshotsEqual(
+		m_pendingUndoSnapshot,
+		currentSnapshot
+	))
+	{
+		pushUndoSnapshot(
+			m_pendingUndoSnapshot
+		);
+	}
+
+	m_hasPendingUndoSnapshot = false;
+}
+
+bool dx3d::Game::canUndo() const noexcept
+{
+	return !m_undoStack.empty();
+}
+
+bool dx3d::Game::canRedo() const noexcept
+{
+	return !m_redoStack.empty();
+}
+
+void dx3d::Game::undoEditorOperation()
+{
+	if (m_hasPendingUndoSnapshot)
+	{
+		commitPendingUndoSnapshot(
+			captureEditorSnapshot(),
+			false
+		);
+	}
+
+	if (!canUndo())
+		return;
+
+	const EditorSnapshot currentSnapshot =
+		captureEditorSnapshot();
+
+	EditorSnapshot undoSnapshot =
+		m_undoStack.back();
+
+	m_undoStack.pop_back();
+
+	if (!areEditorSnapshotsEqual(
+		currentSnapshot,
+		undoSnapshot
+	))
+	{
+		m_redoStack.push_back(
+			currentSnapshot
+		);
+	}
+
+	restoreEditorSnapshot(
+		undoSnapshot
+	);
+}
+
+void dx3d::Game::redoEditorOperation()
+{
+	if (!canRedo())
+		return;
+
+	const EditorSnapshot currentSnapshot =
+		captureEditorSnapshot();
+
+	EditorSnapshot redoSnapshot =
+		m_redoStack.back();
+
+	m_redoStack.pop_back();
+
+	if (!areEditorSnapshotsEqual(
+		currentSnapshot,
+		redoSnapshot
+	))
+	{
+		m_undoStack.push_back(
+			currentSnapshot
+		);
+	}
+
+	restoreEditorSnapshot(
+		redoSnapshot
 	);
 }
 
@@ -1189,11 +2530,16 @@ bool dx3d::Game::loadCreditsLogo()
 
 void dx3d::Game::createNewScene()
 {
+	const EditorSnapshot undoSnapshot =
+		captureEditorSnapshot();
+
 	m_world->stopPhysics();
 
 	SceneSerializer::clear(
 		*m_world
 	);
+
+	m_world->flushGameObjectEvents();
 
 	clearSelection();
 
@@ -1205,6 +2551,16 @@ void dx3d::Game::createNewScene()
 
 	m_sceneStatusMessage =
 		"New scene created";
+
+	if (!areEditorSnapshotsEqual(
+		undoSnapshot,
+		captureEditorSnapshot()
+	))
+	{
+		pushUndoSnapshot(
+			undoSnapshot
+		);
+	}
 }
 
 void dx3d::Game::saveScene()
@@ -1237,6 +2593,9 @@ void dx3d::Game::saveScene()
 
 void dx3d::Game::loadScene()
 {
+	const EditorSnapshot undoSnapshot =
+		captureEditorSnapshot();
+
 	m_world->stopPhysics();
 
 	const SceneLoadResult result =
@@ -1257,6 +2616,8 @@ void dx3d::Game::loadScene()
 		return;
 	}
 
+	m_world->flushGameObjectEvents();
+
 	clearSelection();
 
 	m_objectClipboard =
@@ -1274,6 +2635,16 @@ void dx3d::Game::loadScene()
 	DX3DLogInfo(
 		"Scene loaded."
 	);
+
+	if (!areEditorSnapshotsEqual(
+		undoSnapshot,
+		captureEditorSnapshot()
+	))
+	{
+		pushUndoSnapshot(
+			undoSnapshot
+		);
+	}
 }
 
 void dx3d::Game::onInternalUpdate()
@@ -1316,6 +2687,9 @@ void dx3d::Game::onInternalUpdate()
 		m_display->getSwapChain(),
 		deltaTime
 	);
+
+	const EditorSnapshot frameStartSnapshot =
+		captureEditorSnapshot();
 
 	// --------------------
 // Main editor menu
@@ -1407,10 +2781,49 @@ void dx3d::Game::onInternalUpdate()
 			ImGui::EndMenu();
 		}
 
+		if (ImGui::BeginMenu("Edit"))
+		{
+			ImGui::BeginDisabled(
+				!canUndo() ||
+				physicsIsPlaying
+			);
+
+			if (ImGui::MenuItem(
+				"Undo",
+				"Ctrl+Z"
+			))
+			{
+				undoEditorOperation();
+			}
+
+			ImGui::EndDisabled();
+
+			ImGui::BeginDisabled(
+				!canRedo() ||
+				physicsIsPlaying
+			);
+
+			if (ImGui::MenuItem(
+				"Redo",
+				"Ctrl+Y / Ctrl+Shift+Z"
+			))
+			{
+				redoEditorOperation();
+			}
+
+			ImGui::EndDisabled();
+
+			ImGui::EndMenu();
+		}
+
 		if (ImGui::BeginMenu("Game Object"))
 		{
 			if (ImGui::MenuItem("Create Cube"))
 			{
+				pushUndoSnapshot(
+					frameStartSnapshot
+				);
+
 				++m_cubeCounter;
 
 				auto* cube =
@@ -1477,6 +2890,10 @@ void dx3d::Game::onInternalUpdate()
 
 			if (ImGui::MenuItem("Spawn Physics Cubes"))
 			{
+				pushUndoSnapshot(
+					frameStartSnapshot
+				);
+
 				physicsCubeSpawnCount =
 					std::clamp(
 						physicsCubeSpawnCount,
@@ -1621,6 +3038,10 @@ void dx3d::Game::onInternalUpdate()
 
 			if (ImGui::MenuItem("Create Plane"))
 			{
+				pushUndoSnapshot(
+					frameStartSnapshot
+				);
+
 				++m_planeCounter;
 
 				auto* plane =
@@ -1693,6 +3114,10 @@ void dx3d::Game::onInternalUpdate()
 				}
 				else
 				{
+					pushUndoSnapshot(
+						frameStartSnapshot
+					);
+
 					auto* bunny =
 						m_world->createGameObject<
 						GameObject>();
@@ -1772,6 +3197,10 @@ void dx3d::Game::onInternalUpdate()
 				}
 				else
 				{
+					pushUndoSnapshot(
+						frameStartSnapshot
+					);
+
 					auto* armadillo =
 						m_world->createGameObject<
 						GameObject>();
@@ -1851,6 +3280,10 @@ void dx3d::Game::onInternalUpdate()
 				}
 				else
 				{
+					pushUndoSnapshot(
+						frameStartSnapshot
+					);
+
 					auto* teapot =
 						m_world->createGameObject<
 						GameObject>();
@@ -1918,6 +3351,10 @@ void dx3d::Game::onInternalUpdate()
 				canCreateDirectionalLight
 			))
 			{
+				pushUndoSnapshot(
+					frameStartSnapshot
+				);
+
 				auto* lightObject =
 					m_world->createGameObject<GameObject>();
 
@@ -1997,6 +3434,10 @@ void dx3d::Game::onInternalUpdate()
 				canDeleteSelected
 			))
 			{
+				pushUndoSnapshot(
+					frameStartSnapshot
+				);
+
 				GameObject* objectToDelete =
 					m_selectedObject;
 
@@ -2055,6 +3496,24 @@ void dx3d::Game::onInternalUpdate()
 
 		if (ImGui::BeginMenu("Tools"))
 		{
+			ImGui::MenuItem(
+				"Physics Debug Overlay",
+				nullptr,
+				&m_showPhysicsDebugOverlay
+			);
+
+			ImGui::BeginDisabled(
+				!m_showPhysicsDebugOverlay
+			);
+
+			ImGui::MenuItem(
+				"Selected Physics Only",
+				nullptr,
+				&m_showOnlySelectedPhysicsDebug
+			);
+
+			ImGui::EndDisabled();
+
 			if (ImGui::MenuItem("Color Picker"))
 			{
 				m_showColorPickerWindow = true;
@@ -2241,6 +3700,11 @@ void dx3d::Game::onInternalUpdate()
 		viewport->Size.x,
 		viewport->Size.y
 	};
+
+	drawPhysicsDebugOverlay(
+		editorCameraComponent,
+		gizmoViewport
+	);
 
 	m_transformGizmo.draw(
 		m_selectedObject,
@@ -2435,6 +3899,255 @@ void dx3d::Game::onInternalUpdate()
 			);
 		}
 
+		auto* rigidBody =
+			m_selectedObject->getComponent<
+			RigidBodyComponent
+			>();
+
+		const bool canAddRigidBody =
+			m_selectedObject->getComponent<
+			CubeComponent
+			>() != nullptr;
+
+		if (rigidBody || canAddRigidBody)
+		{
+			ImGui::Spacing();
+			ImGui::Separator();
+			ImGui::Text("Rigid Body");
+			ImGui::Spacing();
+
+			if (!rigidBody)
+			{
+				if (ImGui::Button(
+					"Add RigidBody"
+				))
+				{
+					rigidBody =
+						m_selectedObject->
+						createOrGetComponent<
+						RigidBodyComponent
+						>();
+				}
+			}
+
+			if (rigidBody)
+			{
+				bool isStatic =
+					rigidBody->getStatic();
+
+				if (ImGui::Checkbox(
+					"Static",
+					&isStatic
+				))
+				{
+					rigidBody->setStatic(
+						isStatic
+					);
+				}
+
+				bool useGravity =
+					rigidBody->getUseGravity();
+
+				if (ImGui::Checkbox(
+					"Use Gravity",
+					&useGravity
+				))
+				{
+					rigidBody->setUseGravity(
+						useGravity
+					);
+				}
+
+				float mass =
+					rigidBody->getMass();
+
+				if (ImGui::DragFloat(
+					"Mass",
+					&mass,
+					0.05f,
+					0.001f,
+					1000.0f
+				))
+				{
+					if (mass < 0.001f)
+					{
+						mass = 0.001f;
+					}
+
+					rigidBody->setMass(
+						mass
+					);
+				}
+
+				float restitution =
+					rigidBody->getRestitution();
+
+				if (ImGui::SliderFloat(
+					"Restitution",
+					&restitution,
+					0.0f,
+					1.0f
+				))
+				{
+					rigidBody->setRestitution(
+						restitution
+					);
+				}
+
+				float friction =
+					rigidBody->getFriction();
+
+				if (ImGui::SliderFloat(
+					"Friction",
+					&friction,
+					0.0f,
+					1.0f
+				))
+				{
+					rigidBody->setFriction(
+						friction
+					);
+				}
+
+				bool matchRenderScale =
+					rigidBody->
+					getColliderUsesTransformScale();
+
+				if (ImGui::Checkbox(
+					"Match Render Scale",
+					&matchRenderScale
+				))
+				{
+					if (!matchRenderScale)
+					{
+						rigidBody->
+							setColliderSize(
+								rigidBody->
+								getEffectiveColliderSize()
+							);
+					}
+
+					rigidBody->
+						setColliderUsesTransformScale(
+							matchRenderScale
+						);
+				}
+
+				Vec3 colliderSize =
+					matchRenderScale
+					? rigidBody->
+					getEffectiveColliderSize()
+					: rigidBody->getColliderSize();
+
+				float colliderSizeValues[3]
+				{
+					colliderSize.x,
+					colliderSize.y,
+					colliderSize.z
+				};
+
+				ImGui::BeginDisabled(
+					matchRenderScale
+				);
+
+				if (ImGui::DragFloat3(
+					"Collider Size",
+					colliderSizeValues,
+					0.05f,
+					0.002f,
+					1000.0f
+				))
+				{
+					rigidBody->setColliderSize(
+						{
+							colliderSizeValues[0],
+							colliderSizeValues[1],
+							colliderSizeValues[2]
+						}
+					);
+				}
+
+				ImGui::EndDisabled();
+
+				Vec3 colliderOffset =
+					rigidBody->getColliderOffset();
+
+				float colliderOffsetValues[3]
+				{
+					colliderOffset.x,
+					colliderOffset.y,
+					colliderOffset.z
+				};
+
+				if (ImGui::DragFloat3(
+					"Collider Offset",
+					colliderOffsetValues,
+					0.05f
+				))
+				{
+					rigidBody->setColliderOffset(
+						{
+							colliderOffsetValues[0],
+							colliderOffsetValues[1],
+							colliderOffsetValues[2]
+						}
+					);
+				}
+
+				auto velocity =
+					rigidBody->getVelocity();
+
+				float velocityValues[3]
+				{
+					velocity.x,
+					velocity.y,
+					velocity.z
+				};
+
+				if (ImGui::DragFloat3(
+					"Velocity",
+					velocityValues,
+					0.05f
+				))
+				{
+					rigidBody->setVelocity(
+						{
+							velocityValues[0],
+							velocityValues[1],
+							velocityValues[2]
+						}
+					);
+				}
+
+				auto angularVelocity =
+					rigidBody->
+					getAngularVelocity();
+
+				float angularVelocityValues[3]
+				{
+					angularVelocity.x,
+					angularVelocity.y,
+					angularVelocity.z
+				};
+
+				if (ImGui::DragFloat3(
+					"Angular Velocity",
+					angularVelocityValues,
+					0.05f
+				))
+				{
+					rigidBody->
+						setAngularVelocity(
+							{
+								angularVelocityValues[0],
+								angularVelocityValues[1],
+								angularVelocityValues[2]
+							}
+						);
+				}
+			}
+		}
+
 		if (auto* directionalLight =
 			m_selectedObject->getComponent<
 			DirectionalLightComponent
@@ -2606,6 +4319,41 @@ void dx3d::Game::onInternalUpdate()
 	const bool controlHeld =
 		ImGui::GetIO().KeyCtrl;
 
+	const bool shiftHeld =
+		ImGui::GetIO().KeyShift;
+
+	const bool allowHistoryShortcuts =
+		controlHeld &&
+		!m_transformGizmo.isUsing() &&
+		!rightMouseDown &&
+		!editingImGuiValue &&
+		!typingInImGui &&
+		!popupIsOpen &&
+		!m_world->isPhysicsEnabled();
+
+	if (allowHistoryShortcuts)
+	{
+		if (m_inputSystem->isKeyPressed(
+			KeyCode::Z
+		))
+		{
+			if (shiftHeld)
+			{
+				redoEditorOperation();
+			}
+			else
+			{
+				undoEditorOperation();
+			}
+		}
+		else if (m_inputSystem->isKeyPressed(
+			KeyCode::Y
+		))
+		{
+			redoEditorOperation();
+		}
+	}
+
 	const bool allowClipboardShortcuts =
 		controlHeld &&
 		!m_transformGizmo.isUsing() &&
@@ -2650,6 +4398,10 @@ void dx3d::Game::onInternalUpdate()
 		GameObject* objectToDelete =
 			m_selectedObject;
 
+		pushUndoSnapshot(
+			frameStartSnapshot
+		);
+
 		m_world->destroyGameObject(
 			objectToDelete
 		);
@@ -2658,6 +4410,34 @@ void dx3d::Game::onInternalUpdate()
 			objectToDelete
 		);
 	}
+
+	const EditorSnapshot frameEndSnapshot =
+		captureEditorSnapshot();
+
+	const bool editorStillActive =
+		ImGui::IsAnyItemActive() ||
+		m_transformGizmo.isUsing();
+
+	if (!m_skipUndoTrackingThisFrame &&
+		!m_world->isPhysicsEnabled())
+	{
+		if (!areEditorSnapshotsEqual(
+			frameStartSnapshot,
+			frameEndSnapshot
+		))
+		{
+			beginPendingUndoSnapshot(
+				frameStartSnapshot
+			);
+		}
+
+		commitPendingUndoSnapshot(
+			frameEndSnapshot,
+			editorStillActive
+		);
+	}
+
+	m_skipUndoTrackingThisFrame = false;
 
 	// Render the UI over the 3D scene.
 	ImGui::Render();

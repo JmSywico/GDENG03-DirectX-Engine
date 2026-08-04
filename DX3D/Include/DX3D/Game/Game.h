@@ -46,6 +46,76 @@ namespace dx3d
 			CombinedMesh
 		};
 
+		enum class SnapshotObjectType
+		{
+			Cube,
+			Plane,
+			CombinedMesh,
+			Model,
+			DirectionalLight
+		};
+
+		struct RigidBodySnapshot
+		{
+			bool isPresent{ false };
+			Vec3 velocity{};
+			Vec3 angularVelocity{};
+			f32 mass{ 1.0f };
+			f32 restitution{ 0.45f };
+			f32 friction{ 0.20f };
+			bool useGravity{ true };
+			bool isStatic{ false };
+			Vec3 colliderSize{
+				1.0f,
+				1.0f,
+				1.0f
+			};
+			Vec3 colliderOffset{};
+			bool colliderUsesTransformScale{ true };
+		};
+
+		struct ObjectSnapshot
+		{
+			SnapshotObjectType type{
+				SnapshotObjectType::Cube
+			};
+
+			std::string name{};
+
+			Vec3 position{};
+			Vec3 rotation{};
+			Vec3 scale{
+				1.0f,
+				1.0f,
+				1.0f
+			};
+
+			MeshData meshData{};
+			std::string modelPath{};
+			std::string texturePath{};
+
+			Vec3 lightColor{
+				1.0f,
+				1.0f,
+				1.0f
+			};
+			f32 lightIntensity{ 1.0f };
+			f32 ambientStrength{ 0.20f };
+			f32 shadowArea{ 30.0f };
+			bool castShadows{ true };
+
+			RigidBodySnapshot rigidBody{};
+		};
+
+		struct EditorSnapshot
+		{
+			std::vector<ObjectSnapshot> objects{};
+			std::vector<std::string> selectedNames{};
+			ui32 cubeCounter{};
+			ui32 planeCounter{};
+			std::string sceneStatusMessage{};
+		};
+
 		struct ObjectCopyData
 		{
 			bool isValid{ false };
@@ -66,6 +136,22 @@ namespace dx3d
 			};
 
 			MeshData meshData{};
+
+			bool hasRigidBody{ false };
+			Vec3 rigidBodyVelocity{};
+			Vec3 rigidBodyAngularVelocity{};
+			f32 rigidBodyMass{ 1.0f };
+			f32 rigidBodyRestitution{ 0.45f };
+			f32 rigidBodyFriction{ 0.20f };
+			bool rigidBodyUseGravity{ true };
+			bool rigidBodyIsStatic{ false };
+			Vec3 rigidBodyColliderSize{
+				1.0f,
+				1.0f,
+				1.0f
+			};
+			Vec3 rigidBodyColliderOffset{};
+			bool rigidBodyColliderUsesTransformScale{ true };
 
 			ui32 pasteCount{};
 		};
@@ -110,6 +196,41 @@ namespace dx3d
 
 		void pasteCopiedObject();
 
+		void drawPhysicsDebugOverlay(
+			CameraComponent* camera,
+			const TransformGizmo::ViewportArea& viewportArea
+		);
+
+		EditorSnapshot captureEditorSnapshot() const;
+
+		void restoreEditorSnapshot(
+			const EditorSnapshot& snapshot
+		);
+
+		bool areEditorSnapshotsEqual(
+			const EditorSnapshot& lhs,
+			const EditorSnapshot& rhs
+		) const noexcept;
+
+		void pushUndoSnapshot(
+			const EditorSnapshot& snapshot
+		);
+
+		void beginPendingUndoSnapshot(
+			const EditorSnapshot& snapshot
+		);
+
+		void commitPendingUndoSnapshot(
+			const EditorSnapshot& currentSnapshot,
+			bool editorStillActive
+		);
+
+		bool canUndo() const noexcept;
+		bool canRedo() const noexcept;
+
+		void undoEditorOperation();
+		void redoEditorOperation();
+
 		bool loadCreditsLogo();
 		void createNewScene();
 
@@ -131,11 +252,22 @@ namespace dx3d
 
 		ObjectCopyData m_objectClipboard{};
 
+		std::vector<EditorSnapshot> m_undoStack{};
+		std::vector<EditorSnapshot> m_redoStack{};
+
+		EditorSnapshot m_pendingUndoSnapshot{};
+		bool m_hasPendingUndoSnapshot{ false };
+		bool m_isRestoringEditorSnapshot{ false };
+		bool m_skipUndoTrackingThisFrame{ false };
+
 		TransformGizmo m_transformGizmo{};
 
 		bool m_showCreditsWindow = false;
 
 		bool m_showColorPickerWindow = false;
+
+		bool m_showPhysicsDebugOverlay = false;
+		bool m_showOnlySelectedPhysicsDebug = true;
 
 		Microsoft::WRL::ComPtr<
 			ID3D11ShaderResourceView

@@ -68,6 +68,26 @@ namespace dx3d
 
 		bool getStatic() const noexcept;
 
+		void setColliderSize(
+			const Vec3& size
+		) noexcept;
+
+		Vec3 getColliderSize() const noexcept;
+
+		void setColliderOffset(
+			const Vec3& offset
+		) noexcept;
+
+		Vec3 getColliderOffset() const noexcept;
+
+		void setColliderUsesTransformScale(
+			bool usesTransformScale
+		) noexcept;
+
+		bool getColliderUsesTransformScale() const noexcept;
+
+		Vec3 getEffectiveColliderSize() const noexcept;
+
 	private:
 		void attachRuntimeBody(
 			reactphysics3d::RigidBody* body,
@@ -80,6 +100,7 @@ namespace dx3d
 		void syncFromRuntime() noexcept;
 
 		void applyRuntimeProperties() noexcept;
+		void applyRuntimeColliderProperties() noexcept;
 
 	private:
 		Vec3 m_velocity{};
@@ -91,6 +112,15 @@ namespace dx3d
 
 		bool m_useGravity{ true };
 		bool m_isStatic{ false };
+
+		Vec3 m_colliderSize{
+			1.0f,
+			1.0f,
+			1.0f
+		};
+
+		Vec3 m_colliderOffset{};
+		bool m_colliderUsesTransformScale{ true };
 
 		Vec3 m_initialPosition{};
 		Vec3 m_initialRotation{};

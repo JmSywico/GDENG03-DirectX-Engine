@@ -181,27 +181,43 @@ namespace dx3d
 			return euler;
 		}
 
-		reactphysics3d::Vector3 getCubeHalfExtents(
-			TransformComponent& transform
+		reactphysics3d::Vector3 getRigidBodyHalfExtents(
+			const RigidBodyComponent& rigidBody
 		) noexcept
 		{
-			const Vec3 scale =
-				transform.getScale();
+			const Vec3 colliderSize =
+				rigidBody.
+				getEffectiveColliderSize();
 
 			return
 			{
 				std::max(
-					std::fabs(scale.x) * 0.5f,
+					std::fabs(colliderSize.x) * 0.5f,
 					MinimumHalfExtent
 				),
 				std::max(
-					std::fabs(scale.y) * 0.5f,
+					std::fabs(colliderSize.y) * 0.5f,
 					MinimumHalfExtent
 				),
 				std::max(
-					std::fabs(scale.z) * 0.5f,
+					std::fabs(colliderSize.z) * 0.5f,
 					MinimumHalfExtent
 				)
+			};
+		}
+
+		reactphysics3d::Transform getColliderTransform(
+			const RigidBodyComponent& rigidBody
+		) noexcept
+		{
+			return
+			{
+				toRuntimeVector(
+					rigidBody.
+					getColliderOffset()
+				),
+				reactphysics3d::Quaternion::
+				identity()
 			};
 		}
 
@@ -229,6 +245,20 @@ namespace dx3d
 		bool areHalfExtentsEqual(
 			const Vec3& lhs,
 			const reactphysics3d::Vector3& rhs
+		) noexcept
+		{
+			return
+				std::fabs(lhs.x - rhs.x) <=
+				0.0001f &&
+				std::fabs(lhs.y - rhs.y) <=
+				0.0001f &&
+				std::fabs(lhs.z - rhs.z) <=
+				0.0001f;
+		}
+
+		bool areVec3Equal(
+			const Vec3& lhs,
+			const Vec3& rhs
 		) noexcept
 		{
 			return
@@ -305,6 +335,7 @@ namespace dx3d
 			reactphysics3d::BoxShape* shape{};
 
 			Vec3 halfExtents{};
+			Vec3 colliderOffset{};
 		};
 
 		~Impl()
@@ -638,9 +669,13 @@ namespace dx3d
 					object.getTransform();
 
 				const auto halfExtents =
-					getCubeHalfExtents(
-						transform
+					getRigidBodyHalfExtents(
+						*rigidBody
 					);
+
+				const Vec3 colliderOffset =
+					rigidBody->
+					getColliderOffset();
 
 				auto runtimeIt =
 					rigidBodies.find(
@@ -681,9 +716,9 @@ namespace dx3d
 						runtime.body->
 						addCollider(
 							runtime.shape,
-							reactphysics3d::
-							Transform::
-							identity()
+							getColliderTransform(
+								*rigidBody
+							)
 						);
 
 					runtime.collider->
@@ -695,6 +730,9 @@ namespace dx3d
 						fromRuntimeVector(
 							halfExtents
 						);
+
+					runtime.colliderOffset =
+						colliderOffset;
 
 					RigidBodyRuntimeAccess::
 						attach(
@@ -745,6 +783,29 @@ namespace dx3d
 								)
 							);
 					}
+				}
+
+				if (
+					runtimeIt->second.
+					collider &&
+					!areVec3Equal(
+						runtimeIt->second.
+						colliderOffset,
+						colliderOffset
+					)
+					)
+				{
+					runtimeIt->second.
+						collider->
+						setLocalToBodyTransform(
+							getColliderTransform(
+								*rigidBody
+							)
+						);
+
+					runtimeIt->second.
+						colliderOffset =
+						colliderOffset;
 				}
 
 				if (shouldSyncEngineTransform ||
