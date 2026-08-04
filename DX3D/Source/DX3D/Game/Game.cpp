@@ -5,6 +5,8 @@
 #include <DX3D/Graphics/PrimitiveMeshData.h>
 #include <DX3D/Graphics/MeshMerger.h>
 #include <DX3D/Graphics/MeshData.h>
+#include <DX3D/Graphics/ObjLoader.h>
+
 #include <DX3D/Core/Logger.h>
 #include <DX3D/Input/InputSystem.h>
 #include <DX3D/Game/Display.h>
@@ -21,6 +23,7 @@
 #include <DX3D/Component/CombinedMeshComponent.h>
 #include <DX3D/Component/DirectionalLightComponent.h>
 #include <DX3D/Component/RigidBodyComponent.h>
+#include <DX3D/Component/ModelComponent.h>
 
 #include <string>
 #include <vector>
@@ -244,6 +247,17 @@ dx3d::Game::getObjectMeshData(
 	if (object->getComponent<PlaneComponent>())
 	{
 		return &getPlaneMeshData();
+	}
+
+	if (auto* modelComponent =
+		object->getComponent<ModelComponent>())
+	{
+		if (modelComponent->hasMeshData())
+		{
+			return &modelComponent->getMeshData();
+		}
+
+		return nullptr;
 	}
 
 	return nullptr;
@@ -1643,6 +1657,247 @@ void dx3d::Game::onInternalUpdate()
 				);
 
 				selectOnly(plane);
+			}
+
+			if (ImGui::MenuItem(
+				"Create Stanford Bunny"
+			))
+			{
+				MeshData bunnyMesh{};
+
+				std::string bunnyPath{};
+
+				const std::string bunnyPaths[]
+				{
+					"Assets/Models/bunny.obj",
+					"DX3D/Assets/Models/bunny.obj"
+				};
+
+				for (const auto& path : bunnyPaths)
+				{
+					if (loadObjMesh(
+						path,
+						bunnyMesh
+					))
+					{
+						bunnyPath = path;
+						break;
+					}
+				}
+
+				if (bunnyMesh.empty())
+				{
+					DX3DLogError(
+						"Failed to load Stanford Bunny OBJ."
+					);
+				}
+				else
+				{
+					auto* bunny =
+						m_world->createGameObject<
+						GameObject>();
+
+					bunny->setName(
+						"Stanford Bunny"
+					);
+
+					auto* modelComponent =
+						bunny->createOrGetComponent<
+						ModelComponent>();
+
+					modelComponent->setMeshData(
+						bunnyMesh
+					);
+
+					modelComponent->setModelPath(
+						bunnyPath
+					);
+
+					auto& bunnyTransform =
+						bunny->getTransform();
+
+					bunnyTransform.setPosition(
+						{ 0.0f, 0.0f, 0.0f }
+					);
+
+					bunnyTransform.setRotation(
+						{ 0.0f, 0.0f, 0.0f }
+					);
+
+					bunnyTransform.setScale(
+						{ 1.0f, 1.0f, 1.0f }
+					);
+
+					selectOnly(
+						bunny
+					);
+
+					DX3DLogInfo(
+						"Stanford Bunny loaded."
+					);
+				}
+			}
+
+			if (ImGui::MenuItem(
+				"Create Armadillo"
+			))
+			{
+				MeshData armadilloMesh{};
+
+				std::string armadilloPath{};
+
+				const std::string armadilloPaths[]
+				{
+					"Assets/Models/armadillo.obj",
+					"DX3D/Assets/Models/armadillo.obj"
+				};
+
+				for (const auto& path : armadilloPaths)
+				{
+					if (loadObjMesh(
+						path,
+						armadilloMesh
+					))
+					{
+						armadilloPath = path;
+						break;
+					}
+				}
+
+				if (armadilloMesh.empty())
+				{
+					DX3DLogError(
+						"Failed to load Armadillo OBJ."
+					);
+				}
+				else
+				{
+					auto* armadillo =
+						m_world->createGameObject<
+						GameObject>();
+
+					armadillo->setName(
+						"Armadillo"
+					);
+
+					auto* modelComponent =
+						armadillo->createOrGetComponent<
+						ModelComponent>();
+
+					modelComponent->setMeshData(
+						armadilloMesh
+					);
+
+					modelComponent->setModelPath(
+						armadilloPath
+					);
+
+					auto& armadilloTransform =
+						armadillo->getTransform();
+
+					armadilloTransform.setPosition(
+						{ 3.0f, 0.0f, 0.0f }
+					);
+
+					armadilloTransform.setRotation(
+						{ 0.0f, 0.0f, 0.0f }
+					);
+
+					armadilloTransform.setScale(
+						{ 1.0f, 1.0f, 1.0f }
+					);
+
+					selectOnly(
+						armadillo
+					);
+
+					DX3DLogInfo(
+						"Armadillo loaded."
+					);
+				}
+			}
+
+			if (ImGui::MenuItem(
+				"Create Utah Teapot"
+			))
+			{
+				MeshData teapotMesh{};
+
+				std::string teapotPath{};
+
+				const std::string teapotPaths[]
+				{
+					"Assets/Models/teapot.obj",
+					"DX3D/Assets/Models/teapot.obj"
+				};
+
+				for (const auto& path : teapotPaths)
+				{
+					if (loadObjMesh(
+						path,
+						teapotMesh
+					))
+					{
+						teapotPath = path;
+						break;
+					}
+				}
+
+				if (teapotMesh.empty())
+				{
+					DX3DLogError(
+						"Failed to load Utah Teapot OBJ."
+					);
+				}
+				else
+				{
+					auto* teapot =
+						m_world->createGameObject<
+						GameObject>();
+
+					teapot->setName(
+						"Utah Teapot"
+					);
+
+					auto* modelComponent =
+						teapot->createOrGetComponent<
+						ModelComponent>();
+
+					modelComponent->setMeshData(
+						teapotMesh
+					);
+
+					modelComponent->setModelPath(
+						teapotPath
+					);
+
+					modelComponent->setTexturePath(
+						"DX3D/Assets/Textures/brick.png"
+					);
+
+					auto& teapotTransform =
+						teapot->getTransform();
+
+					teapotTransform.setPosition(
+						{ -3.0f, 0.0f, 0.0f }
+					);
+
+					teapotTransform.setRotation(
+						{ 0.0f, 0.0f, 0.0f }
+					);
+
+					teapotTransform.setScale(
+						{ 1.0f, 1.0f, 1.0f }
+					);
+
+					selectOnly(
+						teapot
+					);
+
+					DX3DLogInfo(
+						"Utah Teapot loaded with brick texture."
+					);
+				}
 			}
 
 			ui32 directionalLightCount = 0;

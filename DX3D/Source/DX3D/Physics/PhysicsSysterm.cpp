@@ -7,763 +7,844 @@
 #include <DX3D/Component/TransformComponent.h>
 #include <DX3D/Component/CubeComponent.h>
 #include <DX3D/Component/PlaneComponent.h>
+#include <DX3D/Math/MathUtils.h>
+
+#include <reactphysics3d/reactphysics3d.h>
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
 
 namespace dx3d
 {
 	namespace
 	{
 		constexpr f32 Gravity = -9.81f;
-		constexpr f32 RestingVelocity = 0.15f;
+		constexpr f32 MinimumHalfExtent = 0.001f;
+		constexpr f32 PlaneHalfThickness = 0.05f;
+		constexpr f32 PlaneFriction = 0.70f;
+		constexpr f32 PlaneRestitution = 0.0f;
 
-		constexpr f32 LinearDamping = 0.999f;
-		constexpr f32 AngularDamping = 0.995f;
+		reactphysics3d::Vector3 toRuntimeVector(
+			const Vec3& value
+		) noexcept
+		{
+			return
+			{
+				value.x,
+				value.y,
+				value.z
+			};
+		}
 
-		constexpr f32 SphereRadiusScale = 0.52f;
-		constexpr f32 CollisionSlop = 0.01f;
-		constexpr f32 PositionCorrectionPercent = 0.65f;
+		Vec3 fromRuntimeVector(
+			const reactphysics3d::Vector3& value
+		) noexcept
+		{
+			return
+			{
+				static_cast<f32>(value.x),
+				static_cast<f32>(value.y),
+				static_cast<f32>(value.z)
+			};
+		}
 
-		constexpr ui32 CollisionIterations = 6;
+		reactphysics3d::Quaternion toRuntimeQuaternion(
+			const Vec3& eulerRotation
+		) noexcept
+		{
+			return reactphysics3d::Quaternion::
+				fromEulerAngles(
+					eulerRotation.x,
+					eulerRotation.y,
+					eulerRotation.z
+				);
+		}
+
+		reactphysics3d::Transform toRuntimeTransform(
+			TransformComponent& transform
+		) noexcept
+		{
+			return
+			{
+				toRuntimeVector(
+					transform.getPosition()
+				),
+				toRuntimeQuaternion(
+					transform.getRotation()
+				)
+			};
+		}
+
+		Vec3 fromRuntimeQuaternion(
+			const reactphysics3d::Quaternion& quaternion
+		) noexcept
+		{
+			const auto matrix =
+				quaternion.getMatrix();
+
+			const f32 e02 =
+				static_cast<f32>(
+					matrix[2][0]
+					);
+
+			const f32 e12 =
+				static_cast<f32>(
+					matrix[2][1]
+					);
+
+			const f32 e22 =
+				static_cast<f32>(
+					matrix[2][2]
+					);
+
+			const f32 e01 =
+				static_cast<f32>(
+					matrix[1][0]
+					);
+
+			const f32 e00 =
+				static_cast<f32>(
+					matrix[0][0]
+					);
+
+			const f32 e10 =
+				static_cast<f32>(
+					matrix[0][1]
+					);
+
+			const f32 e11 =
+				static_cast<f32>(
+					matrix[1][1]
+					);
+
+			Vec3 euler{};
+
+			const f32 sinY =
+				std::clamp(
+					-e02,
+					-1.0f,
+					1.0f
+				);
+
+			euler.y =
+				std::asin(sinY);
+
+			const f32 cosY =
+				std::cos(euler.y);
+
+			if (std::fabs(cosY) >
+				0.00001f)
+			{
+				euler.x =
+					std::atan2(
+						e12,
+						e22
+					);
+
+				euler.z =
+					std::atan2(
+						e01,
+						e00
+					);
+			}
+			else
+			{
+				euler.z = 0.0f;
+
+				if (e02 < 0.0f)
+				{
+					euler.y =
+						MathUtils::PI *
+						0.5f;
+
+					euler.x =
+						std::atan2(
+							e10,
+							e11
+						);
+				}
+				else
+				{
+					euler.y =
+						-MathUtils::PI *
+						0.5f;
+
+					euler.x =
+						std::atan2(
+							-e10,
+							e11
+						);
+				}
+			}
+
+			return euler;
+		}
+
+		reactphysics3d::Vector3 getCubeHalfExtents(
+			TransformComponent& transform
+		) noexcept
+		{
+			const Vec3 scale =
+				transform.getScale();
+
+			return
+			{
+				std::max(
+					std::fabs(scale.x) * 0.5f,
+					MinimumHalfExtent
+				),
+				std::max(
+					std::fabs(scale.y) * 0.5f,
+					MinimumHalfExtent
+				),
+				std::max(
+					std::fabs(scale.z) * 0.5f,
+					MinimumHalfExtent
+				)
+			};
+		}
+
+		reactphysics3d::Vector3 getPlaneHalfExtents(
+			TransformComponent& transform
+		) noexcept
+		{
+			const Vec3 scale =
+				transform.getScale();
+
+			return
+			{
+				std::max(
+					std::fabs(scale.x) * 0.5f,
+					MinimumHalfExtent
+				),
+				PlaneHalfThickness,
+				std::max(
+					std::fabs(scale.z) * 0.5f,
+					MinimumHalfExtent
+				)
+			};
+		}
+
+		bool areHalfExtentsEqual(
+			const Vec3& lhs,
+			const reactphysics3d::Vector3& rhs
+		) noexcept
+		{
+			return
+				std::fabs(lhs.x - rhs.x) <=
+				0.0001f &&
+				std::fabs(lhs.y - rhs.y) <=
+				0.0001f &&
+				std::fabs(lhs.z - rhs.z) <=
+				0.0001f;
+		}
 
 		bool isCubeRigidBody(
 			RigidBodyComponent* rigidBody
-		)
+		) noexcept
 		{
 			if (!rigidBody)
 				return false;
 
-			GameObject& object =
-				rigidBody->getGameObject();
-
-			return object.getComponent<
-				CubeComponent>() != nullptr;
+			return rigidBody->
+				getGameObject().
+				getComponent<CubeComponent>() !=
+				nullptr;
 		}
+	}
 
-		void integrateRigidBody(
-			RigidBodyComponent& rigidBody,
-			f32 fixedDeltaTime
-		)
+	struct RigidBodyRuntimeAccess
+	{
+		static void attach(
+			RigidBodyComponent& component,
+			reactphysics3d::RigidBody* body,
+			reactphysics3d::Collider* collider,
+			reactphysics3d::BoxShape* shape
+		) noexcept
 		{
-			if (rigidBody.getStatic())
-				return;
-
-			GameObject& object =
-				rigidBody.getGameObject();
-
-			if (!object.getComponent<
-				CubeComponent>())
-			{
-				return;
-			}
-
-			TransformComponent& transform =
-				object.getTransform();
-
-			Vec3 position =
-				transform.getPosition();
-
-			Vec3 rotation =
-				transform.getRotation();
-
-			Vec3 velocity =
-				rigidBody.getVelocity();
-
-			Vec3 angularVelocity =
-				rigidBody.getAngularVelocity();
-
-			if (rigidBody.getUseGravity())
-			{
-				velocity.y +=
-					Gravity *
-					fixedDeltaTime;
-			}
-
-			velocity *=
-				LinearDamping;
-
-			angularVelocity *=
-				AngularDamping;
-
-			position +=
-				velocity *
-				fixedDeltaTime;
-
-			rotation +=
-				angularVelocity *
-				fixedDeltaTime;
-
-			rigidBody.setVelocity(
-				velocity
-			);
-
-			rigidBody.setAngularVelocity(
-				angularVelocity
-			);
-
-			transform.setPosition(
-				position
-			);
-
-			transform.setRotation(
-				rotation
+			component.attachRuntimeBody(
+				body,
+				collider,
+				shape
 			);
 		}
 
-		void resolvePlaneCollision(
-			RigidBodyComponent& rigidBody,
-			PlaneComponent* const* planes,
-			ui32 planeCount
-		)
+		static void detach(
+			RigidBodyComponent& component
+		) noexcept
 		{
-			if (rigidBody.getStatic())
+			component.detachRuntimeBody();
+		}
+
+		static void applyRuntimeProperties(
+			RigidBodyComponent& component
+		) noexcept
+		{
+			component.applyRuntimeProperties();
+		}
+
+		static void syncFromRuntime(
+			RigidBodyComponent& component
+		) noexcept
+		{
+			component.syncFromRuntime();
+		}
+	};
+
+	struct PhysicsSystem::Impl final
+	{
+		struct RuntimeBody
+		{
+			GameObject* object{};
+			RigidBodyComponent* rigidBody{};
+			PlaneComponent* plane{};
+
+			reactphysics3d::RigidBody* body{};
+			reactphysics3d::Collider* collider{};
+			reactphysics3d::BoxShape* shape{};
+
+			Vec3 halfExtents{};
+		};
+
+		~Impl()
+		{
+			clear(false);
+		}
+
+		void ensureWorld()
+		{
+			if (physicsWorld)
 				return;
 
-			GameObject& object =
-				rigidBody.getGameObject();
+			reactphysics3d::PhysicsWorld::
+				WorldSettings settings{};
 
-			if (!object.getComponent<
-				CubeComponent>())
+			settings.worldName = "DX3D";
+			settings.gravity =
+				reactphysics3d::Vector3(
+					0.0f,
+					Gravity,
+					0.0f
+				);
+
+			physicsWorld =
+				physicsCommon.
+				createPhysicsWorld(
+					settings
+				);
+
+			if (physicsWorld)
 			{
-				return;
+				physicsWorld->
+					setContactsPositionCorrectionTechnique(
+						reactphysics3d::
+						ContactsPositionCorrectionTechnique::
+						SPLIT_IMPULSES
+					);
+			}
+		}
+
+		void clear(
+			bool detachComponents
+		) noexcept
+		{
+			for (auto& [component, runtime] :
+				rigidBodies)
+			{
+				destroyRuntimeBody(
+					runtime,
+					detachComponents
+				);
 			}
 
-			TransformComponent& transform =
-				object.getTransform();
+			rigidBodies.clear();
 
-			Vec3 position =
-				transform.getPosition();
+			for (auto& [component, runtime] :
+				planes)
+			{
+				destroyRuntimeBody(
+					runtime,
+					detachComponents
+				);
+			}
 
-			const Vec3 scale =
-				transform.getScale();
+			planes.clear();
 
-			Vec3 velocity =
-				rigidBody.getVelocity();
+			if (physicsWorld)
+			{
+				physicsCommon.
+					destroyPhysicsWorld(
+						physicsWorld
+					);
 
-			Vec3 angularVelocity =
-				rigidBody.getAngularVelocity();
+				physicsWorld = nullptr;
+			}
+		}
 
-			const f32 cubeHalfWidth =
-				std::fabs(scale.x) *
-				0.5f;
+		void destroyRuntimeBody(
+			RuntimeBody& runtime,
+			bool detachComponent
+		) noexcept
+		{
+			if (detachComponent &&
+				runtime.rigidBody)
+			{
+				RigidBodyRuntimeAccess::
+					detach(
+						*runtime.rigidBody
+					);
+			}
 
-			const f32 cubeHalfHeight =
-				std::fabs(scale.y) *
-				0.5f;
+			if (runtime.body &&
+				physicsWorld)
+			{
+				physicsWorld->
+					destroyRigidBody(
+						runtime.body
+					);
+			}
 
-			const f32 cubeHalfDepth =
-				std::fabs(scale.z) *
-				0.5f;
+			if (runtime.shape)
+			{
+				physicsCommon.
+					destroyBoxShape(
+						runtime.shape
+					);
+			}
 
-			for (ui32 planeIndex = 0;
-				planeIndex < planeCount;
-				++planeIndex)
+			runtime = RuntimeBody{};
+		}
+
+		void removeGameObject(
+			GameObject& object
+		) noexcept
+		{
+			if (auto* rigidBody =
+				object.getComponent<
+				RigidBodyComponent>())
+			{
+				auto runtimeIt =
+					rigidBodies.find(
+						rigidBody
+					);
+
+				if (runtimeIt !=
+					rigidBodies.end())
+				{
+					destroyRuntimeBody(
+						runtimeIt->second,
+						true
+					);
+
+					rigidBodies.erase(
+						runtimeIt
+					);
+				}
+			}
+
+			if (auto* plane =
+				object.getComponent<
+				PlaneComponent>())
+			{
+				auto runtimeIt =
+					planes.find(
+						plane
+					);
+
+				if (runtimeIt !=
+					planes.end())
+				{
+					destroyRuntimeBody(
+						runtimeIt->second,
+						true
+					);
+
+					planes.erase(
+						runtimeIt
+					);
+				}
+			}
+		}
+
+		void syncPlanes(
+			World& world
+		)
+		{
+			ui32 planeCount = 0;
+
+			PlaneComponent* const* planeComponents =
+				world.getComponents<
+				PlaneComponent>(
+					planeCount
+				);
+
+			for (ui32 index = 0;
+				index < planeCount;
+				++index)
 			{
 				PlaneComponent* plane =
-					planes[planeIndex];
+					planeComponents[index];
 
 				if (!plane)
 					continue;
 
-				TransformComponent& planeTransform =
+				auto& transform =
 					plane->
 					getGameObject().
 					getTransform();
 
-				const Vec3 planePosition =
-					planeTransform.getPosition();
-
-				const Vec3 planeScale =
-					planeTransform.getScale();
-
-				const f32 planeHalfWidth =
-					std::fabs(
-						planeScale.x
-					) * 0.5f;
-
-				const f32 planeHalfDepth =
-					std::fabs(
-						planeScale.z
-					) * 0.5f;
-
-				const bool overlapsPlaneX =
-					position.x + cubeHalfWidth >=
-					planePosition.x - planeHalfWidth &&
-					position.x - cubeHalfWidth <=
-					planePosition.x + planeHalfWidth;
-
-				const bool overlapsPlaneZ =
-					position.z + cubeHalfDepth >=
-					planePosition.z - planeHalfDepth &&
-					position.z - cubeHalfDepth <=
-					planePosition.z + planeHalfDepth;
-
-				if (!overlapsPlaneX ||
-					!overlapsPlaneZ)
-				{
-					continue;
-				}
-
-				const f32 planeSurfaceY =
-					planePosition.y;
-
-				const f32 cubeBottom =
-					position.y -
-					cubeHalfHeight;
-
-				if (cubeBottom >
-					planeSurfaceY)
-				{
-					continue;
-				}
-
-				position.y =
-					planeSurfaceY +
-					cubeHalfHeight;
-
-				if (velocity.y < 0.0f)
-				{
-					velocity.y =
-						-velocity.y *
-						rigidBody.
-						getRestitution();
-
-					const f32 frictionMultiplier =
-						std::clamp(
-							1.0f -
-							rigidBody.
-							getFriction(),
-							0.0f,
-							1.0f
-						);
-
-					velocity.x *=
-						frictionMultiplier;
-
-					velocity.z *=
-						frictionMultiplier;
-
-					const f32 angularFriction =
-						std::clamp(
-							1.0f -
-							rigidBody.
-							getFriction() *
-							0.5f,
-							0.0f,
-							1.0f
-						);
-
-					angularVelocity *=
-						angularFriction;
-
-					if (std::fabs(
-						velocity.y
-					) < RestingVelocity)
-					{
-						velocity.y = 0.0f;
-					}
-				}
-
-				transform.setPosition(
-					position
-				);
-
-				rigidBody.setVelocity(
-					velocity
-				);
-
-				rigidBody.setAngularVelocity(
-					angularVelocity
-				);
-
-				break;
-			}
-		}
-
-		bool resolveCubeCollision(
-			RigidBodyComponent& bodyA,
-			RigidBodyComponent& bodyB
-		)
-		{
-			const bool bodyAStatic =
-				bodyA.getStatic();
-
-			const bool bodyBStatic =
-				bodyB.getStatic();
-
-			if (bodyAStatic &&
-				bodyBStatic)
-			{
-				return false;
-			}
-
-			GameObject& objectA =
-				bodyA.getGameObject();
-
-			GameObject& objectB =
-				bodyB.getGameObject();
-
-			if (!objectA.getComponent<
-				CubeComponent>() ||
-				!objectB.getComponent<
-				CubeComponent>())
-			{
-				return false;
-			}
-
-			TransformComponent& transformA =
-				objectA.getTransform();
-
-			TransformComponent& transformB =
-				objectB.getTransform();
-
-			Vec3 positionA =
-				transformA.getPosition();
-
-			Vec3 positionB =
-				transformB.getPosition();
-
-			const Vec3 scaleA =
-				transformA.getScale();
-
-			const Vec3 scaleB =
-				transformB.getScale();
-
-			const f32 maximumScaleA =
-				std::max(
-					std::fabs(scaleA.x),
-					std::max(
-						std::fabs(scaleA.y),
-						std::fabs(scaleA.z)
-					)
-				);
-
-			const f32 maximumScaleB =
-				std::max(
-					std::fabs(scaleB.x),
-					std::max(
-						std::fabs(scaleB.y),
-						std::fabs(scaleB.z)
-					)
-				);
-
-			const f32 radiusA =
-				maximumScaleA *
-				SphereRadiusScale;
-
-			const f32 radiusB =
-				maximumScaleB *
-				SphereRadiusScale;
-
-			const f32 differenceX =
-				positionB.x -
-				positionA.x;
-
-			const f32 differenceY =
-				positionB.y -
-				positionA.y;
-
-			const f32 differenceZ =
-				positionB.z -
-				positionA.z;
-
-			const f32 distanceSquared =
-				differenceX * differenceX +
-				differenceY * differenceY +
-				differenceZ * differenceZ;
-
-			const f32 combinedRadius =
-				radiusA +
-				radiusB;
-
-			if (distanceSquared >=
-				combinedRadius *
-				combinedRadius)
-			{
-				return false;
-			}
-
-			Vec3 velocityA =
-				bodyA.getVelocity();
-
-			Vec3 velocityB =
-				bodyB.getVelocity();
-
-			Vec3 collisionNormal{};
-
-			f32 distance = 0.0f;
-
-			if (distanceSquared >
-				0.000001f)
-			{
-				distance =
-					std::sqrt(
-						distanceSquared
+				const auto halfExtents =
+					getPlaneHalfExtents(
+						transform
 					);
 
-				const f32 inverseDistance =
-					1.0f /
-					distance;
+				auto runtimeIt =
+					planes.find(plane);
 
-				collisionNormal =
+				if (runtimeIt ==
+					planes.end())
 				{
-					differenceX *
-						inverseDistance,
+					RuntimeBody runtime{};
 
-					differenceY *
-						inverseDistance,
+					runtime.object =
+						&plane->getGameObject();
 
-					differenceZ *
-						inverseDistance
-				};
-			}
-			else
-			{
-				const f32 relativeX =
-					velocityB.x -
-					velocityA.x;
+					runtime.plane = plane;
 
-				const f32 relativeY =
-					velocityB.y -
-					velocityA.y;
-
-				const f32 relativeZ =
-					velocityB.z -
-					velocityA.z;
-
-				const f32 relativeLengthSquared =
-					relativeX * relativeX +
-					relativeY * relativeY +
-					relativeZ * relativeZ;
-
-				if (relativeLengthSquared >
-					0.000001f)
-				{
-					const f32 relativeLength =
-						std::sqrt(
-							relativeLengthSquared
+					runtime.shape =
+						physicsCommon.
+						createBoxShape(
+							halfExtents
 						);
 
-					collisionNormal =
-					{
-						relativeX /
-							relativeLength,
-
-						relativeY /
-							relativeLength,
-
-						relativeZ /
-							relativeLength
-					};
-				}
-				else
-				{
-					collisionNormal =
-					{
-						1.0f,
-						0.0f,
-						0.0f
-					};
-				}
-			}
-
-			const f32 penetrationDepth =
-				combinedRadius -
-				distance;
-
-			const f32 inverseMassA =
-				bodyAStatic
-				? 0.0f
-				: 1.0f /
-				std::max(
-					bodyA.getMass(),
-					0.001f
-				);
-
-			const f32 inverseMassB =
-				bodyBStatic
-				? 0.0f
-				: 1.0f /
-				std::max(
-					bodyB.getMass(),
-					0.001f
-				);
-
-			const f32 totalInverseMass =
-				inverseMassA +
-				inverseMassB;
-
-			if (totalInverseMass <= 0.0f)
-				return false;
-
-			const f32 correctionMagnitude =
-				std::max(
-					penetrationDepth -
-					CollisionSlop,
-					0.0f
-				) *
-				PositionCorrectionPercent /
-				totalInverseMass;
-
-			positionA.x -=
-				collisionNormal.x *
-				correctionMagnitude *
-				inverseMassA;
-
-			positionA.y -=
-				collisionNormal.y *
-				correctionMagnitude *
-				inverseMassA;
-
-			positionA.z -=
-				collisionNormal.z *
-				correctionMagnitude *
-				inverseMassA;
-
-			positionB.x +=
-				collisionNormal.x *
-				correctionMagnitude *
-				inverseMassB;
-
-			positionB.y +=
-				collisionNormal.y *
-				correctionMagnitude *
-				inverseMassB;
-
-			positionB.z +=
-				collisionNormal.z *
-				correctionMagnitude *
-				inverseMassB;
-
-			const f32 relativeVelocityX =
-				velocityB.x -
-				velocityA.x;
-
-			const f32 relativeVelocityY =
-				velocityB.y -
-				velocityA.y;
-
-			const f32 relativeVelocityZ =
-				velocityB.z -
-				velocityA.z;
-
-			const f32 normalVelocity =
-				relativeVelocityX *
-				collisionNormal.x +
-				relativeVelocityY *
-				collisionNormal.y +
-				relativeVelocityZ *
-				collisionNormal.z;
-
-			f32 normalImpulseMagnitude =
-				0.0f;
-
-			if (normalVelocity < 0.0f)
-			{
-				const f32 restitution =
-					std::min(
-						0.75f,
-						std::min(
-							bodyA.getRestitution(),
-							bodyB.getRestitution()
-						)
-					);
-
-				normalImpulseMagnitude =
-					-(1.0f + restitution) *
-					normalVelocity /
-					totalInverseMass;
-
-				const Vec3 normalImpulse
-				{
-					collisionNormal.x *
-						normalImpulseMagnitude,
-
-					collisionNormal.y *
-						normalImpulseMagnitude,
-
-					collisionNormal.z *
-						normalImpulseMagnitude
-				};
-
-				velocityA.x -=
-					normalImpulse.x *
-					inverseMassA;
-
-				velocityA.y -=
-					normalImpulse.y *
-					inverseMassA;
-
-				velocityA.z -=
-					normalImpulse.z *
-					inverseMassA;
-
-				velocityB.x +=
-					normalImpulse.x *
-					inverseMassB;
-
-				velocityB.y +=
-					normalImpulse.y *
-					inverseMassB;
-
-				velocityB.z +=
-					normalImpulse.z *
-					inverseMassB;
-
-				const f32 tangentVelocityX =
-					relativeVelocityX -
-					collisionNormal.x *
-					normalVelocity;
-
-				const f32 tangentVelocityY =
-					relativeVelocityY -
-					collisionNormal.y *
-					normalVelocity;
-
-				const f32 tangentVelocityZ =
-					relativeVelocityZ -
-					collisionNormal.z *
-					normalVelocity;
-
-				const f32 tangentLengthSquared =
-					tangentVelocityX *
-					tangentVelocityX +
-					tangentVelocityY *
-					tangentVelocityY +
-					tangentVelocityZ *
-					tangentVelocityZ;
-
-				if (tangentLengthSquared >
-					0.000001f)
-				{
-					const f32 tangentLength =
-						std::sqrt(
-							tangentLengthSquared
-						);
-
-					const Vec3 tangent
-					{
-						tangentVelocityX /
-							tangentLength,
-
-						tangentVelocityY /
-							tangentLength,
-
-						tangentVelocityZ /
-							tangentLength
-					};
-
-					f32 frictionImpulseMagnitude =
-						-(
-							relativeVelocityX *
-							tangent.x +
-							relativeVelocityY *
-							tangent.y +
-							relativeVelocityZ *
-							tangent.z
-							) /
-						totalInverseMass;
-
-					const f32 frictionCoefficient =
-						std::sqrt(
-							std::max(
-								bodyA.
-								getFriction() *
-								bodyB.
-								getFriction(),
-								0.0f
+					runtime.body =
+						physicsWorld->
+						createRigidBody(
+							toRuntimeTransform(
+								transform
 							)
 						);
 
-					const f32 maximumFrictionImpulse =
-						normalImpulseMagnitude *
-						frictionCoefficient;
+					runtime.body->setType(
+						reactphysics3d::
+						BodyType::STATIC
+					);
 
-					frictionImpulseMagnitude =
-						std::clamp(
-							frictionImpulseMagnitude,
-							-maximumFrictionImpulse,
-							maximumFrictionImpulse
-						);
-
-					const Vec3 frictionImpulse
+					const reactphysics3d::
+						Transform colliderTransform
 					{
-						tangent.x *
-							frictionImpulseMagnitude,
-
-						tangent.y *
-							frictionImpulseMagnitude,
-
-						tangent.z *
-							frictionImpulseMagnitude
+						{
+							0.0f,
+							-PlaneHalfThickness,
+							0.0f
+						},
+						reactphysics3d::
+						Quaternion::identity()
 					};
 
-					velocityA.x -=
-						frictionImpulse.x *
-						inverseMassA;
+					runtime.collider =
+						runtime.body->
+						addCollider(
+							runtime.shape,
+							colliderTransform
+						);
 
-					velocityA.y -=
-						frictionImpulse.y *
-						inverseMassA;
+					auto& material =
+						runtime.collider->
+						getMaterial();
 
-					velocityA.z -=
-						frictionImpulse.z *
-						inverseMassA;
+					material.setBounciness(
+						PlaneRestitution
+					);
 
-					velocityB.x +=
-						frictionImpulse.x *
-						inverseMassB;
+					material.
+						setFrictionCoefficient(
+							PlaneFriction
+						);
 
-					velocityB.y +=
-						frictionImpulse.y *
-						inverseMassB;
+					runtime.halfExtents =
+						fromRuntimeVector(
+							halfExtents
+						);
 
-					velocityB.z +=
-						frictionImpulse.z *
-						inverseMassB;
+					runtimeIt =
+						planes.emplace(
+							plane,
+							runtime
+						).first;
+				}
+				else if (
+					!areHalfExtentsEqual(
+						runtimeIt->second.
+						halfExtents,
+						halfExtents
+					))
+				{
+					runtimeIt->second.
+						shape->
+						setHalfExtents(
+							halfExtents
+						);
+
+					runtimeIt->second.
+						halfExtents =
+						fromRuntimeVector(
+							halfExtents
+						);
+				}
+
+				runtimeIt->second.body->
+					setTransform(
+						toRuntimeTransform(
+							transform
+						)
+					);
+			}
+		}
+
+		void syncRigidBodies(
+			World& world,
+			bool syncEngineTransform
+		)
+		{
+			ui32 rigidBodyCount = 0;
+
+			RigidBodyComponent* const* components =
+				world.getComponents<
+				RigidBodyComponent>(
+					rigidBodyCount
+				);
+
+			for (ui32 index = 0;
+				index < rigidBodyCount;
+				++index)
+			{
+				RigidBodyComponent* rigidBody =
+					components[index];
+
+				if (!isCubeRigidBody(
+					rigidBody
+				))
+				{
+					continue;
+				}
+
+				auto& object =
+					rigidBody->
+					getGameObject();
+
+				auto& transform =
+					object.getTransform();
+
+				const auto halfExtents =
+					getCubeHalfExtents(
+						transform
+					);
+
+				auto runtimeIt =
+					rigidBodies.find(
+						rigidBody
+					);
+
+				bool shouldSyncEngineTransform =
+					syncEngineTransform;
+
+				if (runtimeIt ==
+					rigidBodies.end())
+				{
+					RuntimeBody runtime{};
+
+					runtime.object = &object;
+					runtime.rigidBody =
+						rigidBody;
+
+					runtime.shape =
+						physicsCommon.
+						createBoxShape(
+							halfExtents
+						);
+
+					runtime.body =
+						physicsWorld->
+						createRigidBody(
+							toRuntimeTransform(
+								transform
+							)
+						);
+
+					runtime.body->setUserData(
+						&object
+					);
+
+					runtime.collider =
+						runtime.body->
+						addCollider(
+							runtime.shape,
+							reactphysics3d::
+							Transform::
+							identity()
+						);
+
+					runtime.collider->
+						setUserData(
+							rigidBody
+						);
+
+					runtime.halfExtents =
+						fromRuntimeVector(
+							halfExtents
+						);
+
+					RigidBodyRuntimeAccess::
+						attach(
+							*rigidBody,
+							runtime.body,
+							runtime.collider,
+							runtime.shape
+						);
+
+					runtimeIt =
+						rigidBodies.emplace(
+							rigidBody,
+							runtime
+						).first;
+
+					shouldSyncEngineTransform =
+						true;
+				}
+				else if (
+					!areHalfExtentsEqual(
+						runtimeIt->second.
+						halfExtents,
+						halfExtents
+					))
+				{
+					runtimeIt->second.
+						shape->
+						setHalfExtents(
+							halfExtents
+						);
+
+					runtimeIt->second.
+						halfExtents =
+						fromRuntimeVector(
+							halfExtents
+						);
+
+					if (!rigidBody->getStatic())
+					{
+						runtimeIt->second.
+							body->
+							setLocalInertiaTensor(
+								runtimeIt->second.
+								shape->
+								getLocalInertiaTensor(
+									rigidBody->
+									getMass()
+								)
+							);
+					}
+				}
+
+				if (shouldSyncEngineTransform ||
+					rigidBody->getStatic())
+				{
+					runtimeIt->second.
+						body->
+						setTransform(
+							toRuntimeTransform(
+								transform
+							)
+						);
+				}
+
+				if (shouldSyncEngineTransform)
+				{
+					RigidBodyRuntimeAccess::
+						applyRuntimeProperties(
+							*rigidBody
+						);
 				}
 			}
-
-			Vec3 angularVelocityA =
-				bodyA.getAngularVelocity();
-
-			Vec3 angularVelocityB =
-				bodyB.getAngularVelocity();
-
-			angularVelocityA *=
-				0.985f;
-
-			angularVelocityB *=
-				0.985f;
-
-			transformA.setPosition(
-				positionA
-			);
-
-			transformB.setPosition(
-				positionB
-			);
-
-			bodyA.setVelocity(
-				velocityA
-			);
-
-			bodyB.setVelocity(
-				velocityB
-			);
-
-			bodyA.setAngularVelocity(
-				angularVelocityA
-			);
-
-			bodyB.setAngularVelocity(
-				angularVelocityB
-			);
-
-			return true;
 		}
-	}
+
+		void syncDynamicRigidBodiesToEngine()
+		{
+			for (auto& [component, runtime] :
+				rigidBodies)
+			{
+				RigidBodyComponent* rigidBody =
+					runtime.rigidBody;
+
+				if (!rigidBody ||
+					!runtime.body ||
+					rigidBody->getStatic())
+				{
+					continue;
+				}
+
+				const auto& runtimeTransform =
+					runtime.body->
+					getTransform();
+
+				auto& transform =
+					rigidBody->
+					getGameObject().
+					getTransform();
+
+				transform.setPosition(
+					fromRuntimeVector(
+						runtimeTransform.
+						getPosition()
+					)
+				);
+
+				transform.setRotation(
+					fromRuntimeQuaternion(
+						runtimeTransform.
+						getOrientation()
+					)
+				);
+
+				RigidBodyRuntimeAccess::
+					syncFromRuntime(
+						*rigidBody
+					);
+			}
+		}
+
+		reactphysics3d::PhysicsCommon physicsCommon{};
+		reactphysics3d::PhysicsWorld* physicsWorld{};
+
+		std::unordered_map<
+			RigidBodyComponent*,
+			RuntimeBody
+		> rigidBodies{};
+
+		std::unordered_map<
+			PlaneComponent*,
+			RuntimeBody
+		> planes{};
+	};
+}
+
+dx3d::PhysicsSystem::PhysicsSystem()
+	: m_impl(std::make_unique<Impl>())
+{}
+
+dx3d::PhysicsSystem::~PhysicsSystem() = default;
+
+void dx3d::PhysicsSystem::start(
+	World& world
+)
+{
+	m_impl->ensureWorld();
+	m_impl->syncPlanes(world);
+	m_impl->syncRigidBodies(
+		world,
+		true
+	);
 }
 
 void dx3d::PhysicsSystem::update(
@@ -801,138 +882,39 @@ void dx3d::PhysicsSystem::fixedUpdate(
 	f32 fixedDeltaTime
 )
 {
-	ui32 rigidBodyCount = 0;
+	m_impl->ensureWorld();
+	m_impl->syncPlanes(world);
+	m_impl->syncRigidBodies(
+		world,
+		false
+	);
 
-	RigidBodyComponent* const* rigidBodies =
-		world.getComponents<
-		RigidBodyComponent>(
-			rigidBodyCount
-		);
-
-	if (!rigidBodies ||
-		rigidBodyCount == 0)
-	{
+	if (!m_impl->physicsWorld)
 		return;
-	}
 
-	ui32 planeCount = 0;
+	m_impl->physicsWorld->update(
+		fixedDeltaTime
+	);
 
-	PlaneComponent* const* planes =
-		world.getComponents<
-		PlaneComponent>(
-			planeCount
-		);
+	m_impl->syncDynamicRigidBodiesToEngine();
+}
 
-	for (ui32 rigidBodyIndex = 0;
-		rigidBodyIndex < rigidBodyCount;
-		++rigidBodyIndex)
-	{
-		RigidBodyComponent* rigidBody =
-			rigidBodies[rigidBodyIndex];
+void dx3d::PhysicsSystem::stop(
+	World& world
+) noexcept
+{
+	(void)world;
+	m_impl->clear(true);
+	m_accumulator = 0.0f;
+}
 
-		if (!isCubeRigidBody(
-			rigidBody
-		))
-		{
-			continue;
-		}
-
-		integrateRigidBody(
-			*rigidBody,
-			fixedDeltaTime
-		);
-	}
-
-	for (ui32 rigidBodyIndex = 0;
-		rigidBodyIndex < rigidBodyCount;
-		++rigidBodyIndex)
-	{
-		RigidBodyComponent* rigidBody =
-			rigidBodies[rigidBodyIndex];
-
-		if (!isCubeRigidBody(
-			rigidBody
-		))
-		{
-			continue;
-		}
-
-		resolvePlaneCollision(
-			*rigidBody,
-			planes,
-			planeCount
-		);
-	}
-
-	for (ui32 iteration = 0;
-		iteration < CollisionIterations;
-		++iteration)
-	{
-		bool collisionFound = false;
-
-		for (ui32 firstIndex = 0;
-			firstIndex < rigidBodyCount;
-			++firstIndex)
-		{
-			RigidBodyComponent* firstBody =
-				rigidBodies[firstIndex];
-
-			if (!isCubeRigidBody(
-				firstBody
-			))
-			{
-				continue;
-			}
-
-			for (ui32 secondIndex =
-				firstIndex + 1;
-				secondIndex < rigidBodyCount;
-				++secondIndex)
-			{
-				RigidBodyComponent* secondBody =
-					rigidBodies[secondIndex];
-
-				if (!isCubeRigidBody(
-					secondBody
-				))
-				{
-					continue;
-				}
-
-				if (resolveCubeCollision(
-					*firstBody,
-					*secondBody
-				))
-				{
-					collisionFound = true;
-				}
-			}
-		}
-
-		if (!collisionFound)
-			break;
-	}
-
-	for (ui32 rigidBodyIndex = 0;
-		rigidBodyIndex < rigidBodyCount;
-		++rigidBodyIndex)
-	{
-		RigidBodyComponent* rigidBody =
-			rigidBodies[rigidBodyIndex];
-
-		if (!isCubeRigidBody(
-			rigidBody
-		))
-		{
-			continue;
-		}
-
-		resolvePlaneCollision(
-			*rigidBody,
-			planes,
-			planeCount
-		);
-	}
+void dx3d::PhysicsSystem::removeGameObject(
+	GameObject& object
+) noexcept
+{
+	m_impl->removeGameObject(
+		object
+	);
 }
 
 void dx3d::PhysicsSystem::resetAccumulator() noexcept

@@ -9,6 +9,7 @@
 #include <DX3D/Graphics/VertexShaderSignature.h>
 #include <DX3D/Graphics/ConstantBuffer.h>
 #include <DX3D/Graphics/ShadowMap.h>
+#include <DX3D/Graphics/Texture2D.h>
 
 using namespace dx3d;
 
@@ -179,6 +180,17 @@ dx3d::GraphicsDevice::createShadowMap(
 )
 {
 	return std::make_shared<ShadowMap>(
+		desc,
+		getGraphicsResourceDesc()
+	);
+}
+
+RefPtr<Texture2D>
+dx3d::GraphicsDevice::createTexture2D(
+	const Texture2DDesc& desc
+)
+{
+	return std::make_shared<Texture2D>(
 		desc,
 		getGraphicsResourceDesc()
 	);

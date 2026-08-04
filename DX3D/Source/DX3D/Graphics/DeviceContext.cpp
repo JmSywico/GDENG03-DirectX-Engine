@@ -5,6 +5,7 @@
 #include <DX3D/Graphics/IndexBuffer.h>
 #include <DX3D/Graphics/ConstantBuffer.h>
 #include <DX3D/Graphics/ShadowMap.h>
+#include <DX3D/Graphics/Texture2D.h>
 
 #include <cstring>
 
@@ -134,6 +135,50 @@ void dx3d::DeviceContext::setShadowMap(
 		0,
 		1,
 		&samplerState
+	);
+}
+
+void dx3d::DeviceContext::setTexture2D(
+	const Texture2D& texture
+)
+{
+	auto shaderResourceView =
+		texture.m_shaderResourceView.Get();
+
+	auto samplerState =
+		texture.m_samplerState.Get();
+
+	m_context->PSSetShaderResources(
+		1,
+		1,
+		&shaderResourceView
+	);
+
+	m_context->PSSetSamplers(
+		1,
+		1,
+		&samplerState
+	);
+}
+
+void dx3d::DeviceContext::clearTexture2D()
+{
+	ID3D11ShaderResourceView*
+		nullShaderResource = nullptr;
+
+	ID3D11SamplerState*
+		nullSamplerState = nullptr;
+
+	m_context->PSSetShaderResources(
+		1,
+		1,
+		&nullShaderResource
+	);
+
+	m_context->PSSetSamplers(
+		1,
+		1,
+		&nullSamplerState
 	);
 }
 

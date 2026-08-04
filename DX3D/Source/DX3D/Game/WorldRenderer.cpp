@@ -8,6 +8,7 @@
 #include <DX3D/Graphics/MeshData.h>
 #include <DX3D/Graphics/PrimitiveMeshData.h>
 #include <DX3D/Graphics/ShadowMap.h>
+#include <DX3D/Graphics/Texture2D.h>
 
 #include <DX3D/Game/World.h>
 #include <DX3D/Game/GameObject.h>
@@ -19,6 +20,7 @@
 #include <DX3D/Component/CameraComponent.h>
 #include <DX3D/Component/CombinedMeshComponent.h>
 #include <DX3D/Component/DirectionalLightComponent.h>
+#include <DX3D/Component/ModelComponent.h>
 
 #include <DX3D/Math/MathUtils.h>
 
@@ -27,6 +29,7 @@
 #include <vector>
 #include <cmath>
 #include <unordered_set>
+#include <string>
 
 dx3d::WorldRenderer::WorldRenderer(
 	const WorldRendererDesc& desc
@@ -572,11 +575,155 @@ void dx3d::WorldRenderer::render(
 		}
 	}
 
+	std::unordered_set<
+		const ModelComponent*
+	> activeModels{};
+
+	{
+		auto components =
+			world.getComponents<
+			ModelComponent
+			>(
+				numComponents
+			);
+
+		activeModels.reserve(
+			numComponents
+		);
+
+		for (
+			auto i :
+			std::views::iota(
+				0u,
+				numComponents
+			)
+			)
+		{
+			auto* component =
+				components[i];
+
+			if (!component)
+				continue;
+
+			activeModels.insert(
+				component
+			);
+
+			if (!component->hasMeshData())
+			{
+				m_modelResources.erase(
+					component
+				);
+
+				continue;
+			}
+
+			auto& renderResources =
+				m_modelResources[
+					component
+				];
+
+			const auto& meshData =
+				component->getMeshData();
+
+			if (
+				!renderResources.vertexBuffer ||
+				!renderResources.indexBuffer
+				)
+			{
+				renderResources.vertexBuffer =
+					m_graphicsDevice.
+					createVertexBuffer(
+						{
+							meshData.vertices.data(),
+							static_cast<ui32>(
+								meshData.vertices.size()
+							),
+							sizeof(MeshVertex)
+						}
+					);
+
+				renderResources.indexBuffer =
+					m_graphicsDevice.
+					createIndexBuffer(
+						{
+							meshData.indices.data(),
+							static_cast<ui32>(
+								meshData.indices.size()
+							)
+						}
+					);
+			}
+
+			if (component->hasTexture())
+			{
+				const std::string& texturePath =
+					component->getTexturePath();
+
+				const bool needsTextureLoad =
+					!renderResources.texture ||
+					renderResources.texturePath !=
+					texturePath;
+
+				if (needsTextureLoad)
+				{
+					const std::wstring wideTexturePath(
+						texturePath.begin(),
+						texturePath.end()
+					);
+
+					renderResources.texture =
+						m_graphicsDevice.
+						createTexture2D(
+							{
+								wideTexturePath.c_str()
+							}
+						);
+
+					renderResources.texturePath =
+						texturePath;
+				}
+			}
+			else
+			{
+				renderResources.texture.reset();
+				renderResources.texturePath.clear();
+			}
+		}
+	}
+
+	for (
+		auto it =
+		m_modelResources.begin();
+
+		it !=
+		m_modelResources.end();
+		)
+	{
+		if (
+			activeModels.find(
+				it->first
+			) ==
+			activeModels.end()
+			)
+		{
+			it =
+				m_modelResources.erase(
+					it
+				);
+		}
+		else
+		{
+			++it;
+		}
+	}
+
 	auto drawObject =
 		[&](
 			TransformComponent& transform,
 			VertexBuffer& vertexBuffer,
-			IndexBuffer& indexBuffer
+			IndexBuffer& indexBuffer,
+			Texture2D* texture
 			)
 		{
 			data.world =
@@ -586,6 +733,33 @@ void dx3d::WorldRenderer::render(
 				Mat4x4::inverse(
 					data.world
 				);
+
+			if (texture)
+			{
+				data.materialSettings =
+				{
+					1.0f,
+					0.0f,
+					0.0f,
+					0.0f
+				};
+
+				context.setTexture2D(
+					*texture
+				);
+			}
+			else
+			{
+				data.materialSettings =
+				{
+					0.0f,
+					0.0f,
+					0.0f,
+					0.0f
+				};
+
+				context.clearTexture2D();
+			}
 
 			auto& constantBuffer =
 				*m_cb;
@@ -644,7 +818,8 @@ void dx3d::WorldRenderer::render(
 						getGameObject().
 						getTransform(),
 						*m_cubeVertexBuffer,
-						*m_cubeIndexBuffer
+						*m_cubeIndexBuffer,
+						nullptr
 					);
 				}
 			}
@@ -676,7 +851,8 @@ void dx3d::WorldRenderer::render(
 						getGameObject().
 						getTransform(),
 						*m_planeVertexBuffer,
-						*m_planeIndexBuffer
+						*m_planeIndexBuffer,
+						nullptr
 					);
 				}
 			}
@@ -708,7 +884,8 @@ void dx3d::WorldRenderer::render(
 						getGameObject().
 						getTransform(),
 						*m_circleVertexBuffer,
-						*m_circleIndexBuffer
+						*m_circleIndexBuffer,
+						nullptr
 					);
 				}
 			}
@@ -769,7 +946,70 @@ void dx3d::WorldRenderer::render(
 						getGameObject().
 						getTransform(),
 						*renderResources.vertexBuffer,
-						*renderResources.indexBuffer
+						*renderResources.indexBuffer,
+						nullptr
+					);
+				}
+			}
+
+			{
+				auto components =
+					world.getComponents<
+					ModelComponent
+					>(
+						numComponents
+					);
+
+				for (
+					auto i :
+					std::views::iota(
+						0u,
+						numComponents
+					)
+					)
+				{
+					auto* component =
+						components[i];
+
+					if (
+						!component ||
+						!component->hasMeshData()
+						)
+					{
+						continue;
+					}
+
+					auto resourceIterator =
+						m_modelResources.find(
+							component
+						);
+
+					if (
+						resourceIterator ==
+						m_modelResources.end()
+						)
+					{
+						continue;
+					}
+
+					auto& renderResources =
+						resourceIterator->second;
+
+					if (
+						!renderResources.vertexBuffer ||
+						!renderResources.indexBuffer
+						)
+					{
+						continue;
+					}
+
+					drawObject(
+						component->
+						getGameObject().
+						getTransform(),
+						*renderResources.vertexBuffer,
+						*renderResources.indexBuffer,
+						renderResources.texture.get()
 					);
 				}
 			}

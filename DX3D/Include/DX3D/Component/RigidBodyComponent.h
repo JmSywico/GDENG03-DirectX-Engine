@@ -4,8 +4,17 @@
 #include <DX3D/Game/Component.h>
 #include <DX3D/Math/Vec3.h>
 
+namespace reactphysics3d
+{
+	class BoxShape;
+	class Collider;
+	class RigidBody;
+}
+
 namespace dx3d
 {
+	struct RigidBodyRuntimeAccess;
+
 	class RigidBodyComponent final : public Component
 	{
 		dx3d_typeid(RigidBodyComponent)
@@ -60,6 +69,19 @@ namespace dx3d
 		bool getStatic() const noexcept;
 
 	private:
+		void attachRuntimeBody(
+			reactphysics3d::RigidBody* body,
+			reactphysics3d::Collider* collider,
+			reactphysics3d::BoxShape* shape
+		) noexcept;
+
+		void detachRuntimeBody() noexcept;
+
+		void syncFromRuntime() noexcept;
+
+		void applyRuntimeProperties() noexcept;
+
+	private:
 		Vec3 m_velocity{};
 		Vec3 m_angularVelocity{};
 
@@ -78,5 +100,12 @@ namespace dx3d
 		Vec3 m_initialAngularVelocity{};
 
 		bool m_hasInitialState{ false };
+
+		reactphysics3d::RigidBody* m_runtimeBody{};
+		reactphysics3d::Collider* m_runtimeCollider{};
+		reactphysics3d::BoxShape* m_runtimeShape{};
+
+		friend class PhysicsSystem;
+		friend struct RigidBodyRuntimeAccess;
 	};
 }

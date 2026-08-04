@@ -92,6 +92,13 @@ void dx3d::World::setPhysicsEnabled(
 
 	m_physicsEnabled = enabled;
 
+	if (enabled)
+	{
+		m_physicsSystem.start(
+			*this
+		);
+	}
+
 	if (!enabled)
 	{
 		m_physicsSystem.resetAccumulator();
@@ -127,6 +134,10 @@ void dx3d::World::stopPhysics() noexcept
 				restoreInitialState();
 		}
 	}
+
+	m_physicsSystem.stop(
+		*this
+	);
 
 	m_physicsSystem.resetAccumulator();
 
@@ -188,6 +199,10 @@ void dx3d::World::destroyGameObjectInternal(GameObject* object)
 {
 	if (!object)
 		return;
+
+	m_physicsSystem.removeGameObject(
+		*object
+	);
 
 	// Remove every component belonging to this object
 	// from the World's component lists.

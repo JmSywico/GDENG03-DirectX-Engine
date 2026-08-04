@@ -6,6 +6,7 @@
 namespace dx3d
 {
 	class ShadowMap;
+	class Texture2D;
 
 	class DeviceContext final :
 		public GraphicsResource
@@ -27,6 +28,12 @@ namespace dx3d
 		void setShadowMap(
 			const ShadowMap& shadowMap
 		);
+
+		void setTexture2D(
+			const Texture2D& texture
+		);
+
+		void clearTexture2D();
 
 		void setGraphicsPipelineState(
 			const GraphicsPipelineState& pipeline

@@ -90,6 +90,11 @@ namespace dx3d
 		ui32 height{ 2048 };
 	};
 
+	struct Texture2DDesc
+	{
+		const wchar_t* filePath{};
+	};
+
 	struct GameContext
 	{
 		InputSystem& input;

@@ -10,6 +10,7 @@
 namespace dx3d
 {
 	class ShadowMap;
+	class Texture2D;
 
 	class GraphicsDevice final :
 		public Base,
@@ -59,6 +60,10 @@ namespace dx3d
 
 		RefPtr<ShadowMap> createShadowMap(
 			const ShadowMapDesc& desc
+		);
+
+		RefPtr<Texture2D> createTexture2D(
+			const Texture2DDesc& desc
 		);
 
 		void executeCommandList(

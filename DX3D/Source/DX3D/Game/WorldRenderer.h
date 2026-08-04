@@ -8,11 +8,14 @@
 #include <DX3D/Graphics/MeshData.h>
 
 #include <unordered_map>
+#include <string>
 
 namespace dx3d
 {
 	class ShadowMap;
 	class CombinedMeshComponent;
+	class ModelComponent;
+	class Texture2D;
 
 	class WorldRenderer final :
 		public Base
@@ -39,6 +42,7 @@ namespace dx3d
 
 			Vec4 lightDirection{};
 			Vec4 lightColorAndAmbient{};
+			Vec4 materialSettings{};
 
 			Mat4x4 inverseWorld{};
 
@@ -51,6 +55,15 @@ namespace dx3d
 			RefPtr<VertexBuffer> vertexBuffer{};
 			RefPtr<IndexBuffer> indexBuffer{};
 			ui32 meshRevision{};
+		};
+
+		struct ModelRenderResources
+		{
+			RefPtr<VertexBuffer> vertexBuffer{};
+			RefPtr<IndexBuffer> indexBuffer{};
+			RefPtr<Texture2D> texture{};
+
+			std::string texturePath{};
 		};
 
 	private:
@@ -73,6 +86,11 @@ namespace dx3d
 			const CombinedMeshComponent*,
 			CombinedMeshRenderResources
 		> m_combinedMeshResources{};
+
+		std::unordered_map<
+			const ModelComponent*,
+			ModelRenderResources
+		> m_modelResources{};
 
 		RefPtr<ConstantBuffer> m_cb{};
 	};

@@ -3,6 +3,7 @@ struct VSInput
     float3 position : POSITION0;
     float4 color : COLOR0;
     float3 normal : NORMAL0;
+    float2 texCoord : TEXCOORD0;
 };
 
 struct VSOutput
@@ -11,6 +12,7 @@ struct VSOutput
     float4 color : COLOR0;
     float3 worldNormal : NORMAL0;
     float4 lightPosition : TEXCOORD0;
+    float2 texCoord : TEXCOORD1;
 };
 
 cbuffer ConstantData : register(b0)
@@ -21,6 +23,7 @@ cbuffer ConstantData : register(b0)
 
     float4 lightDirection;
     float4 lightColorAndAmbient;
+    float4 materialSettings;
 
     row_major float4x4 inverseWorld;
 
@@ -32,6 +35,11 @@ Texture2D shadowMap : register(t0);
 
 SamplerComparisonState shadowSampler :
     register(s0);
+
+Texture2D modelTexture : register(t1);
+
+SamplerState modelTextureSampler :
+    register(s1);
 
 VSOutput VSMain(
     VSInput input
@@ -87,6 +95,9 @@ VSOutput VSMain(
                 )
             ).xyz
         );
+
+    output.texCoord =
+        input.texCoord;
 
     return output;
 }
@@ -249,13 +260,25 @@ float4 PSMain(
         ambientStrength +
         directLighting;
 
+    float4 surfaceColor =
+        input.color;
+
+    if (materialSettings.x > 0.5f)
+    {
+        surfaceColor *=
+            modelTexture.Sample(
+                modelTextureSampler,
+                input.texCoord
+            );
+    }
+
     const float3 finalColor =
-        input.color.rgb *
+        surfaceColor.rgb *
         lightColorAndAmbient.rgb *
         lightingStrength;
 
     return float4(
         finalColor,
-        input.color.a
+        surfaceColor.a
     );
 }
