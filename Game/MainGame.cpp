@@ -74,7 +74,6 @@ void MainGame::onCreate()
 		{ 0.0f, 3.0f, -6.0f }
 	);
 
-	// Positive X rotation looks downward in this engine.
 	camera->getTransform().setRotation(
 		{ 0.45f, 0.0f, 0.0f }
 	);

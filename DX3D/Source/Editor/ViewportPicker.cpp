@@ -162,8 +162,6 @@ bool dx3d::createPickingRay(
 	const f32 localMouseY =
 		mouseY - viewportArea.y;
 
-	// Convert screen coordinates to Direct3D
-	// normalized device coordinates.
 	const f32 normalizedX =
 		(localMouseX / viewportArea.width) *
 		2.0f - 1.0f;
@@ -184,7 +182,6 @@ bool dx3d::createPickingRay(
 			viewMatrix * projectionMatrix
 		);
 
-	// Direct3D uses a normalized depth range of 0 to 1.
 	const Vec4 nearClipPoint
 	{
 		normalizedX,
@@ -269,7 +266,6 @@ bool dx3d::intersectRayWithMesh(
 	f32 closestDistance =
 		std::numeric_limits<f32>::max();
 
-	// Möller-Trumbore ray-triangle intersection.
 	for (
 		size_t indexPosition = 0;
 		indexPosition + 2 < meshData.indices.size();
@@ -328,9 +324,6 @@ bool dx3d::intersectRayWithMesh(
 				directionCrossEdge
 			);
 
-		// Do not perform back-face culling. This allows
-		// planes and negatively scaled objects to be picked
-		// from either side.
 		if (std::fabs(determinant) <=
 			intersectionEpsilon)
 		{

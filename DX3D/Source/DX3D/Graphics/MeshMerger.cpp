@@ -11,8 +11,6 @@ dx3d::MeshData dx3d::mergeMeshes(
 	size_t totalVertexCount = 0;
 	size_t totalIndexCount = 0;
 
-	// Determine the final sizes first so the vectors
-	// do not repeatedly reallocate while merging.
 	for (const auto& source : sources)
 	{
 		if (!source.meshData ||
@@ -47,17 +45,9 @@ dx3d::MeshData dx3d::mergeMeshes(
 		const MeshData& sourceMesh =
 			*source.meshData;
 
-		// Positions use the complete source transform.
-		//
-		// Normals must use the inverse-transpose of the
-		// source transform so non-uniform scaling does not
-		// distort the lighting direction.
 		const Mat4x4 inverseTransform =
 			Mat4x4::inverse(source.transform);
-
-		// With the engine's row-vector convention,
-		// multiplying by inverse-transpose can be performed
-		// using the rows of the inverse matrix.
+            
 		const Vec4 inverseRow0 =
 			inverseTransform.row(0);
 
@@ -67,8 +57,6 @@ dx3d::MeshData dx3d::mergeMeshes(
 		const Vec4 inverseRow2 =
 			inverseTransform.row(2);
 
-		// The indices of this mesh must be moved forward
-		// by the number of vertices already added.
 		const ui32 vertexOffset =
 			static_cast<ui32>(
 				combinedMesh.vertices.size()
@@ -77,7 +65,6 @@ dx3d::MeshData dx3d::mergeMeshes(
 		for (const auto& sourceVertex :
 			sourceMesh.vertices)
 		{
-			// Position uses W = 1 so translation is included.
 			const Vec4 transformedPosition =
 				source.transform.transform(
 					{
@@ -88,8 +75,6 @@ dx3d::MeshData dx3d::mergeMeshes(
 					}
 				);
 
-			// Normal uses the inverse-transpose matrix.
-			// Translation is not included.
 			const Vec3 transformedNormal =
 				Vec3::normalize(
 					{

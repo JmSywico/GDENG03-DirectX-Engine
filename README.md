@@ -1,6 +1,9 @@
 GDENG03 DirectX 11 Game Engine
 
 Name:
+Naomi Jade V. Inoferio
+Paul Davidion D. Macaraeg
+Francis Gabriel M. Obina
 Juan Morcwel D. Sy-Wico
 
 How to Run
