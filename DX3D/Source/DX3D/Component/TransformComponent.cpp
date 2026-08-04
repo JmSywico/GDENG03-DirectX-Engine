@@ -1,5 +1,6 @@
 #include <DX3D/Component/TransformComponent.h>
 #include <DX3D/Game/World.h>
+#include <DX3D/Game/GameObject.h>
 
 
 dx3d::TransformComponent::TransformComponent(const ComponentDesc& data) : Component(data)
@@ -79,21 +80,32 @@ void dx3d::TransformComponent::updateWorldMatrix() noexcept
 
 	m_dirty = false;
 
-	m_rigidWorldMatrix =
+	const Mat4x4 localRigid =
 		Mat4x4::rotateX(m_rotation.x) *
 		Mat4x4::rotateY(m_rotation.y) *
 		Mat4x4::rotateZ(m_rotation.z) *
 		Mat4x4::translate(m_position);
 
-	m_affineWorldMatrix =
+	const Mat4x4 localAffine =
 		Mat4x4::scale(m_scale) *
-		m_rigidWorldMatrix;
+		localRigid;
+
+	if (auto* parent = m_object.getParent())
+	{
+		m_rigidWorldMatrix =
+			localRigid * parent->getTransform().getRigidWorldMatrix();
+		m_affineWorldMatrix =
+			localAffine * parent->getTransform().getAffineWorldMatrix();
+	}
+	else
+	{
+		m_rigidWorldMatrix = localRigid;
+		m_affineWorldMatrix = localAffine;
+	}
 }
 
 
 void dx3d::TransformComponent::markAsDirty()
 {
-	if (m_dirty) return;
-	m_dirty = true;
 	m_world.addDirtyTransformInternal(*this);
 }

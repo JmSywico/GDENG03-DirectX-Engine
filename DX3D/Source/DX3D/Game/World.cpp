@@ -53,11 +53,29 @@ void dx3d::World::update(f32 deltaTime)
 	m_dirtyTransforms.clear();
 }
 
-dx3d::GameObject* dx3d::World::createGameObjectInternal(UniquePtr<GameObject>& object)
+dx3d::GameObject* dx3d::World::createGameObjectInternal(
+	UniquePtr<GameObject>& object,
+	ui64 requestedId
+)
 {
 	if (!object) return {};
 
 	auto ptr = object.get();
+	ui64 entityId = requestedId;
+
+	if (entityId == 0 || m_entityIndex.contains(entityId))
+	{
+		while (m_entityIndex.contains(m_nextEntityId) || m_nextEntityId == 0)
+			++m_nextEntityId;
+		entityId = m_nextEntityId++;
+	}
+	else if (entityId >= m_nextEntityId)
+	{
+		m_nextEntityId = entityId + 1;
+	}
+
+	ptr->m_entityId = entityId;
+	m_entityIndex[entityId] = ptr;
 
 	auto index = m_pendingObjects.size();
 	m_pendingObjects.push_back(std::move(object));
@@ -66,10 +84,73 @@ dx3d::GameObject* dx3d::World::createGameObjectInternal(UniquePtr<GameObject>& o
 	return ptr;
 }
 
+dx3d::GameObject* dx3d::World::findGameObject(
+	ui64 entityId
+) const noexcept
+{
+	const auto found = m_entityIndex.find(entityId);
+	return found == m_entityIndex.end() ? nullptr : found->second;
+}
+
+bool dx3d::World::isDescendantOf(
+	const GameObject* object,
+	const GameObject* potentialAncestor
+) const noexcept
+{
+	if (!object || !potentialAncestor)
+		return false;
+
+	for (const GameObject* parent = object->m_parent;
+		parent;
+		parent = parent->m_parent)
+	{
+		if (parent == potentialAncestor)
+			return true;
+	}
+
+	return false;
+}
+
+bool dx3d::World::setParent(
+	GameObject* child,
+	GameObject* parent
+)
+{
+	if (!child || child == parent || child->m_parent == parent)
+		return child && child->m_parent == parent;
+
+	if (parent && isDescendantOf(parent, child))
+		return false;
+
+	if (child->m_parent)
+	{
+		auto& siblings = child->m_parent->m_children;
+		siblings.erase(
+			std::remove(siblings.begin(), siblings.end(), child),
+			siblings.end()
+		);
+	}
+
+	child->m_parent = parent;
+	if (parent)
+		parent->m_children.push_back(child);
+
+	addDirtyTransformInternal(child->getTransform());
+	return true;
+}
+
 void dx3d::World::destroyGameObject(GameObject* object)
 {
-	if (!object)
+	if (!object || m_pendingDestruction.contains(object))
 		return;
+
+	// Hierarchy ownership is explicit: destroying a parent destroys its
+	// subtree. Queue children first so no live child observes a dead parent.
+	const auto children = object->m_children;
+	for (auto* child : children)
+		destroyGameObject(child);
+
+	m_pendingDestruction.insert(object);
 
 	m_events.push_back(
 		{
@@ -103,6 +184,30 @@ void dx3d::World::destroyGameObjectInternal(GameObject* object)
 {
 	if (!object)
 		return;
+
+	m_pendingDestruction.erase(object);
+
+	if (object->m_parent)
+	{
+		auto& siblings = object->m_parent->m_children;
+		siblings.erase(
+			std::remove(siblings.begin(), siblings.end(), object),
+			siblings.end()
+		);
+		object->m_parent = nullptr;
+	}
+
+	const auto children = object->m_children;
+	for (auto* child : children)
+	{
+		if (child)
+		{
+			child->m_parent = nullptr;
+			addDirtyTransformInternal(child->getTransform());
+		}
+	}
+	object->m_children.clear();
+	m_entityIndex.erase(object->m_entityId);
 
 	// Remove every component belonging to this object
 	// from the World's component lists.
@@ -174,7 +279,28 @@ void dx3d::World::addComponentInternal(Component& component)
 
 void dx3d::World::addDirtyTransformInternal(TransformComponent& component)
 {
-	m_dirtyTransforms.push_back(&component);
+	auto markSubtree = [this](auto&& self, GameObject& object) -> void
+	{
+		auto* transform = object.m_transform;
+		if (transform)
+		{
+			transform->m_dirty = true;
+			if (std::find(
+				m_dirtyTransforms.begin(),
+				m_dirtyTransforms.end(),
+				transform) == m_dirtyTransforms.end())
+			{
+				m_dirtyTransforms.push_back(transform);
+			}
+		}
+
+		for (auto* child : object.m_children)
+		{
+			if (child) self(self, *child);
+		}
+	};
+
+	markSubtree(markSubtree, component.getGameObject());
 }
 
 dx3d::Component* const* dx3d::World::getComponentsInternal(size_t typeId, ui32* numComponents) const noexcept

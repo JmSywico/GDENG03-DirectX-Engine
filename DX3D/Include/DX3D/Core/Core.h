@@ -1,6 +1,7 @@
 #pragma once
 #include <stdexcept>
 #include <memory>
+#include <cstdint>
 
 #define dx3d_disable_copy_and_move(Class)     \
 protected:\
@@ -38,6 +39,7 @@ namespace dx3d
 
 	using i32 = int;
 	using ui32 = unsigned int;
+	using ui64 = std::uint64_t;
 	using f32 = float;
 	using d64 = double;
 

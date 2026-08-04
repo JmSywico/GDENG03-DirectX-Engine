@@ -6,6 +6,7 @@
 
 #include <unordered_map>
 #include <string>
+#include <vector>
 
 namespace dx3d
 {
@@ -51,6 +52,9 @@ namespace dx3d
 
 		void setName(const std::string& name);
 		const std::string& getName() const noexcept;
+		ui64 getEntityId() const noexcept;
+		GameObject* getParent() const noexcept;
+		const std::vector<GameObject*>& getChildren() const noexcept;
 
 		TransformComponent& getTransform() noexcept;
 		World& getWorld() noexcept;
@@ -69,6 +73,9 @@ namespace dx3d
 
 	private:
 		std::string m_name{ "GameObject" };
+		ui64 m_entityId{};
+		GameObject* m_parent{};
+		std::vector<GameObject*> m_children{};
 
 		std::unordered_map<
 			size_t,

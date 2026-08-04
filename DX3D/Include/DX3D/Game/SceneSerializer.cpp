@@ -8,6 +8,8 @@
 #include <DX3D/Component/PlaneComponent.h>
 #include <DX3D/Component/CombinedMeshComponent.h>
 #include <DX3D/Component/DirectionalLightComponent.h>
+#include <DX3D/Component/MaterialComponent.h>
+#include <DX3D/Component/RigidBodyComponent.h>
 #include <DX3D/Component/TransformComponent.h>
 
 #include <DX3D/Graphics/MeshData.h>
@@ -15,11 +17,15 @@
 #include <DX3D/Math/Vec4.h>
 
 #include <fstream>
+#include <sstream>
+#include <ostream>
+#include <istream>
 #include <string>
 #include <vector>
 #include <type_traits>
 #include <utility>
 #include <cstddef>
+#include <unordered_map>
 
 namespace
 {
@@ -35,7 +41,8 @@ namespace
 		'E'
 	};
 
-	constexpr dx3d::ui32 sceneVersion = 1;
+	constexpr dx3d::ui32 sceneVersion = 4;
+	constexpr dx3d::ui32 oldestSupportedSceneVersion = 1;
 	constexpr dx3d::ui32 maximumObjectCount = 100000;
 	constexpr dx3d::ui32 maximumStringLength = 1024 * 1024;
 	constexpr dx3d::ui32 maximumVertexCount = 10000000;
@@ -51,6 +58,8 @@ namespace
 
 	struct SerializedSceneObject
 	{
+		dx3d::ui64 entityId{};
+		dx3d::ui64 parentEntityId{};
 		SceneObjectType type{};
 		std::string name{};
 
@@ -77,11 +86,24 @@ namespace
 		dx3d::f32 ambientStrength{ 0.20f };
 		dx3d::f32 shadowArea{ 30.0f };
 		bool castShadows{ true };
+		bool hasMaterial{};
+		dx3d::MaterialMode materialMode{ dx3d::MaterialMode::LitTint };
+		dx3d::Vec4 materialAlbedo{ 1.0f, 1.0f, 1.0f, 1.0f };
+		dx3d::Vec3 materialEmissive{};
+		dx3d::f32 materialEmissionStrength{};
+		bool hasRigidBody{};
+		dx3d::RigidBodyType rigidBodyType{ dx3d::RigidBodyType::Dynamic };
+		dx3d::ColliderShape colliderShape{ dx3d::ColliderShape::Box };
+		dx3d::Vec3 colliderHalfExtents{ 0.5f, 0.5f, 0.5f };
+		dx3d::f32 colliderRadius{ 0.5f };
+		dx3d::f32 rigidBodyMass{ 1.0f };
+		dx3d::f32 rigidBodyRestitution{ 0.1f };
+		bool gravityEnabled{ true };
 	};
 
 	template <typename T>
 	bool writeValue(
-		std::ofstream& stream,
+		std::ostream& stream,
 		const T& value
 	)
 	{
@@ -101,7 +123,7 @@ namespace
 
 	template <typename T>
 	bool readValue(
-		std::ifstream& stream,
+		std::istream& stream,
 		T& value
 	)
 	{
@@ -120,7 +142,7 @@ namespace
 	}
 
 	bool writeString(
-		std::ofstream& stream,
+		std::ostream& stream,
 		const std::string& value
 	)
 	{
@@ -159,7 +181,7 @@ namespace
 	}
 
 	bool readString(
-		std::ifstream& stream,
+		std::istream& stream,
 		std::string& value
 	)
 	{
@@ -194,7 +216,7 @@ namespace
 	}
 
 	bool writeVec3(
-		std::ofstream& stream,
+		std::ostream& stream,
 		const dx3d::Vec3& value
 	)
 	{
@@ -205,7 +227,7 @@ namespace
 	}
 
 	bool readVec3(
-		std::ifstream& stream,
+		std::istream& stream,
 		dx3d::Vec3& value
 	)
 	{
@@ -216,7 +238,7 @@ namespace
 	}
 
 	bool writeVec4(
-		std::ofstream& stream,
+		std::ostream& stream,
 		const dx3d::Vec4& value
 	)
 	{
@@ -228,7 +250,7 @@ namespace
 	}
 
 	bool readVec4(
-		std::ifstream& stream,
+		std::istream& stream,
 		dx3d::Vec4& value
 	)
 	{
@@ -240,7 +262,7 @@ namespace
 	}
 
 	bool writeMeshData(
-		std::ofstream& stream,
+		std::ostream& stream,
 		const dx3d::MeshData& meshData
 	)
 	{
@@ -318,7 +340,7 @@ namespace
 	}
 
 	bool readMeshData(
-		std::ifstream& stream,
+		std::istream& stream,
 		dx3d::MeshData& meshData
 	)
 	{
@@ -466,15 +488,66 @@ namespace
 	}
 
 	bool writeSceneObject(
-		std::ofstream& stream,
+		std::ostream& stream,
 		dx3d::GameObject* object,
 		SceneObjectType type
 	)
 	{
+		dx3d::ui64 parentEntityId = 0;
+		if (auto* parent = object->getParent())
+		{
+			SceneObjectType parentType{};
+			if (getObjectType(parent, parentType))
+				parentEntityId = parent->getEntityId();
+		}
+
 		const auto storedType =
 			static_cast<dx3d::ui32>(
 				type
 				);
+
+		auto* material = object->getComponent<dx3d::MaterialComponent>();
+		const dx3d::ui32 hasMaterial = material ? 1u : 0u;
+
+		if (
+			!writeValue(stream, object->getEntityId()) ||
+			!writeValue(stream, parentEntityId) ||
+			!writeValue(stream, hasMaterial)
+		)
+		{
+			return false;
+		}
+
+		if (material)
+		{
+			const auto mode = static_cast<dx3d::ui32>(material->getMode());
+			if (!writeValue(stream, mode) ||
+				!writeVec4(stream, material->getAlbedo()) ||
+				!writeVec3(stream, material->getEmissive()) ||
+				!writeValue(stream, material->getEmissionStrength()))
+			{
+				return false;
+			}
+		}
+
+		auto* rigidBody = object->getComponent<dx3d::RigidBodyComponent>();
+		const dx3d::ui32 hasRigidBody = rigidBody ? 1u : 0u;
+		if (!writeValue(stream, hasRigidBody)) return false;
+		if (rigidBody)
+		{
+			const auto bodyType = static_cast<dx3d::ui32>(rigidBody->getBodyType());
+			const auto shape = static_cast<dx3d::ui32>(rigidBody->getColliderShape());
+			const dx3d::ui32 gravity = rigidBody->isGravityEnabled() ? 1u : 0u;
+			if (!writeValue(stream, bodyType) || !writeValue(stream, shape) ||
+				!writeVec3(stream, rigidBody->getHalfExtents()) ||
+				!writeValue(stream, rigidBody->getRadius()) ||
+				!writeValue(stream, rigidBody->getMass()) ||
+				!writeValue(stream, rigidBody->getRestitution()) ||
+				!writeValue(stream, gravity))
+			{
+				return false;
+			}
+		}
 
 		if (
 			!writeValue(
@@ -579,10 +652,66 @@ namespace
 	}
 
 	bool readSceneObject(
-		std::ifstream& stream,
-		SerializedSceneObject& object
+		std::istream& stream,
+		SerializedSceneObject& object,
+		dx3d::ui32 storedVersion
 	)
 	{
+		if (storedVersion >= 2 &&
+			(!readValue(stream, object.entityId) ||
+			 !readValue(stream, object.parentEntityId)))
+		{
+			return false;
+		}
+
+		if (storedVersion >= 3)
+		{
+			dx3d::ui32 hasMaterial = 0;
+			if (!readValue(stream, hasMaterial) || hasMaterial > 1u)
+				return false;
+
+			object.hasMaterial = hasMaterial != 0;
+			if (object.hasMaterial)
+			{
+				dx3d::ui32 mode = 0;
+				if (!readValue(stream, mode) ||
+					mode > static_cast<dx3d::ui32>(dx3d::MaterialMode::FlatBlue) ||
+					!readVec4(stream, object.materialAlbedo) ||
+					!readVec3(stream, object.materialEmissive) ||
+					!readValue(stream, object.materialEmissionStrength))
+				{
+					return false;
+				}
+				object.materialMode = static_cast<dx3d::MaterialMode>(mode);
+			}
+		}
+
+		if (storedVersion >= 4)
+		{
+			dx3d::ui32 hasRigidBody = 0;
+			if (!readValue(stream, hasRigidBody) || hasRigidBody > 1u) return false;
+			object.hasRigidBody = hasRigidBody != 0;
+			if (object.hasRigidBody)
+			{
+				dx3d::ui32 bodyType = 0;
+				dx3d::ui32 shape = 0;
+				dx3d::ui32 gravity = 0;
+				if (!readValue(stream, bodyType) || bodyType > 2u ||
+					!readValue(stream, shape) || shape > 1u ||
+					!readVec3(stream, object.colliderHalfExtents) ||
+					!readValue(stream, object.colliderRadius) ||
+					!readValue(stream, object.rigidBodyMass) ||
+					!readValue(stream, object.rigidBodyRestitution) ||
+					!readValue(stream, gravity) || gravity > 1u)
+				{
+					return false;
+				}
+				object.rigidBodyType = static_cast<dx3d::RigidBodyType>(bodyType);
+				object.colliderShape = static_cast<dx3d::ColliderShape>(shape);
+				object.gravityEnabled = gravity != 0;
+			}
+		}
+
 		dx3d::ui32 storedType = 0;
 
 		if (!readValue(
@@ -687,20 +816,18 @@ namespace
 		return false;
 	}
 
-	void instantiateObject(
+	dx3d::GameObject* instantiateObject(
 		dx3d::World& world,
 		const SerializedSceneObject& data,
 		dx3d::SceneLoadResult& result
 	)
 	{
-		auto* object =
-			world.createGameObject<
-			dx3d::GameObject
-			>();
+		auto* object = world.createGameObjectWithId<
+			dx3d::GameObject>(data.entityId);
 
 		if (!object)
 		{
-			return;
+			return nullptr;
 		}
 
 		object->setName(
@@ -784,6 +911,29 @@ namespace
 		transform.setScale(
 			data.scale
 		);
+
+		if (data.hasMaterial)
+		{
+			auto* material = object->createOrGetComponent<dx3d::MaterialComponent>();
+			material->setMode(data.materialMode);
+			material->setAlbedo(data.materialAlbedo);
+			material->setEmissive(data.materialEmissive);
+			material->setEmissionStrength(data.materialEmissionStrength);
+		}
+
+		if (data.hasRigidBody)
+		{
+			auto* rigidBody = object->createOrGetComponent<dx3d::RigidBodyComponent>();
+			rigidBody->setBodyType(data.rigidBodyType);
+			rigidBody->setColliderShape(data.colliderShape);
+			rigidBody->setHalfExtents(data.colliderHalfExtents);
+			rigidBody->setRadius(data.colliderRadius);
+			rigidBody->setMass(data.rigidBodyMass);
+			rigidBody->setRestitution(data.rigidBodyRestitution);
+			rigidBody->setGravityEnabled(data.gravityEnabled);
+		}
+
+		return object;
 	}
 }
 
@@ -884,6 +1034,53 @@ bool dx3d::SceneSerializer::save(
 	return static_cast<bool>(stream);
 }
 
+std::string dx3d::SceneSerializer::serialize(
+	World& world
+)
+{
+	std::vector<std::pair<GameObject*, SceneObjectType>> objectsToSave{};
+
+	for (auto* object : world.getGameObjects())
+	{
+		SceneObjectType type{};
+		if (getObjectType(object, type))
+		{
+			objectsToSave.push_back({ object, type });
+		}
+	}
+
+	if (objectsToSave.size() > maximumObjectCount)
+	{
+		return {};
+	}
+
+	std::ostringstream stream(
+		std::ios::out | std::ios::binary
+	);
+
+	stream.write(sceneMagic, sizeof(sceneMagic));
+
+	const auto objectCount =
+		static_cast<ui32>(objectsToSave.size());
+
+	if (!stream ||
+		!writeValue(stream, sceneVersion) ||
+		!writeValue(stream, objectCount))
+	{
+		return {};
+	}
+
+	for (const auto& [object, type] : objectsToSave)
+	{
+		if (!writeSceneObject(stream, object, type))
+		{
+			return {};
+		}
+	}
+
+	return stream.str();
+}
+
 dx3d::SceneLoadResult
 dx3d::SceneSerializer::load(
 	World& world,
@@ -947,7 +1144,8 @@ dx3d::SceneSerializer::load(
 		}
 
 		if (
-			storedVersion != sceneVersion ||
+			storedVersion < oldestSupportedSceneVersion ||
+			storedVersion > sceneVersion ||
 			objectCount > maximumObjectCount
 			)
 		{
@@ -967,7 +1165,8 @@ dx3d::SceneSerializer::load(
 		{
 			if (!readSceneObject(
 				stream,
-				object
+				object,
+				storedVersion
 			))
 			{
 				return result;
@@ -975,20 +1174,119 @@ dx3d::SceneSerializer::load(
 		}
 
 		clear(world);
+		world.update(0.0f);
+
+		std::unordered_map<ui64, GameObject*> loadedEntities{};
 
 		for (const auto& object :
 			serializedObjects)
 		{
-			instantiateObject(
+			auto* loaded = instantiateObject(
 				world,
 				object,
 				result
 			);
+			if (loaded && object.entityId != 0)
+				loadedEntities[object.entityId] = loaded;
+		}
+
+		for (const auto& object : serializedObjects)
+		{
+			if (object.entityId == 0 || object.parentEntityId == 0)
+				continue;
+
+			const auto child = loadedEntities.find(object.entityId);
+			const auto parent = loadedEntities.find(object.parentEntityId);
+			if (child != loadedEntities.end() && parent != loadedEntities.end())
+				world.setParent(child->second, parent->second);
 		}
 
 		result.success = true;
 
 		return result;
+}
+
+dx3d::SceneLoadResult
+dx3d::SceneSerializer::deserialize(
+	World& world,
+	const std::string& sceneData
+)
+{
+	SceneLoadResult result{};
+
+	if (sceneData.empty())
+	{
+		return result;
+	}
+
+	std::istringstream stream(
+		sceneData,
+		std::ios::in | std::ios::binary
+	);
+
+	char storedMagic[sizeof(sceneMagic)]{};
+	stream.read(storedMagic, sizeof(storedMagic));
+
+	if (!stream)
+	{
+		return result;
+	}
+
+	for (size_t index = 0; index < sizeof(sceneMagic); ++index)
+	{
+		if (storedMagic[index] != sceneMagic[index])
+		{
+			return result;
+		}
+	}
+
+	ui32 storedVersion = 0;
+	ui32 objectCount = 0;
+
+	if (!readValue(stream, storedVersion) ||
+		!readValue(stream, objectCount) ||
+		storedVersion < oldestSupportedSceneVersion ||
+		storedVersion > sceneVersion ||
+		objectCount > maximumObjectCount)
+	{
+		return result;
+	}
+
+	std::vector<SerializedSceneObject> serializedObjects(objectCount);
+
+	for (auto& object : serializedObjects)
+	{
+		if (!readSceneObject(stream, object, storedVersion))
+		{
+			return result;
+		}
+	}
+
+	clear(world);
+	world.update(0.0f);
+
+	std::unordered_map<ui64, GameObject*> loadedEntities{};
+
+	for (const auto& object : serializedObjects)
+	{
+		auto* loaded = instantiateObject(world, object, result);
+		if (loaded && object.entityId != 0)
+			loadedEntities[object.entityId] = loaded;
+	}
+
+	for (const auto& object : serializedObjects)
+	{
+		if (object.entityId == 0 || object.parentEntityId == 0)
+			continue;
+
+		const auto child = loadedEntities.find(object.entityId);
+		const auto parent = loadedEntities.find(object.parentEntityId);
+		if (child != loadedEntities.end() && parent != loadedEntities.end())
+			world.setParent(child->second, parent->second);
+	}
+
+	result.success = true;
+	return result;
 }
 
 void dx3d::SceneSerializer::clear(

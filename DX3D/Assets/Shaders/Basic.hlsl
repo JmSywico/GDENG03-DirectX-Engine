@@ -21,6 +21,9 @@ cbuffer ConstantData : register(b0)
 
     float4 lightDirection;
     float4 lightColorAndAmbient;
+    float4 materialAlbedo;
+    float4 materialEmissiveAndStrength;
+    float4 materialParameters;
 
     row_major float4x4 inverseWorld;
 
@@ -249,13 +252,37 @@ float4 PSMain(
         ambientStrength +
         directLighting;
 
+    float3 surfaceColor = input.color.rgb * materialAlbedo.rgb;
+    float appliedLighting = lightingStrength;
+
+    const int materialMode = (int)(materialParameters.x + 0.5f);
+    if (materialMode == 1)
+    {
+        surfaceColor = saturate(abs(normal.zxy) * 1.25f);
+        appliedLighting = 1.0f;
+    }
+    else if (materialMode == 2)
+    {
+        surfaceColor = float3(1.0f, 0.08f, 0.06f);
+        appliedLighting = 1.0f;
+    }
+    else if (materialMode == 3)
+    {
+        surfaceColor = float3(0.08f, 1.0f, 0.18f);
+        appliedLighting = 1.0f;
+    }
+    else if (materialMode == 4)
+    {
+        surfaceColor = float3(0.08f, 0.22f, 1.0f);
+        appliedLighting = 1.0f;
+    }
+
     const float3 finalColor =
-        input.color.rgb *
-        lightColorAndAmbient.rgb *
-        lightingStrength;
+        surfaceColor * lightColorAndAmbient.rgb * appliedLighting +
+        materialEmissiveAndStrength.rgb * materialEmissiveAndStrength.a;
 
     return float4(
         finalColor,
-        input.color.a
+        input.color.a * materialAlbedo.a
     );
 }

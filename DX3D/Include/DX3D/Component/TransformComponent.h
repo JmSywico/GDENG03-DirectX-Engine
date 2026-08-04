@@ -41,5 +41,7 @@ namespace dx3d
 		Mat4x4 m_affineWorldMatrix{};  // rotation + translation + scale
 
 		bool m_dirty{};
+
+		friend class World;
 	};
 }

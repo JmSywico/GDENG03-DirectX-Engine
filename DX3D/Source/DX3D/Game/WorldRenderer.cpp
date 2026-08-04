@@ -19,6 +19,7 @@
 #include <DX3D/Component/CameraComponent.h>
 #include <DX3D/Component/CombinedMeshComponent.h>
 #include <DX3D/Component/DirectionalLightComponent.h>
+#include <DX3D/Component/MaterialComponent.h>
 
 #include <DX3D/Math/MathUtils.h>
 
@@ -574,11 +575,28 @@ void dx3d::WorldRenderer::render(
 
 	auto drawObject =
 		[&](
-			TransformComponent& transform,
+			GameObject& object,
 			VertexBuffer& vertexBuffer,
 			IndexBuffer& indexBuffer
 			)
 		{
+			auto& transform = object.getTransform();
+			data.materialAlbedo = { 1.0f, 1.0f, 1.0f, 1.0f };
+			data.materialEmissiveAndStrength = {};
+			data.materialParameters = {};
+
+			if (auto* material = object.getComponent<MaterialComponent>())
+			{
+				data.materialAlbedo = material->getAlbedo();
+				const Vec3 emissive = material->getEmissive();
+				data.materialEmissiveAndStrength =
+				{
+					emissive.x, emissive.y, emissive.z,
+					material->getEmissionStrength()
+				};
+				data.materialParameters.x = static_cast<f32>(material->getMode());
+			}
+
 			data.world =
 				transform.getAffineWorldMatrix();
 
@@ -640,9 +658,7 @@ void dx3d::WorldRenderer::render(
 						continue;
 
 					drawObject(
-						component->
-						getGameObject().
-						getTransform(),
+						component->getGameObject(),
 						*m_cubeVertexBuffer,
 						*m_cubeIndexBuffer
 					);
@@ -672,9 +688,7 @@ void dx3d::WorldRenderer::render(
 						continue;
 
 					drawObject(
-						component->
-						getGameObject().
-						getTransform(),
+						component->getGameObject(),
 						*m_planeVertexBuffer,
 						*m_planeIndexBuffer
 					);
@@ -704,9 +718,7 @@ void dx3d::WorldRenderer::render(
 						continue;
 
 					drawObject(
-						component->
-						getGameObject().
-						getTransform(),
+						component->getGameObject(),
 						*m_circleVertexBuffer,
 						*m_circleIndexBuffer
 					);
@@ -765,9 +777,7 @@ void dx3d::WorldRenderer::render(
 					}
 
 					drawObject(
-						component->
-						getGameObject().
-						getTransform(),
+						component->getGameObject(),
 						*renderResources.vertexBuffer,
 						*renderResources.indexBuffer
 					);

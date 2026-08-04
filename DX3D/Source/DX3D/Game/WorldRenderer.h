@@ -39,6 +39,9 @@ namespace dx3d
 
 			Vec4 lightDirection{};
 			Vec4 lightColorAndAmbient{};
+			Vec4 materialAlbedo{};
+			Vec4 materialEmissiveAndStrength{};
+			Vec4 materialParameters{};
 
 			Mat4x4 inverseWorld{};
 

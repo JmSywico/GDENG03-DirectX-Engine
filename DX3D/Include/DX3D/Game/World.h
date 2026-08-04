@@ -5,6 +5,7 @@
 #include <DX3D/Core/Identifiable.h>
 
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace dx3d
@@ -17,6 +18,13 @@ namespace dx3d
 		template <typename T>
 		T* createGameObject() requires IsRegistered<GameObject, T>
 		{
+			return createGameObjectWithId<T>(0);
+		}
+
+		template <typename T>
+		T* createGameObjectWithId(ui64 stableId)
+			requires IsRegistered<GameObject, T>
+		{
 			UniquePtr<GameObject> e = std::make_unique<T>(
 				GameObjectDesc
 				{
@@ -26,7 +34,7 @@ namespace dx3d
 				}
 			);
 
-			return static_cast<T*>(createGameObjectInternal(e));
+			return static_cast<T*>(createGameObjectInternal(e, stableId));
 		}
 
 		template <typename T>
@@ -46,10 +54,17 @@ namespace dx3d
 		void destroyGameObject(GameObject* object);
 
 		std::vector<GameObject*> getGameObjects() const;
+		GameObject* findGameObject(ui64 entityId) const noexcept;
+		bool setParent(GameObject* child, GameObject* parent);
+		bool isDescendantOf(
+			const GameObject* object,
+			const GameObject* potentialAncestor
+		) const noexcept;
 
 	private:
 		GameObject* createGameObjectInternal(
-			UniquePtr<GameObject>& object
+			UniquePtr<GameObject>& object,
+			ui64 requestedId
 		);
 
 		void destroyGameObjectInternal(
@@ -89,6 +104,9 @@ namespace dx3d
 			std::vector<UniquePtr<GameObject>>
 		> m_objects{};
 
+		std::unordered_map<ui64, GameObject*> m_entityIndex{};
+		ui64 m_nextEntityId{ 1 };
+
 		std::unordered_map<
 			size_t,
 			std::vector<Component*>
@@ -101,6 +119,7 @@ namespace dx3d
 
 		std::vector<GameObjectEvent> m_events{};
 		std::vector<GameObjectEvent> m_eventsSwapBuffer{};
+		std::unordered_set<GameObject*> m_pendingDestruction{};
 
 		friend class GameObject;
 		friend class TransformComponent;

@@ -83,3 +83,19 @@ dx3d::GameObject::getComponentInternal(size_t id)
 
 	return it->second.get();
 }
+
+dx3d::ui64 dx3d::GameObject::getEntityId() const noexcept
+{
+	return m_entityId;
+}
+
+dx3d::GameObject* dx3d::GameObject::getParent() const noexcept
+{
+	return m_parent;
+}
+
+const std::vector<dx3d::GameObject*>&
+dx3d::GameObject::getChildren() const noexcept
+{
+	return m_children;
+}

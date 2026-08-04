@@ -79,6 +79,11 @@
     <IntDir>Intermediate\$(Platform)\$(Configuration)\</IntDir>
     <IncludePath>DX3D/Include;DX3D/Source;$(IncludePath)</IncludePath>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>Bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>Intermediate\$(Platform)\$(Configuration)\</IntDir>
+    <IncludePath>DX3D/Include;DX3D/Source;$(IncludePath)</IncludePath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -132,8 +137,11 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalOptions>/Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(ProjectDir)DX3D\External\ImGui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
@@ -141,6 +149,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>d3d11.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -186,6 +195,9 @@
     <ClCompile Include="DX3D\Source\DX3D\Component\CombinedMeshComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\CubeComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\DirectionalLightComponent.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Component\MaterialComponent.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Component\RigidBodyComponent.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Physics\PhysicsWorld.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\PlaneComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\TransformComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Game\Component.cpp" />
@@ -222,6 +234,9 @@
     <ClInclude Include="DX3D\Include\DX3D\Component\CubeComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\CircleComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\DirectionalLightComponent.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Component\MaterialComponent.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Component\RigidBodyComponent.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Physics\PhysicsWorld.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\PlaneComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\TransformComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Core\Identifiable.h" />

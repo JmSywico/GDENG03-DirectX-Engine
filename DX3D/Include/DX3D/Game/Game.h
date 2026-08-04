@@ -5,15 +5,20 @@
 #include <DX3D/Core/Base.h>
 #include <DX3D/Core/Core.h>
 #include <DX3D/Editor/TransformGizmo.h>
+#include <DX3D/Component/MaterialComponent.h>
+#include <DX3D/Component/RigidBodyComponent.h>
 
 #include <string>
 #include <chrono>
 #include <vector>
+#include <deque>
+#include <array>
 
 namespace dx3d
 {
 	class GameObject;
 	class CameraComponent;
+	class PhysicsWorld;
 
 	class Game
 	{
@@ -35,6 +40,13 @@ namespace dx3d
 		void requestExit() noexcept;
 
 	private:
+		enum class EditorMode
+		{
+			Editing,
+			Playing,
+			Paused
+		};
+
 		enum class CopiedObjectType
 		{
 			None,
@@ -63,6 +75,20 @@ namespace dx3d
 			};
 
 			MeshData meshData{};
+			ui64 parentEntityId{};
+			bool hasMaterial{};
+			MaterialMode materialMode{ MaterialMode::LitTint };
+			Vec4 materialAlbedo{ 1.0f, 1.0f, 1.0f, 1.0f };
+			Vec3 materialEmissive{};
+			f32 materialEmissionStrength{};
+			bool hasRigidBody{};
+			RigidBodyType rigidBodyType{ RigidBodyType::Dynamic };
+			ColliderShape colliderShape{ ColliderShape::Box };
+			Vec3 colliderHalfExtents{ 0.5f, 0.5f, 0.5f };
+			f32 colliderRadius{ 0.5f };
+			f32 rigidBodyMass{ 1.0f };
+			f32 rigidBodyRestitution{ 0.1f };
+			bool gravityEnabled{ true };
 
 			ui32 pasteCount{};
 		};
@@ -106,12 +132,21 @@ namespace dx3d
 		void copySelectedObject();
 
 		void pasteCopiedObject();
+		void duplicateSelectedObject();
 
 		void createNewScene();
 
 		void saveScene();
 
 		void loadScene();
+
+		void pushUndoSnapshot();
+		void pushUndoSnapshot(const std::string& snapshot);
+		void undo();
+		void redo();
+		void startPlayMode();
+		void stopPlayMode();
+		void refreshAssetLens();
 
 	private:
 		UniquePtr<Logger> m_logger{};
@@ -121,6 +156,7 @@ namespace dx3d
 		UniquePtr<World> m_world{};
 
 		UniquePtr<WorldRenderer> m_worldRenderer{};
+		UniquePtr<PhysicsWorld> m_physicsWorld{};
 
 		GameObject* m_selectedObject{};
 		std::vector<GameObject*> m_selectedObjects{};
@@ -136,6 +172,22 @@ namespace dx3d
 		{
 			"Scene file: Scene.dx3dscene"
 		};
+
+		EditorMode m_editorMode{ EditorMode::Editing };
+		std::string m_editorSceneSnapshot{};
+		std::deque<std::string> m_undoSnapshots{};
+		std::deque<std::string> m_redoSnapshots{};
+		std::vector<std::string> m_assetPaths{};
+		std::array<f32, 120> m_frameTimes{};
+		size_t m_frameTimeCursor{};
+		f32 m_fixedStepAccumulator{};
+		bool m_singleStepRequested{};
+		bool m_sceneDirty{};
+		bool m_showStats{ true };
+		bool m_showAssetLens{ true };
+		bool m_defaultDockLayoutBuilt{};
+		char m_assetFilter[128]{};
+		char m_registryFilter[128]{};
 
 		bool m_isRunning{ true };
 
