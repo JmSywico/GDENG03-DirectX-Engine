@@ -133,6 +133,8 @@ namespace
 
 dx3d::Game::Game(const GameDesc& desc)
 {
+	m_startupScenePath = desc.startupScenePath;
+
 	m_logger = std::make_unique<Logger>(desc.logLevel);
 
 	DX3DLogInfo("GDENG03 | DirectX Game Engine");
@@ -1082,6 +1084,7 @@ void dx3d::Game::createNewScene()
 
 	m_cubeCounter = 0;
 	m_planeCounter = 0;
+	m_sceneFilePath = "Scene.dx3dscene";
 
 	m_sceneStatusMessage =
 		"New scene created";
@@ -1093,13 +1096,13 @@ void dx3d::Game::saveScene()
 	const bool saved =
 		SceneSerializer::save(
 			*m_world,
-			"Scene.dx3dscene"
+			m_sceneFilePath
 		);
 
 	if (saved)
 	{
 		m_sceneStatusMessage =
-			"Saved: Scene.dx3dscene";
+			"Saved: " + m_sceneFilePath;
 
 		DX3DLogInfo(
 			"Scene saved."
@@ -1119,12 +1122,21 @@ void dx3d::Game::saveScene()
 
 void dx3d::Game::loadScene()
 {
-	pushUndoSnapshot();
+	loadScene(m_sceneFilePath);
+}
+
+void dx3d::Game::loadScene(const std::string& filePath)
+{
+	if (filePath.empty() || m_editorMode != EditorMode::Editing)
+		return;
+
+	const std::string previousScene =
+		SceneSerializer::serialize(*m_world);
 
 	const SceneLoadResult result =
 		SceneSerializer::load(
 			*m_world,
-			"Scene.dx3dscene"
+			filePath
 		);
 
 	if (!result.success)
@@ -1139,6 +1151,8 @@ void dx3d::Game::loadScene()
 		return;
 	}
 
+	pushUndoSnapshot(previousScene);
+
 	clearSelection();
 
 	m_objectClipboard =
@@ -1150,8 +1164,11 @@ void dx3d::Game::loadScene()
 	m_planeCounter =
 		result.planeCount;
 
+	m_sceneFilePath =
+		std::filesystem::path(filePath).generic_string();
+
 	m_sceneStatusMessage =
-		"Loaded: Scene.dx3dscene";
+		"Loaded: " + m_sceneFilePath;
 	m_sceneDirty = false;
 
 	DX3DLogInfo(
@@ -1284,14 +1301,17 @@ void dx3d::Game::refreshAssetLens()
 {
 	m_assetPaths.clear();
 
-	const std::filesystem::path assetRoot =
-		std::filesystem::path("DX3D") / "Assets";
-
 	std::error_code error{};
-	if (std::filesystem::exists(assetRoot, error))
+	auto scanRoot = [this, &error](const std::filesystem::path& root)
 	{
+		if (!std::filesystem::exists(root, error))
+		{
+			error.clear();
+			return;
+		}
+
 		for (std::filesystem::recursive_directory_iterator iterator(
-			assetRoot,
+			root,
 			std::filesystem::directory_options::skip_permission_denied,
 			error
 		); iterator != std::filesystem::recursive_directory_iterator();
@@ -1310,7 +1330,10 @@ void dx3d::Game::refreshAssetLens()
 				);
 			}
 		}
-	}
+	};
+
+	scanRoot(std::filesystem::path("DX3D") / "Assets");
+	scanRoot("Scenes");
 
 	for (const auto& entry : std::filesystem::directory_iterator(
 		std::filesystem::current_path(),
@@ -1325,6 +1348,10 @@ void dx3d::Game::refreshAssetLens()
 	}
 
 	std::sort(m_assetPaths.begin(), m_assetPaths.end());
+	m_assetPaths.erase(
+		std::unique(m_assetPaths.begin(), m_assetPaths.end()),
+		m_assetPaths.end()
+	);
 }
 
 void dx3d::Game::onInternalUpdate()
@@ -1425,6 +1452,33 @@ void dx3d::Game::onInternalUpdate()
 			))
 			{
 				loadScene();
+			}
+
+			if (ImGui::BeginMenu("Scene Library"))
+			{
+				bool foundScene = false;
+				for (const auto& path : m_assetPaths)
+				{
+					const std::filesystem::path scenePath(path);
+					if (scenePath.extension() != ".dx3dscene")
+						continue;
+
+					foundScene = true;
+					const std::string label =
+						scenePath.filename().generic_string() + "##" + path;
+					ImGui::BeginDisabled(m_editorMode != EditorMode::Editing);
+					if (ImGui::MenuItem(label.c_str()))
+						loadScene(path);
+					ImGui::EndDisabled();
+				}
+
+				if (!foundScene)
+					ImGui::TextDisabled("No native scenes discovered");
+
+				ImGui::Separator();
+				if (ImGui::MenuItem("Refresh Library"))
+					refreshAssetLens();
+				ImGui::EndMenu();
 			}
 
 			ImGui::Separator();
@@ -2694,7 +2748,26 @@ void dx3d::Game::onInternalUpdate()
 					ImGui::TextColored(rgba(150, 190, 176), "%s",
 						extension.empty() ? "FILE" : extension.c_str() + 1);
 					ImGui::TableNextColumn();
-					ImGui::TextUnformatted(path.c_str());
+					if (extension == ".dx3dscene")
+					{
+						ImGui::BeginDisabled(m_editorMode != EditorMode::Editing);
+						const bool activated = ImGui::Selectable(
+							path.c_str(), false,
+							ImGuiSelectableFlags_AllowDoubleClick
+						);
+						if (activated && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+							loadScene(path);
+						ImGui::EndDisabled();
+
+						if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+							ImGui::SetTooltip("Double-click to open this native scene");
+					}
+					else
+					{
+						ImGui::TextUnformatted(path.c_str());
+						if (extension == ".escene" && ImGui::IsItemHovered())
+							ImGui::SetTooltip("Original enignE source; open its .dx3dscene counterpart");
+					}
 				}
 				ImGui::EndTable();
 			}

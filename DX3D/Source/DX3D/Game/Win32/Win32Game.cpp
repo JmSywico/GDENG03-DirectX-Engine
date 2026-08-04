@@ -11,6 +11,9 @@ void dx3d::Game::run()
 {
 	onCreate();
 
+	if (!m_startupScenePath.empty())
+		loadScene(m_startupScenePath);
+
 	MSG msg{};
 
 	constexpr auto targetFrameTime =

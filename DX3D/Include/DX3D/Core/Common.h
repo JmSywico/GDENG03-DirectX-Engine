@@ -3,6 +3,8 @@
 #include <DX3D/Core/Logger.h>
 #include <DX3D/Math/Rect.h>
 
+#include <string>
+
 namespace dx3d
 {
 	struct BaseDesc
@@ -99,6 +101,7 @@ namespace dx3d
 	{
 		Rect windowSize{ 1280,720 };
 		Logger::LogLevel logLevel = Logger::LogLevel::Error;
+		std::string startupScenePath{};
 	};
 
 	struct WorldDesc

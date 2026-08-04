@@ -1,0 +1,5 @@
+Source: D:\GitHub\source\repos\enignE\enignE\scenes\test.escene
+Scene: MainScene
+Source entities: 4
+Imported entities: 4
+Warnings: 0

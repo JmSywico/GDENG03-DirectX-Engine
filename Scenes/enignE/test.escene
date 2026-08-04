@@ -1,0 +1,61 @@
+{
+  "scene": {
+    "name": "Runtime Sample",
+    "version": 1,
+    "activeCamera": 1002,
+    "activeDirectionalLight": 0
+  },
+  "entities": [
+    {
+      "id": 1001,
+      "name": "Cube",
+      "parent": null,
+      "components": {
+        "TransformComponent": {
+          "position": [0.0, 0.5, 0.0],
+          "rotation": [0.0, 0.0, 0.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "RotatorComponent": {
+          "angularVelocity": [0.0, 1.0, 0.0],
+          "enabled": true
+        },
+        "MeshRendererComponent": {
+          "visible": true,
+          "materialMode": 0,
+          "albedo": [1.0, 1.0, 1.0, 1.0],
+          "primitive": {
+            "type": "Cube",
+            "size": 1.0,
+            "width": 1.0,
+            "height": 1.0,
+            "depth": 1.0,
+            "radius": 0.5,
+            "slices": 16,
+            "stacks": 16,
+            "xSegments": 10,
+            "zSegments": 10,
+            "spacing": 1.0
+          }
+        }
+      }
+    },
+    {
+      "id": 1002,
+      "name": "Main Camera",
+      "parent": null,
+      "components": {
+        "TransformComponent": {
+          "position": [0.0, 3.0, -6.0],
+          "rotation": [0.463648, 0.0, 0.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "CameraComponent": {
+          "fovDegrees": 45.0,
+          "nearPlane": 0.1,
+          "farPlane": 1000.0
+        }
+      }
+    }
+  ]
+}

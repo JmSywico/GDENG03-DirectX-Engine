@@ -139,6 +139,7 @@ namespace dx3d
 		void saveScene();
 
 		void loadScene();
+		void loadScene(const std::string& filePath);
 
 		void pushUndoSnapshot();
 		void pushUndoSnapshot(const std::string& snapshot);
@@ -172,6 +173,8 @@ namespace dx3d
 		{
 			"Scene file: Scene.dx3dscene"
 		};
+		std::string m_sceneFilePath{ "Scene.dx3dscene" };
+		std::string m_startupScenePath{};
 
 		EditorMode m_editorMode{ EditorMode::Editing };
 		std::string m_editorSceneSnapshot{};
