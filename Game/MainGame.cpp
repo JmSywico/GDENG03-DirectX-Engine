@@ -7,6 +7,7 @@
 #include <imgui.h>
 
 #include <string>
+#include <algorithm>
 #include <cmath>
 #include <random>
 
@@ -461,13 +462,10 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 	if (!editorCamera)
 		return;
 
-	bool imguiWantsMouse = false;
 	bool imguiWantsKeyboard = false;
 	if (ImGui::GetCurrentContext() != nullptr)
 	{
 		const ImGuiIO& io = ImGui::GetIO();
-
-		imguiWantsMouse = io.WantCaptureMouse;
 
 		imguiWantsKeyboard =
 			io.WantCaptureKeyboard ||
@@ -482,33 +480,81 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 
 	const bool rightMouseDown =
 		input.isKeyDown(dx3d::KeyCode::MouseRight);
+	const bool leftMousePressed =
+		input.isKeyPressed(dx3d::KeyCode::MouseLeft);
+	const bool leftMouseReleased =
+		input.isKeyReleased(dx3d::KeyCode::MouseLeft);
+	const bool leftMouseDown =
+		input.isKeyDown(dx3d::KeyCode::MouseLeft);
+	const bool altDown = ImGui::GetCurrentContext() && ImGui::GetIO().KeyAlt;
 
 
 	const bool sceneViewportHovered = isSceneViewportHovered();
-	if (rightMousePressed &&
-		(sceneViewportHovered || !imguiWantsMouse) &&
-		!m_isCameraControlActive)
+	const bool sceneViewportFocused = isSceneViewportFocused();
+	if (rightMousePressed && sceneViewportHovered &&
+		!m_isCameraControlActive && !m_isDollyActive)
 	{
-		m_isCameraControlActive = true;
+		m_isDollyActive = altDown;
+		m_isCameraControlActive = !altDown;
 
+		input.setCursorVisible(false);
+		input.setCursorLocked(true);
+	}
+	if (leftMousePressed && altDown && sceneViewportHovered && !m_isOrbitActive)
+	{
+		m_isOrbitActive = true;
+		auto& cameraTransform = editorCamera->getTransform();
+		if (auto* selected = getPrimarySelectedObject())
+		{
+			const auto worldRow = selected->getTransform().getAffineWorldMatrix().row(3);
+			m_orbitPivot = { worldRow.x, worldRow.y, worldRow.z };
+			const dx3d::Vec3 cameraPosition = cameraTransform.getPosition();
+			const float deltaX = cameraPosition.x - m_orbitPivot.x;
+			const float deltaY = cameraPosition.y - m_orbitPivot.y;
+			const float deltaZ = cameraPosition.z - m_orbitPivot.z;
+			m_orbitDistance = std::max(0.25f,
+				std::sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ));
+			m_orbitPivotValid = true;
+		}
+		else if (!m_orbitPivotValid)
+		{
+			const dx3d::Vec3 position = cameraTransform.getPosition();
+			const dx3d::Vec3 forward = cameraTransform.forward();
+			m_orbitPivot = position + forward * m_orbitDistance;
+			m_orbitPivotValid = true;
+		}
 		input.setCursorVisible(false);
 		input.setCursorLocked(true);
 	}
 
 
-	if (m_isCameraControlActive &&
+	if ((m_isCameraControlActive || m_isDollyActive) &&
 		(rightMouseReleased || !rightMouseDown))
 	{
 		m_isCameraControlActive = false;
+		m_isDollyActive = false;
 
-		input.setCursorLocked(false);
-		input.setCursorVisible(true);
+		if (!m_isOrbitActive)
+		{
+			input.setCursorLocked(false);
+			input.setCursorVisible(true);
+		}
+	}
+	if (m_isOrbitActive && (leftMouseReleased || !leftMouseDown || !altDown))
+	{
+		m_isOrbitActive = false;
+		if (!m_isCameraControlActive && !m_isDollyActive)
+		{
+			input.setCursorLocked(false);
+			input.setCursorVisible(true);
+		}
 	}
 
 
 	auto& transform = editorCamera->getTransform();
 
-	if (m_isCameraControlActive && !rightMousePressed)
+	if ((m_isCameraControlActive || m_isOrbitActive) &&
+		!rightMousePressed && !leftMousePressed)
 	{
 		const auto mouseDelta = input.getMouseDelta();
 
@@ -535,13 +581,46 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 				0.0f
 			}
 		);
+
+		if (m_isOrbitActive && m_orbitPivotValid)
+		{
+			const dx3d::Vec3 forward = transform.forward();
+			transform.setPosition({
+				m_orbitPivot.x - forward.x * m_orbitDistance,
+				m_orbitPivot.y - forward.y * m_orbitDistance,
+				m_orbitPivot.z - forward.z * m_orbitDistance });
+		}
 	}
 
 	const bool middleMouseDown =
 		sceneViewportHovered && input.isKeyDown(dx3d::KeyCode::MouseMiddle);
 	const float wheelDelta = sceneViewportHovered && ImGui::GetCurrentContext()
 		? ImGui::GetIO().MouseWheel : 0.0f;
-	if (!m_isCameraControlActive && !middleMouseDown && wheelDelta == 0.0f)
+	if (sceneViewportFocused && !imguiWantsKeyboard &&
+		input.isKeyPressed(dx3d::KeyCode::F))
+	{
+		if (auto* selected = getPrimarySelectedObject())
+		{
+			const auto worldRow = selected->getTransform().getAffineWorldMatrix().row(3);
+			m_orbitPivot = { worldRow.x, worldRow.y, worldRow.z };
+			const dx3d::Vec3 scale = selected->getTransform().getScale();
+			const float extent = std::max({ std::fabs(scale.x), std::fabs(scale.y),
+				std::fabs(scale.z), 0.5f });
+			m_orbitDistance = std::max(2.0f, extent * 3.0f);
+			const dx3d::Vec3 forward = transform.forward();
+			transform.setPosition({
+				m_orbitPivot.x - forward.x * m_orbitDistance,
+				m_orbitPivot.y - forward.y * m_orbitDistance,
+				m_orbitPivot.z - forward.z * m_orbitDistance });
+			m_orbitPivotValid = true;
+		}
+	}
+
+	const bool arrowNavigation = sceneViewportFocused && !imguiWantsKeyboard &&
+		(input.isKeyDown(dx3d::KeyCode::Up) || input.isKeyDown(dx3d::KeyCode::Down) ||
+		 input.isKeyDown(dx3d::KeyCode::Left) || input.isKeyDown(dx3d::KeyCode::Right));
+	if (!m_isCameraControlActive && !m_isOrbitActive && !m_isDollyActive &&
+		!middleMouseDown && wheelDelta == 0.0f && !arrowNavigation)
 		return;
 	if (imguiWantsKeyboard && m_isCameraControlActive)
 		return;
@@ -571,6 +650,13 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		movement = movement + right * rightInput;
 		movement.y += upInput;
 	}
+	else if (arrowNavigation)
+	{
+		if (input.isKeyDown(dx3d::KeyCode::Up)) movement = movement + forward;
+		if (input.isKeyDown(dx3d::KeyCode::Down)) movement = movement + forward * -1.0f;
+		if (input.isKeyDown(dx3d::KeyCode::Right)) movement = movement + right;
+		if (input.isKeyDown(dx3d::KeyCode::Left)) movement = movement + right * -1.0f;
+	}
 
 	const dx3d::f32 movementLength =
 		std::sqrt(
@@ -595,9 +681,10 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		position.z += movement.z * movementAmount;
 
 		transform.setPosition(position);
+		m_orbitPivotValid = false;
 	}
 
-	if (middleMouseDown || wheelDelta != 0.0f)
+	if (middleMouseDown || wheelDelta != 0.0f || m_isDollyActive)
 	{
 		const auto mouseDelta = input.getMouseDelta();
 		auto position = transform.getPosition();
@@ -605,11 +692,29 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		const float frameScale = deltaTime * 60.0f;
 		if (middleMouseDown)
 		{
-			position = position + right * (-mouseDelta.x * m_cameraPanSpeed * frameScale);
-			position = position + up * (mouseDelta.y * m_cameraPanSpeed * frameScale);
+			const float panScale = std::max(m_cameraPanSpeed,
+				m_orbitDistance * 0.0015f) * frameScale;
+			const dx3d::Vec3 pan = right * (-mouseDelta.x * panScale) +
+				up * (mouseDelta.y * panScale);
+			position = position + pan;
+			if (m_orbitPivotValid) m_orbitPivot = m_orbitPivot + pan;
 		}
 		if (wheelDelta != 0.0f)
-			position = position + forward * (wheelDelta * m_cameraZoomSpeed * frameScale);
+		{
+			const float zoomAmount = wheelDelta *
+				std::max(0.5f, m_orbitDistance * 0.15f) * frameScale;
+			position = position + forward * zoomAmount;
+			if (m_orbitPivotValid)
+				m_orbitDistance = std::max(0.25f, m_orbitDistance - zoomAmount);
+		}
+		if (m_isDollyActive)
+		{
+			const float dollyAmount = -mouseDelta.y *
+				std::max(0.01f, m_orbitDistance * 0.01f);
+			position = position + forward * dollyAmount;
+			if (m_orbitPivotValid)
+				m_orbitDistance = std::max(0.25f, m_orbitDistance - dollyAmount);
+		}
 		transform.setPosition(position);
 	}
 }

@@ -832,6 +832,8 @@ void dx3d::Game::handleViewportPicking(
 
 	if (!leftMousePressed)
 		return;
+	if (!m_sceneViewportHovered)
+		return;
 
 	const bool rightMouseDown =
 		m_inputSystem->isKeyDown(
@@ -848,7 +850,7 @@ void dx3d::Game::handleViewportPicking(
 		return;
 	}
 
-	if (ImGui::GetIO().WantCaptureMouse)
+	if (ImGui::GetIO().KeyAlt)
 		return;
 
 	if (ImGui::IsPopupOpen(
@@ -861,6 +863,35 @@ void dx3d::Game::handleViewportPicking(
 
 	const Vec2 mousePosition =
 		m_inputSystem->getMousePosition();
+
+	// Camera entities have no mesh to ray-test, so their Scene-view icon is
+	// an explicit selectable target just like it is in enignE.
+	GameObject* closestCamera = nullptr;
+	f32 closestCameraDistanceSquared = std::numeric_limits<f32>::max();
+	const Mat4x4 viewProjection = camera->getViewMatrix() * camera->getProjectionMatrix();
+	for (auto* object : m_world->getGameObjects())
+	{
+		if (!object || isEditorCamera(object) ||
+			!object->getComponent<CameraComponent>()) continue;
+		ImVec2 iconPosition{};
+		if (!projectWorldPoint(object->getTransform().getPosition(), viewProjection,
+			viewportArea, iconPosition)) continue;
+		const f32 deltaX = mousePosition.x - iconPosition.x;
+		const f32 deltaY = mousePosition.y - iconPosition.y;
+		const f32 distanceSquared = deltaX * deltaX + deltaY * deltaY;
+		if (distanceSquared < closestCameraDistanceSquared)
+		{
+			closestCameraDistanceSquared = distanceSquared;
+			closestCamera = object;
+		}
+	}
+	const f32 cameraPickRadius = 16.0f * m_uiScale;
+	if (closestCamera && closestCameraDistanceSquared <= cameraPickRadius * cameraPickRadius)
+	{
+		if (ImGui::GetIO().KeyCtrl) toggleObjectSelection(closestCamera);
+		else selectOnly(closestCamera);
+		return;
+	}
 
 	const PickingViewportArea pickingViewport
 	{
@@ -2146,6 +2177,7 @@ void dx3d::Game::onInternalUpdate()
 		ImGuiWindowFlags_NoBackground);
 	if (sceneViewportVisible)
 	{
+		m_sceneViewportFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 		sceneViewportOrigin = ImGui::GetCursorScreenPos();
 		sceneViewportSize = ImGui::GetContentRegionAvail();
 		if (ID3D11ShaderResourceView* sceneView =
@@ -2154,6 +2186,10 @@ void dx3d::Game::onInternalUpdate()
 		else
 			ImGui::Dummy(sceneViewportSize);
 		m_sceneViewportHovered = ImGui::IsItemHovered();
+	}
+	else
+	{
+		m_sceneViewportFocused = false;
 	}
 	ImGui::End();
 	if (m_focusGameViewRequested)
@@ -2802,18 +2838,30 @@ void dx3d::Game::onInternalUpdate()
 			}
 
 			ImGui::Spacing();
-			ImGui::SeparatorText("COMPONENT CATALOG / PHYSICS");
-			for (const auto& descriptor : ComponentCatalog::descriptors())
+			ImGui::Separator();
+			if (ImGui::Button("Add Component", { -1.0f, 0.0f }))
+				ImGui::OpenPopup("##AddComponentPopup");
+
+			if (ImGui::BeginPopup("##AddComponentPopup"))
 			{
-				if (ComponentCatalog::has(*m_selectedObject, descriptor.kind)) continue;
-				ImGui::PushID(static_cast<int>(descriptor.kind));
-				const std::string addLabel = std::string("+ ") + descriptor.name;
-				if (ImGui::Button(addLabel.c_str(), { -1.0f, 0.0f }))
+				bool hasAvailableComponent = false;
+				for (const auto& descriptor : ComponentCatalog::descriptors())
 				{
-					pushUndoSnapshot(inspectorSnapshot);
-					ComponentCatalog::addDefault(*m_selectedObject, descriptor.kind);
+					if (ComponentCatalog::has(*m_selectedObject, descriptor.kind)) continue;
+					hasAvailableComponent = true;
+					ImGui::PushID(static_cast<int>(descriptor.kind));
+					if (ImGui::MenuItem(descriptor.name))
+					{
+						pushUndoSnapshot(inspectorSnapshot);
+						ComponentCatalog::addDefault(*m_selectedObject, descriptor.kind);
+					}
+					if (ImGui::IsItemHovered())
+						ImGui::SetTooltip("%s component", descriptor.category);
+					ImGui::PopID();
 				}
-				ImGui::PopID();
+				if (!hasAvailableComponent)
+					ImGui::TextDisabled("All available components are attached");
+				ImGui::EndPopup();
 			}
 			auto* rigidBody = m_selectedObject->getComponent<RigidBodyComponent>();
 			auto* collider = m_selectedObject->getComponent<ColliderComponent>();

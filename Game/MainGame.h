@@ -35,6 +35,11 @@ private:
 	dx3d::f32 m_cameraZoomSpeed{ 6.0f };
 
 	bool m_isCameraControlActive{ false };
+	bool m_isOrbitActive{ false };
+	bool m_isDollyActive{ false };
+	bool m_orbitPivotValid{ false };
+	dx3d::Vec3 m_orbitPivot{};
+	dx3d::f32 m_orbitDistance{ 8.5f };
 	dx3d::InputActionMap m_sceneInputActions{ dx3d::InputActionMap::createDefaults() };
 
 	struct CircleData

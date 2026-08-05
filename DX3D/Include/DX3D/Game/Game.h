@@ -40,7 +40,9 @@ namespace dx3d
 
 		void requestExit() noexcept;
 		bool isSceneViewportHovered() const noexcept { return m_sceneViewportHovered; }
+		bool isSceneViewportFocused() const noexcept { return m_sceneViewportFocused; }
 		GameObject* getEditorCamera() noexcept { return m_editorCamera; }
+		GameObject* getPrimarySelectedObject() noexcept { return m_selectedObject; }
 
 	private:
 		enum class EditorMode
@@ -205,6 +207,7 @@ namespace dx3d
 		bool m_focusSceneViewRequested{ true };
 		bool m_focusGameViewRequested{};
 		bool m_sceneViewportHovered{};
+		bool m_sceneViewportFocused{};
 		f32 m_uiScale{ 1.0f };
 		char m_assetFilter[128]{};
 		char m_registryFilter[128]{};
