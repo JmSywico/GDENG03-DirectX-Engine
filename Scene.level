@@ -1,0 +1,51 @@
+{
+  "format": "DX3D_LEVEL",
+  "version": 1,
+  "objects": [
+    {
+      "name": "Plane",
+      "type": "plane",
+      "transform": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [4, 1, 4]
+      },
+      "rigidBody": { "enabled": false }
+    },
+    {
+      "name": "Capsule",
+      "type": "capsule",
+      "transform": {
+        "position": [0, 1, -0.194008559],
+        "rotation": [0, 0, 0.0399999991],
+        "scale": [1, 0.449999988, 1]
+      },
+      "rigidBody": {
+        "enabled": true,
+        "velocity": [0, 0, 0],
+        "angularVelocity": [0, 0, 0],
+        "mass": 1,
+        "restitution": 0.449999988,
+        "friction": 0.200000003,
+        "useGravity": true,
+        "isStatic": false,
+        "collider": {
+          "shape": "box",
+          "size": [1, 1, 1],
+          "offset": [0, 0, 0],
+          "matchRenderScale": true
+        }
+      }
+    },
+    {
+      "name": "Sphere",
+      "type": "sphere",
+      "transform": {
+        "position": [0, 2.01001501, -0.265544593],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "rigidBody": { "enabled": false }
+    }
+  ]
+}

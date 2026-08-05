@@ -7,6 +7,8 @@
 #include <DX3D/Component/TransformComponent.h>
 #include <DX3D/Component/CubeComponent.h>
 #include <DX3D/Component/PlaneComponent.h>
+#include <DX3D/Component/SphereComponent.h>
+#include <DX3D/Component/CapsuleComponent.h>
 #include <DX3D/Math/MathUtils.h>
 
 #include <reactphysics3d/reactphysics3d.h>
@@ -270,16 +272,25 @@ namespace dx3d
 				0.0001f;
 		}
 
-		bool isCubeRigidBody(
+		bool isPrimitiveRigidBody(
 			RigidBodyComponent* rigidBody
 		) noexcept
 		{
 			if (!rigidBody)
 				return false;
 
-			return rigidBody->
-				getGameObject().
-				getComponent<CubeComponent>() !=
+			auto& object =
+				rigidBody->getGameObject();
+
+			return
+				object.getComponent<
+				CubeComponent>() !=
+				nullptr ||
+				object.getComponent<
+				SphereComponent>() !=
+				nullptr ||
+				object.getComponent<
+				CapsuleComponent>() !=
 				nullptr;
 		}
 	}
@@ -654,7 +665,7 @@ namespace dx3d
 				RigidBodyComponent* rigidBody =
 					components[index];
 
-				if (!isCubeRigidBody(
+				if (!isPrimitiveRigidBody(
 					rigidBody
 				))
 				{

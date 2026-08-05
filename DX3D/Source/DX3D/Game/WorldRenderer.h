@@ -4,6 +4,7 @@
 #include <DX3D/Core/Base.h>
 #include <DX3D/Math/Vec3.h>
 #include <DX3D/Math/Vec4.h>
+#include <DX3D/Math/Vec2.h>
 #include <DX3D/Math/Mat4x4.h>
 #include <DX3D/Graphics/MeshData.h>
 
@@ -43,6 +44,7 @@ namespace dx3d
 			Vec4 lightDirection{};
 			Vec4 lightColorAndAmbient{};
 			Vec4 materialSettings{};
+			Vec4 textureSettings{};
 
 			Mat4x4 inverseWorld{};
 
@@ -61,9 +63,6 @@ namespace dx3d
 		{
 			RefPtr<VertexBuffer> vertexBuffer{};
 			RefPtr<IndexBuffer> indexBuffer{};
-			RefPtr<Texture2D> texture{};
-
-			std::string texturePath{};
 		};
 
 	private:
@@ -79,6 +78,12 @@ namespace dx3d
 		RefPtr<VertexBuffer> m_planeVertexBuffer{};
 		RefPtr<IndexBuffer> m_planeIndexBuffer{};
 
+		RefPtr<VertexBuffer> m_sphereVertexBuffer{};
+		RefPtr<IndexBuffer> m_sphereIndexBuffer{};
+
+		RefPtr<VertexBuffer> m_capsuleVertexBuffer{};
+		RefPtr<IndexBuffer> m_capsuleIndexBuffer{};
+
 		RefPtr<VertexBuffer> m_circleVertexBuffer{};
 		RefPtr<IndexBuffer> m_circleIndexBuffer{};
 
@@ -92,6 +97,16 @@ namespace dx3d
 			ModelRenderResources
 		> m_modelResources{};
 
+		std::unordered_map<
+			std::string,
+			RefPtr<Texture2D>
+		> m_textureCache{};
+
 		RefPtr<ConstantBuffer> m_cb{};
+
+	private:
+		Texture2D* getCachedTexture(
+			const std::string& texturePath
+		);
 	};
 }

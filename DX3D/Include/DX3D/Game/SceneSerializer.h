@@ -13,6 +13,8 @@ namespace dx3d
 		bool success{};
 		ui32 cubeCount{};
 		ui32 planeCount{};
+		ui32 sphereCount{};
+		ui32 capsuleCount{};
 	};
 
 	class SceneSerializer final
@@ -24,6 +26,16 @@ namespace dx3d
 		);
 
 		static SceneLoadResult load(
+			World& world,
+			const std::string& filePath
+		);
+
+		static bool saveLevel(
+			World& world,
+			const std::string& filePath
+		);
+
+		static SceneLoadResult loadLevel(
 			World& world,
 			const std::string& filePath
 		);

@@ -182,10 +182,13 @@
     <ClCompile Include="DX3D\Source\DX3D\Component\CircleComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\CombinedMeshComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\CubeComponent.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Component\CapsuleComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\DirectionalLightComponent.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Component\MaterialComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\ModelComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\PlaneComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\RigidBodyComponent.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Component\SphereComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\TransformComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Game\Component.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Game\WorldRenderer.cpp" />
@@ -222,11 +225,14 @@
   <ItemGroup>
     <ClInclude Include="DX3D\Include\DX3D\Component\CameraComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\CubeComponent.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Component\CapsuleComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\CircleComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\DirectionalLightComponent.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Component\MaterialComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\ModelComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\PlaneComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\RigidBodyComponent.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Component\SphereComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\TransformComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Core\Identifiable.h" />
     <ClInclude Include="DX3D\Include\DX3D\Editor\ViewportPicker.h" />

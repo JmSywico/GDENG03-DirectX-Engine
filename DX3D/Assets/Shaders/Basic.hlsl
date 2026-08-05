@@ -24,6 +24,7 @@ cbuffer ConstantData : register(b0)
     float4 lightDirection;
     float4 lightColorAndAmbient;
     float4 materialSettings;
+    float4 textureSettings;
 
     row_major float4x4 inverseWorld;
 
@@ -265,10 +266,15 @@ float4 PSMain(
 
     if (materialSettings.x > 0.5f)
     {
+        const float2 textureCoordinate =
+            input.texCoord *
+            materialSettings.yz +
+            textureSettings.xy;
+
         surfaceColor *=
             modelTexture.Sample(
                 modelTextureSampler,
-                input.texCoord
+                textureCoordinate
             );
     }
 

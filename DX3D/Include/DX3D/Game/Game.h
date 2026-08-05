@@ -1,6 +1,7 @@
 #pragma once
 
 #include <DX3D/Graphics/MeshData.h>
+#include <DX3D/Math/Vec2.h>
 #include <DX3D/Math/Vec3.h>
 #include <DX3D/Core/Base.h>
 #include <DX3D/Core/Core.h>
@@ -9,6 +10,9 @@
 #include <string>
 #include <chrono>
 #include <vector>
+#include <array>
+#include <unordered_map>
+#include <cstddef>
 
 #include <d3d11.h>
 #include <wrl.h>
@@ -43,6 +47,8 @@ namespace dx3d
 			None,
 			Cube,
 			Plane,
+			Sphere,
+			Capsule,
 			CombinedMesh
 		};
 
@@ -50,6 +56,8 @@ namespace dx3d
 		{
 			Cube,
 			Plane,
+			Sphere,
+			Capsule,
 			CombinedMesh,
 			Model,
 			DirectionalLight
@@ -72,6 +80,17 @@ namespace dx3d
 			};
 			Vec3 colliderOffset{};
 			bool colliderUsesTransformScale{ true };
+		};
+
+		struct MaterialSnapshot
+		{
+			bool isPresent{ false };
+			std::string texturePath{};
+			Vec2 uvTiling{
+				1.0f,
+				1.0f
+			};
+			Vec2 uvOffset{};
 		};
 
 		struct ObjectSnapshot
@@ -105,6 +124,7 @@ namespace dx3d
 			bool castShadows{ true };
 
 			RigidBodySnapshot rigidBody{};
+			MaterialSnapshot material{};
 		};
 
 		struct EditorSnapshot
@@ -113,6 +133,8 @@ namespace dx3d
 			std::vector<std::string> selectedNames{};
 			ui32 cubeCounter{};
 			ui32 planeCounter{};
+			ui32 sphereCounter{};
+			ui32 capsuleCounter{};
 			std::string sceneStatusMessage{};
 		};
 
@@ -153,7 +175,44 @@ namespace dx3d
 			Vec3 rigidBodyColliderOffset{};
 			bool rigidBodyColliderUsesTransformScale{ true };
 
+			MaterialSnapshot material{};
+
 			ui32 pasteCount{};
+		};
+
+		enum class ProjectAssetKind
+		{
+			Folder,
+			Image,
+			Model,
+			Shader,
+			Scene,
+			Level,
+			Prefab,
+			Script,
+			Other
+		};
+
+		struct ProjectAssetEntry
+		{
+			std::string name{};
+			std::string path{};
+			ProjectAssetKind kind{
+				ProjectAssetKind::Other
+			};
+			bool isDirectory{ false };
+			size_t fileSize{};
+		};
+
+		struct ProjectThumbnail
+		{
+			Microsoft::WRL::ComPtr<
+				ID3D11ShaderResourceView
+			> resourceView{};
+
+			f32 width{};
+			f32 height{};
+			bool failed{ false };
 		};
 
 	private:
@@ -196,9 +255,46 @@ namespace dx3d
 
 		void pasteCopiedObject();
 
+		bool canObjectAcceptTexture(
+			GameObject* object
+		) const noexcept;
+
+		void assignTextureToObject(
+			GameObject* object,
+			const std::string& texturePath
+		);
+
 		void drawPhysicsDebugOverlay(
 			CameraComponent* camera,
 			const TransformGizmo::ViewportArea& viewportArea
+		);
+
+		void drawProjectWindow(
+			f32 workX,
+			f32 workY,
+			f32 workWidth,
+			f32 workHeight,
+			f32 rightPanelWidth
+		);
+
+		void refreshProjectAssets();
+
+		ProjectAssetKind getProjectAssetKind(
+			const std::string& path,
+			bool isDirectory
+		) const;
+
+		const char* getProjectAssetIcon(
+			ProjectAssetKind kind
+		) const noexcept;
+
+		ProjectThumbnail* getProjectThumbnail(
+			const std::string& path
+		);
+
+		bool loadProjectThumbnail(
+			const std::string& path,
+			ProjectThumbnail& thumbnail
 		);
 
 		EditorSnapshot captureEditorSnapshot() const;
@@ -238,6 +334,10 @@ namespace dx3d
 
 		void loadScene();
 
+		void saveLevel();
+
+		void loadLevel();
+
 	private:
 		UniquePtr<Logger> m_logger{};
 		UniquePtr<InputSystem> m_inputSystem{};
@@ -268,6 +368,7 @@ namespace dx3d
 
 		bool m_showPhysicsDebugOverlay = false;
 		bool m_showOnlySelectedPhysicsDebug = true;
+		bool m_showProjectWindow = true;
 
 		Microsoft::WRL::ComPtr<
 			ID3D11ShaderResourceView
@@ -276,8 +377,33 @@ namespace dx3d
 		f32 m_creditsLogoWidth{};
 		f32 m_creditsLogoHeight{};
 
+		std::vector<ProjectAssetEntry>
+			m_projectAssets{};
+
+		std::unordered_map<
+			std::string,
+			ProjectThumbnail
+		> m_projectThumbnailCache{};
+
+		std::string m_projectRootPath{
+			"DX3D/Assets"
+		};
+
+		std::string m_projectCurrentPath{
+			"DX3D/Assets"
+		};
+
+		std::string m_selectedProjectAssetPath{};
+
+		std::array<char, 128>
+			m_projectSearchBuffer{};
+
+		bool m_projectAssetsDirty{ true };
+
 		ui32 m_cubeCounter{ 0 };
 		ui32 m_planeCounter{ 0 };
+		ui32 m_sphereCounter{ 0 };
+		ui32 m_capsuleCounter{ 0 };
 
 		std::string m_sceneStatusMessage
 		{

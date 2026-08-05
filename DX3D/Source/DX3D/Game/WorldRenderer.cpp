@@ -16,10 +16,13 @@
 #include <DX3D/Component/TransformComponent.h>
 #include <DX3D/Component/CubeComponent.h>
 #include <DX3D/Component/PlaneComponent.h>
+#include <DX3D/Component/SphereComponent.h>
+#include <DX3D/Component/CapsuleComponent.h>
 #include <DX3D/Component/CircleComponent.h>
 #include <DX3D/Component/CameraComponent.h>
 #include <DX3D/Component/CombinedMeshComponent.h>
 #include <DX3D/Component/DirectionalLightComponent.h>
+#include <DX3D/Component/MaterialComponent.h>
 #include <DX3D/Component/ModelComponent.h>
 
 #include <DX3D/Math/MathUtils.h>
@@ -162,6 +165,54 @@ dx3d::WorldRenderer::WorldRenderer(
 			}
 		);
 
+	const auto& sphereMesh =
+		getSphereMeshData();
+
+	m_sphereVertexBuffer =
+		device.createVertexBuffer(
+			{
+				sphereMesh.vertices.data(),
+				static_cast<ui32>(
+					sphereMesh.vertices.size()
+				),
+				sizeof(MeshVertex)
+			}
+		);
+
+	m_sphereIndexBuffer =
+		device.createIndexBuffer(
+			{
+				sphereMesh.indices.data(),
+				static_cast<ui32>(
+					sphereMesh.indices.size()
+				)
+			}
+		);
+
+	const auto& capsuleMesh =
+		getCapsuleMeshData();
+
+	m_capsuleVertexBuffer =
+		device.createVertexBuffer(
+			{
+				capsuleMesh.vertices.data(),
+				static_cast<ui32>(
+					capsuleMesh.vertices.size()
+				),
+				sizeof(MeshVertex)
+			}
+		);
+
+	m_capsuleIndexBuffer =
+		device.createIndexBuffer(
+			{
+				capsuleMesh.indices.data(),
+				static_cast<ui32>(
+					capsuleMesh.indices.size()
+				)
+			}
+		);
+
 	constexpr ui32 circleSegments = 64;
 
 	std::vector<MeshVertex>
@@ -254,6 +305,47 @@ dx3d::WorldRenderer::WorldRenderer(
 
 dx3d::WorldRenderer::~WorldRenderer()
 {}
+
+dx3d::Texture2D*
+dx3d::WorldRenderer::getCachedTexture(
+	const std::string& texturePath
+)
+{
+	if (texturePath.empty())
+		return nullptr;
+
+	auto iterator =
+		m_textureCache.find(
+			texturePath
+		);
+
+	if (iterator != m_textureCache.end())
+	{
+		return iterator->second.get();
+	}
+
+	const std::wstring wideTexturePath(
+		texturePath.begin(),
+		texturePath.end()
+	);
+
+	auto texture =
+		m_graphicsDevice.createTexture2D(
+			{
+				wideTexturePath.c_str()
+			}
+		);
+
+	auto* texturePointer =
+		texture.get();
+
+	m_textureCache.emplace(
+		texturePath,
+		texture
+	);
+
+	return texturePointer;
+}
 
 void dx3d::WorldRenderer::render(
 	const World& world,
@@ -655,40 +747,6 @@ void dx3d::WorldRenderer::render(
 					);
 			}
 
-			if (component->hasTexture())
-			{
-				const std::string& texturePath =
-					component->getTexturePath();
-
-				const bool needsTextureLoad =
-					!renderResources.texture ||
-					renderResources.texturePath !=
-					texturePath;
-
-				if (needsTextureLoad)
-				{
-					const std::wstring wideTexturePath(
-						texturePath.begin(),
-						texturePath.end()
-					);
-
-					renderResources.texture =
-						m_graphicsDevice.
-						createTexture2D(
-							{
-								wideTexturePath.c_str()
-							}
-						);
-
-					renderResources.texturePath =
-						texturePath;
-				}
-			}
-			else
-			{
-				renderResources.texture.reset();
-				renderResources.texturePath.clear();
-			}
 		}
 	}
 
@@ -718,12 +776,63 @@ void dx3d::WorldRenderer::render(
 		}
 	}
 
+	struct RenderMaterial
+	{
+		Texture2D* texture{};
+		Vec2 uvTiling{ 1.0f, 1.0f };
+		Vec2 uvOffset{};
+	};
+
+	auto getRenderMaterial =
+		[&](
+			GameObject& object,
+			const ModelComponent* model = nullptr
+			)
+		{
+			RenderMaterial material{};
+			std::string texturePath{};
+
+			if (auto* materialComponent =
+				object.getComponent<
+				MaterialComponent
+				>())
+			{
+				material.uvTiling =
+					materialComponent->getUvTiling();
+
+				material.uvOffset =
+					materialComponent->getUvOffset();
+
+				if (materialComponent->hasTexture())
+				{
+					texturePath =
+						materialComponent->
+						getTexturePath();
+				}
+			}
+
+			if (texturePath.empty() &&
+				model &&
+				model->hasTexture())
+			{
+				texturePath =
+					model->getTexturePath();
+			}
+
+			material.texture =
+				getCachedTexture(
+					texturePath
+				);
+
+			return material;
+		};
+
 	auto drawObject =
 		[&](
 			TransformComponent& transform,
 			VertexBuffer& vertexBuffer,
 			IndexBuffer& indexBuffer,
-			Texture2D* texture
+			const RenderMaterial& material
 			)
 		{
 			data.world =
@@ -734,23 +843,39 @@ void dx3d::WorldRenderer::render(
 					data.world
 				);
 
-			if (texture)
+			if (material.texture)
 			{
 				data.materialSettings =
 				{
 					1.0f,
-					0.0f,
+					material.uvTiling.x,
+					material.uvTiling.y,
+					0.0f
+				};
+
+				data.textureSettings =
+				{
+					material.uvOffset.x,
+					material.uvOffset.y,
 					0.0f,
 					0.0f
 				};
 
 				context.setTexture2D(
-					*texture
+					*material.texture
 				);
 			}
 			else
 			{
 				data.materialSettings =
+				{
+					0.0f,
+					1.0f,
+					1.0f,
+					0.0f
+				};
+
+				data.textureSettings =
 				{
 					0.0f,
 					0.0f,
@@ -819,7 +944,10 @@ void dx3d::WorldRenderer::render(
 						getTransform(),
 						*m_cubeVertexBuffer,
 						*m_cubeIndexBuffer,
-						nullptr
+						getRenderMaterial(
+							component->
+							getGameObject()
+						)
 					);
 				}
 			}
@@ -852,7 +980,82 @@ void dx3d::WorldRenderer::render(
 						getTransform(),
 						*m_planeVertexBuffer,
 						*m_planeIndexBuffer,
-						nullptr
+						getRenderMaterial(
+							component->
+							getGameObject()
+						)
+					);
+				}
+			}
+
+			{
+				auto components =
+					world.getComponents<
+					SphereComponent
+					>(
+						numComponents
+					);
+
+				for (
+					auto i :
+					std::views::iota(
+						0u,
+						numComponents
+					)
+					)
+				{
+					auto* component =
+						components[i];
+
+					if (!component)
+						continue;
+
+					drawObject(
+						component->
+						getGameObject().
+						getTransform(),
+						*m_sphereVertexBuffer,
+						*m_sphereIndexBuffer,
+						getRenderMaterial(
+							component->
+							getGameObject()
+						)
+					);
+				}
+			}
+
+			{
+				auto components =
+					world.getComponents<
+					CapsuleComponent
+					>(
+						numComponents
+					);
+
+				for (
+					auto i :
+					std::views::iota(
+						0u,
+						numComponents
+					)
+					)
+				{
+					auto* component =
+						components[i];
+
+					if (!component)
+						continue;
+
+					drawObject(
+						component->
+						getGameObject().
+						getTransform(),
+						*m_capsuleVertexBuffer,
+						*m_capsuleIndexBuffer,
+						getRenderMaterial(
+							component->
+							getGameObject()
+						)
 					);
 				}
 			}
@@ -885,7 +1088,10 @@ void dx3d::WorldRenderer::render(
 						getTransform(),
 						*m_circleVertexBuffer,
 						*m_circleIndexBuffer,
-						nullptr
+						getRenderMaterial(
+							component->
+							getGameObject()
+						)
 					);
 				}
 			}
@@ -947,7 +1153,10 @@ void dx3d::WorldRenderer::render(
 						getTransform(),
 						*renderResources.vertexBuffer,
 						*renderResources.indexBuffer,
-						nullptr
+						getRenderMaterial(
+							component->
+							getGameObject()
+						)
 					);
 				}
 			}
@@ -1009,7 +1218,11 @@ void dx3d::WorldRenderer::render(
 						getTransform(),
 						*renderResources.vertexBuffer,
 						*renderResources.indexBuffer,
-						renderResources.texture.get()
+						getRenderMaterial(
+							component->
+							getGameObject(),
+							component
+						)
 					);
 				}
 			}

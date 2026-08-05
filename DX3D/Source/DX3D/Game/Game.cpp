@@ -18,11 +18,14 @@
 
 #include <DX3D/Component/CubeComponent.h>
 #include <DX3D/Component/PlaneComponent.h>
+#include <DX3D/Component/SphereComponent.h>
+#include <DX3D/Component/CapsuleComponent.h>
 #include <DX3D/Component/TransformComponent.h>
 #include <DX3D/Component/CameraComponent.h>
 #include <DX3D/Component/CombinedMeshComponent.h>
 #include <DX3D/Component/DirectionalLightComponent.h>
 #include <DX3D/Component/RigidBodyComponent.h>
+#include <DX3D/Component/MaterialComponent.h>
 #include <DX3D/Component/ModelComponent.h>
 
 #include <string>
@@ -31,6 +34,9 @@
 #include <limits>
 #include <cmath>
 #include <iterator>
+#include <filesystem>
+#include <cctype>
+#include <cstdio>
 #include <wincodec.h>
 
 #pragma comment(lib, "windowscodecs.lib")
@@ -354,6 +360,100 @@ namespace
 
 		return true;
 	}
+
+	std::string toLowerAscii(
+		std::string value
+	)
+	{
+		for (auto& character : value)
+		{
+			character =
+				static_cast<char>(
+					std::tolower(
+						static_cast<unsigned char>(
+							character
+						)
+					)
+				);
+		}
+
+		return value;
+	}
+
+	bool containsCaseInsensitive(
+		const std::string& text,
+		const char* filter
+	)
+	{
+		if (!filter || filter[0] == '\0')
+			return true;
+
+		return toLowerAscii(text).find(
+			toLowerAscii(filter)
+		) != std::string::npos;
+	}
+
+	std::string truncateText(
+		const std::string& text,
+		size_t maximumLength
+	)
+	{
+		if (text.size() <= maximumLength)
+			return text;
+
+		if (maximumLength <= 3)
+			return text.substr(0, maximumLength);
+
+		return text.substr(
+			0,
+			maximumLength - 3
+		) + "...";
+	}
+
+	std::string formatFileSize(
+		size_t bytes
+	)
+	{
+		constexpr double kiloBytes = 1024.0;
+		constexpr double megaBytes =
+			kiloBytes * 1024.0;
+
+		char buffer[64]{};
+
+		if (bytes >=
+			static_cast<size_t>(megaBytes))
+		{
+			std::snprintf(
+				buffer,
+				sizeof(buffer),
+				"%.2f MB",
+				static_cast<double>(bytes) /
+				megaBytes
+			);
+		}
+		else if (bytes >=
+			static_cast<size_t>(kiloBytes))
+		{
+			std::snprintf(
+				buffer,
+				sizeof(buffer),
+				"%.1f KB",
+				static_cast<double>(bytes) /
+				kiloBytes
+			);
+		}
+		else
+		{
+			std::snprintf(
+				buffer,
+				sizeof(buffer),
+				"%zu B",
+				bytes
+			);
+		}
+
+		return buffer;
+	}
 }
 
 
@@ -400,6 +500,25 @@ dx3d::Game::Game(const GameDesc& desc)
 	}
 
 	loadCreditsLogo();
+
+	std::error_code assetRootError{};
+
+	if (!std::filesystem::exists(
+		m_projectRootPath,
+		assetRootError
+	))
+	{
+		if (std::filesystem::exists(
+			"Assets",
+			assetRootError
+		))
+		{
+			m_projectRootPath = "Assets";
+		}
+	}
+
+	m_projectCurrentPath =
+		m_projectRootPath;
 
 	m_inputSystem->setCursorLockArea(m_display->getClientAreaInScreenSpace());
 
@@ -563,6 +682,16 @@ dx3d::Game::getObjectMeshData(
 	if (object->getComponent<PlaneComponent>())
 	{
 		return &getPlaneMeshData();
+	}
+
+	if (object->getComponent<SphereComponent>())
+	{
+		return &getSphereMeshData();
+	}
+
+	if (object->getComponent<CapsuleComponent>())
+	{
+		return &getCapsuleMeshData();
 	}
 
 	if (auto* modelComponent =
@@ -760,7 +889,88 @@ bool dx3d::Game::canCopySelectedObject() const noexcept
 		return true;
 	}
 
+	if (m_selectedObject->getComponent<
+		SphereComponent>())
+	{
+		return true;
+	}
+
+	if (m_selectedObject->getComponent<
+		CapsuleComponent>())
+	{
+		return true;
+	}
+
 	return false;
+}
+
+bool dx3d::Game::canObjectAcceptTexture(
+	GameObject* object
+) const noexcept
+{
+	if (!object ||
+		object->getComponent<
+		CameraComponent>())
+	{
+		return false;
+	}
+
+	if (object->getComponent<
+		CubeComponent>())
+	{
+		return true;
+	}
+
+	if (object->getComponent<
+		PlaneComponent>())
+	{
+		return true;
+	}
+
+	if (object->getComponent<
+		SphereComponent>())
+	{
+		return true;
+	}
+
+	if (object->getComponent<
+		CapsuleComponent>())
+	{
+		return true;
+	}
+
+	if (auto* combinedComponent =
+		object->getComponent<
+		CombinedMeshComponent>())
+	{
+		return combinedComponent->hasMeshData();
+	}
+
+	if (auto* modelComponent =
+		object->getComponent<
+		ModelComponent>())
+	{
+		return modelComponent->hasMeshData();
+	}
+
+	return false;
+}
+
+void dx3d::Game::assignTextureToObject(
+	GameObject* object,
+	const std::string& texturePath
+)
+{
+	if (!canObjectAcceptTexture(object))
+		return;
+
+	auto* material =
+		object->createOrGetComponent<
+		MaterialComponent>();
+
+	material->setTexturePath(
+		texturePath
+	);
 }
 
 void dx3d::Game::copySelectedObject()
@@ -812,6 +1022,20 @@ void dx3d::Game::copySelectedObject()
 		copiedData.type =
 			CopiedObjectType::Plane;
 	}
+	else if (
+		m_selectedObject->getComponent<
+		SphereComponent>())
+	{
+		copiedData.type =
+			CopiedObjectType::Sphere;
+	}
+	else if (
+		m_selectedObject->getComponent<
+		CapsuleComponent>())
+	{
+		copiedData.type =
+			CopiedObjectType::Capsule;
+	}
 	else
 	{
 		return;
@@ -846,6 +1070,19 @@ void dx3d::Game::copySelectedObject()
 			getColliderUsesTransformScale();
 	}
 
+	if (auto* material =
+		m_selectedObject->getComponent<
+		MaterialComponent>())
+	{
+		copiedData.material.isPresent = true;
+		copiedData.material.texturePath =
+			material->getTexturePath();
+		copiedData.material.uvTiling =
+			material->getUvTiling();
+		copiedData.material.uvOffset =
+			material->getUvOffset();
+	}
+
 	// A new copy operation restarts the pasted-object count.
 	copiedData.pasteCount = 0;
 
@@ -875,6 +1112,16 @@ void dx3d::Game::pasteCopiedObject()
 	case CopiedObjectType::Plane:
 		pastedObject->createOrGetComponent<
 			PlaneComponent>();
+		break;
+
+	case CopiedObjectType::Sphere:
+		pastedObject->createOrGetComponent<
+			SphereComponent>();
+		break;
+
+	case CopiedObjectType::Capsule:
+		pastedObject->createOrGetComponent<
+			CapsuleComponent>();
 		break;
 
 	case CopiedObjectType::CombinedMesh:
@@ -954,6 +1201,28 @@ void dx3d::Game::pasteCopiedObject()
 				m_objectClipboard.
 				rigidBodyColliderUsesTransformScale
 			);
+	}
+
+	if (m_objectClipboard.material.isPresent)
+	{
+		auto* material =
+			pastedObject->createOrGetComponent<
+			MaterialComponent>();
+
+		material->setTexturePath(
+			m_objectClipboard.
+			material.texturePath
+		);
+
+		material->setUvTiling(
+			m_objectClipboard.
+			material.uvTiling
+		);
+
+		material->setUvOffset(
+			m_objectClipboard.
+			material.uvOffset
+		);
 	}
 
 	++m_objectClipboard.pasteCount;
@@ -1200,6 +1469,12 @@ dx3d::Game::captureEditorSnapshot() const
 	snapshot.planeCounter =
 		m_planeCounter;
 
+	snapshot.sphereCounter =
+		m_sphereCounter;
+
+	snapshot.capsuleCounter =
+		m_capsuleCounter;
+
 	snapshot.sceneStatusMessage =
 		m_sceneStatusMessage;
 
@@ -1288,6 +1563,22 @@ dx3d::Game::captureEditorSnapshot() const
 
 			canSnapshotObject = true;
 		}
+		else if (object->getComponent<
+			SphereComponent>())
+		{
+			objectSnapshot.type =
+				SnapshotObjectType::Sphere;
+
+			canSnapshotObject = true;
+		}
+		else if (object->getComponent<
+			CapsuleComponent>())
+		{
+			objectSnapshot.type =
+				SnapshotObjectType::Capsule;
+
+			canSnapshotObject = true;
+		}
 		else if (auto* light =
 			object->getComponent<
 			DirectionalLightComponent>())
@@ -1331,6 +1622,19 @@ dx3d::Game::captureEditorSnapshot() const
 
 		objectSnapshot.scale =
 			transform.getScale();
+
+		if (auto* material =
+			object->getComponent<
+			MaterialComponent>())
+		{
+			objectSnapshot.material.isPresent = true;
+			objectSnapshot.material.texturePath =
+				material->getTexturePath();
+			objectSnapshot.material.uvTiling =
+				material->getUvTiling();
+			objectSnapshot.material.uvOffset =
+				material->getUvOffset();
+		}
 
 		if (auto* rigidBody =
 			object->getComponent<
@@ -1468,8 +1772,18 @@ void dx3d::Game::restoreEditorSnapshot(
 				PlaneComponent>();
 			break;
 
+		case SnapshotObjectType::Sphere:
+			object->createOrGetComponent<
+				SphereComponent>();
+			break;
+
+		case SnapshotObjectType::Capsule:
+			object->createOrGetComponent<
+				CapsuleComponent>();
+			break;
+
 		case SnapshotObjectType::CombinedMesh:
-		{
+	{
 			auto* combinedMesh =
 				object->createOrGetComponent<
 				CombinedMeshComponent>();
@@ -1591,6 +1905,28 @@ void dx3d::Game::restoreEditorSnapshot(
 				);
 		}
 
+		if (objectSnapshot.material.isPresent)
+		{
+			auto* material =
+				object->createOrGetComponent<
+				MaterialComponent>();
+
+			material->setTexturePath(
+				objectSnapshot.
+				material.texturePath
+			);
+
+			material->setUvTiling(
+				objectSnapshot.
+				material.uvTiling
+			);
+
+			material->setUvOffset(
+				objectSnapshot.
+				material.uvOffset
+			);
+		}
+
 		auto& transform =
 			object->getTransform();
 
@@ -1614,6 +1950,12 @@ void dx3d::Game::restoreEditorSnapshot(
 
 	m_planeCounter =
 		snapshot.planeCounter;
+
+	m_sphereCounter =
+		snapshot.sphereCounter;
+
+	m_capsuleCounter =
+		snapshot.capsuleCounter;
 
 	m_sceneStatusMessage =
 		snapshot.sceneStatusMessage;
@@ -1657,6 +1999,8 @@ bool dx3d::Game::areEditorSnapshotsEqual(
 	if (
 		lhs.cubeCounter != rhs.cubeCounter ||
 		lhs.planeCounter != rhs.planeCounter ||
+		lhs.sphereCounter != rhs.sphereCounter ||
+		lhs.capsuleCounter != rhs.capsuleCounter ||
 		lhs.objects.size() != rhs.objects.size()
 		)
 	{
@@ -1692,6 +2036,18 @@ bool dx3d::Game::areEditorSnapshotsEqual(
 			rhsObject.modelPath ||
 			lhsObject.texturePath !=
 			rhsObject.texturePath ||
+			lhsObject.material.isPresent !=
+			rhsObject.material.isPresent ||
+			lhsObject.material.texturePath !=
+			rhsObject.material.texturePath ||
+			!areVec2Equal(
+				lhsObject.material.uvTiling,
+				rhsObject.material.uvTiling
+			) ||
+			!areVec2Equal(
+				lhsObject.material.uvOffset,
+				rhsObject.material.uvOffset
+			) ||
 			!areMeshDataEqual(
 				lhsObject.meshData,
 				rhsObject.meshData
@@ -2528,6 +2884,891 @@ bool dx3d::Game::loadCreditsLogo()
 	return true;
 }
 
+void dx3d::Game::refreshProjectAssets()
+{
+	m_projectAssets.clear();
+
+	std::error_code error{};
+
+	if (!std::filesystem::exists(
+		m_projectCurrentPath,
+		error
+	))
+	{
+		m_projectCurrentPath =
+			m_projectRootPath;
+	}
+
+	if (!std::filesystem::exists(
+		m_projectCurrentPath,
+		error
+	))
+	{
+		m_projectAssetsDirty = false;
+		return;
+	}
+
+	for (const auto& entry :
+		std::filesystem::directory_iterator(
+			m_projectCurrentPath,
+			error
+		))
+	{
+		if (error)
+			break;
+
+		ProjectAssetEntry asset{};
+
+		asset.isDirectory =
+			entry.is_directory(error);
+
+		const auto path =
+			entry.path();
+
+		asset.name =
+			path.filename().string();
+
+		asset.path =
+			path.generic_string();
+
+		asset.kind =
+			getProjectAssetKind(
+				asset.path,
+				asset.isDirectory
+			);
+
+		if (!asset.isDirectory)
+		{
+			const auto size =
+				entry.file_size(error);
+
+			asset.fileSize =
+				error
+				? 0u
+				: static_cast<size_t>(
+					size
+				);
+
+			error.clear();
+		}
+
+		m_projectAssets.push_back(
+			std::move(asset)
+		);
+	}
+
+	std::sort(
+		m_projectAssets.begin(),
+		m_projectAssets.end(),
+		[](
+			const ProjectAssetEntry& lhs,
+			const ProjectAssetEntry& rhs
+			)
+		{
+			if (lhs.isDirectory !=
+				rhs.isDirectory)
+			{
+				return lhs.isDirectory >
+					rhs.isDirectory;
+			}
+
+			return toLowerAscii(lhs.name) <
+				toLowerAscii(rhs.name);
+		}
+	);
+
+	m_projectAssetsDirty = false;
+}
+
+dx3d::Game::ProjectAssetKind
+dx3d::Game::getProjectAssetKind(
+	const std::string& path,
+	bool isDirectory
+) const
+{
+	if (isDirectory)
+		return ProjectAssetKind::Folder;
+
+	const std::string extension =
+		toLowerAscii(
+			std::filesystem::path(path).
+			extension().
+			string()
+		);
+
+	if (
+		extension == ".png" ||
+		extension == ".jpg" ||
+		extension == ".jpeg" ||
+		extension == ".bmp" ||
+		extension == ".tif" ||
+		extension == ".tiff" ||
+		extension == ".gif"
+		)
+	{
+		return ProjectAssetKind::Image;
+	}
+
+	if (
+		extension == ".obj" ||
+		extension == ".fbx"
+		)
+	{
+		return ProjectAssetKind::Model;
+	}
+
+	if (
+		extension == ".hlsl" ||
+		extension == ".hlsli" ||
+		extension == ".fx"
+		)
+	{
+		return ProjectAssetKind::Shader;
+	}
+
+	if (extension == ".dx3dscene")
+		return ProjectAssetKind::Scene;
+
+	if (extension == ".level")
+		return ProjectAssetKind::Level;
+
+	if (extension == ".prefab")
+		return ProjectAssetKind::Prefab;
+
+	if (
+		extension == ".cs" ||
+		extension == ".py" ||
+		extension == ".cpp" ||
+		extension == ".h" ||
+		extension == ".hpp"
+		)
+	{
+		return ProjectAssetKind::Script;
+	}
+
+	return ProjectAssetKind::Other;
+}
+
+const char* dx3d::Game::getProjectAssetIcon(
+	ProjectAssetKind kind
+) const noexcept
+{
+	switch (kind)
+	{
+	case ProjectAssetKind::Folder:
+		return "DIR";
+
+	case ProjectAssetKind::Image:
+		return "IMG";
+
+	case ProjectAssetKind::Model:
+		return "OBJ";
+
+	case ProjectAssetKind::Shader:
+		return "SHD";
+
+	case ProjectAssetKind::Scene:
+		return "SCN";
+
+	case ProjectAssetKind::Level:
+		return "LVL";
+
+	case ProjectAssetKind::Prefab:
+		return "PFB";
+
+	case ProjectAssetKind::Script:
+		return "SCR";
+
+	case ProjectAssetKind::Other:
+		return "FILE";
+	}
+
+	return "FILE";
+}
+
+dx3d::Game::ProjectThumbnail*
+dx3d::Game::getProjectThumbnail(
+	const std::string& path
+)
+{
+	auto iterator =
+		m_projectThumbnailCache.find(path);
+
+	if (iterator !=
+		m_projectThumbnailCache.end())
+	{
+		return &iterator->second;
+	}
+
+	ProjectThumbnail thumbnail{};
+
+	if (!loadProjectThumbnail(
+		path,
+		thumbnail
+	))
+	{
+		thumbnail.failed = true;
+	}
+
+	auto [insertedIterator, inserted] =
+		m_projectThumbnailCache.emplace(
+			path,
+			std::move(thumbnail)
+		);
+
+	(void)inserted;
+
+	return &insertedIterator->second;
+}
+
+bool dx3d::Game::loadProjectThumbnail(
+	const std::string& path,
+	ProjectThumbnail& thumbnail
+)
+{
+	struct ComScope
+	{
+		bool shouldUninitialize{ false };
+
+		~ComScope()
+		{
+			if (shouldUninitialize)
+			{
+				CoUninitialize();
+			}
+		}
+	};
+
+	ComScope comScope{};
+
+	const HRESULT comResult =
+		CoInitializeEx(
+			nullptr,
+			COINIT_MULTITHREADED
+		);
+
+	if (SUCCEEDED(comResult))
+	{
+		comScope.shouldUninitialize = true;
+	}
+	else if (comResult != RPC_E_CHANGED_MODE)
+	{
+		return false;
+	}
+
+	Microsoft::WRL::ComPtr<
+		IWICImagingFactory
+	> imagingFactory{};
+
+	HRESULT result =
+		CoCreateInstance(
+			CLSID_WICImagingFactory,
+			nullptr,
+			CLSCTX_INPROC_SERVER,
+			IID_PPV_ARGS(
+				imagingFactory.GetAddressOf()
+			)
+		);
+
+	if (FAILED(result))
+		return false;
+
+	Microsoft::WRL::ComPtr<
+		IWICBitmapDecoder
+	> decoder{};
+
+	const std::wstring widePath =
+		std::filesystem::path(path).
+		wstring();
+
+	result =
+		imagingFactory->
+		CreateDecoderFromFilename(
+			widePath.c_str(),
+			nullptr,
+			GENERIC_READ,
+			WICDecodeMetadataCacheOnLoad,
+			decoder.GetAddressOf()
+		);
+
+	if (FAILED(result))
+		return false;
+
+	Microsoft::WRL::ComPtr<
+		IWICBitmapFrameDecode
+	> frame{};
+
+	result =
+		decoder->GetFrame(
+			0,
+			frame.GetAddressOf()
+		);
+
+	if (FAILED(result))
+		return false;
+
+	UINT width{};
+	UINT height{};
+
+	result =
+		frame->GetSize(
+			&width,
+			&height
+		);
+
+	if (FAILED(result) ||
+		width == 0 ||
+		height == 0)
+	{
+		return false;
+	}
+
+	Microsoft::WRL::ComPtr<
+		IWICFormatConverter
+	> converter{};
+
+	result =
+		imagingFactory->
+		CreateFormatConverter(
+			converter.GetAddressOf()
+		);
+
+	if (FAILED(result))
+		return false;
+
+	result =
+		converter->Initialize(
+			frame.Get(),
+			GUID_WICPixelFormat32bppRGBA,
+			WICBitmapDitherTypeNone,
+			nullptr,
+			0.0,
+			WICBitmapPaletteTypeCustom
+		);
+
+	if (FAILED(result))
+		return false;
+
+	const UINT bytesPerPixel = 4;
+
+	const UINT rowPitch =
+		width * bytesPerPixel;
+
+	std::vector<unsigned char> pixels(
+		static_cast<size_t>(rowPitch) *
+		static_cast<size_t>(height)
+	);
+
+	result =
+		converter->CopyPixels(
+			nullptr,
+			rowPitch,
+			static_cast<UINT>(
+				pixels.size()
+				),
+			pixels.data()
+		);
+
+	if (FAILED(result))
+		return false;
+
+	D3D11_TEXTURE2D_DESC textureDescription{};
+
+	textureDescription.Width = width;
+	textureDescription.Height = height;
+	textureDescription.MipLevels = 1;
+	textureDescription.ArraySize = 1;
+	textureDescription.Format =
+		DXGI_FORMAT_R8G8B8A8_UNORM;
+	textureDescription.SampleDesc.Count = 1;
+	textureDescription.Usage =
+		D3D11_USAGE_DEFAULT;
+	textureDescription.BindFlags =
+		D3D11_BIND_SHADER_RESOURCE;
+
+	D3D11_SUBRESOURCE_DATA textureData{};
+
+	textureData.pSysMem =
+		pixels.data();
+
+	textureData.SysMemPitch =
+		rowPitch;
+
+	Microsoft::WRL::ComPtr<
+		ID3D11Texture2D
+	> texture{};
+
+	ID3D11Device* device =
+		m_graphicsDevice->getD3DDevice();
+
+	if (!device)
+		return false;
+
+	result =
+		device->CreateTexture2D(
+			&textureDescription,
+			&textureData,
+			texture.GetAddressOf()
+		);
+
+	if (FAILED(result))
+		return false;
+
+	result =
+		device->CreateShaderResourceView(
+			texture.Get(),
+			nullptr,
+			thumbnail.resourceView.
+			ReleaseAndGetAddressOf()
+		);
+
+	if (FAILED(result))
+		return false;
+
+	thumbnail.width =
+		static_cast<f32>(width);
+
+	thumbnail.height =
+		static_cast<f32>(height);
+
+	thumbnail.failed = false;
+
+	return true;
+}
+
+void dx3d::Game::drawProjectWindow(
+	f32 workX,
+	f32 workY,
+	f32 workWidth,
+	f32 workHeight,
+	f32 rightPanelWidth
+)
+{
+	constexpr f32 projectPanelHeight = 230.0f;
+
+	ImGui::SetNextWindowPos(
+		{
+			workX,
+			workY + workHeight -
+			projectPanelHeight
+		},
+		ImGuiCond_Always
+	);
+
+	ImGui::SetNextWindowSize(
+		{
+			std::max(
+				220.0f,
+				workWidth - rightPanelWidth
+			),
+			projectPanelHeight
+		},
+		ImGuiCond_Always
+	);
+
+	if (!ImGui::Begin(
+		"Project",
+		&m_showProjectWindow
+	))
+	{
+		ImGui::End();
+		return;
+	}
+
+	if (m_projectAssetsDirty)
+	{
+		refreshProjectAssets();
+	}
+
+	std::error_code pathError{};
+
+	const bool canGoUp =
+		!std::filesystem::equivalent(
+			m_projectCurrentPath,
+			m_projectRootPath,
+			pathError
+		);
+
+	if (ImGui::Button("Assets"))
+	{
+		m_projectCurrentPath =
+			m_projectRootPath;
+
+		m_projectAssetsDirty = true;
+	}
+
+	ImGui::SameLine();
+
+	ImGui::BeginDisabled(!canGoUp);
+
+	if (ImGui::ArrowButton(
+		"##ProjectUp",
+		ImGuiDir_Up
+	))
+	{
+		const auto parent =
+			std::filesystem::path(
+				m_projectCurrentPath
+			).parent_path();
+
+		if (!parent.empty())
+		{
+			m_projectCurrentPath =
+				parent.generic_string();
+
+			m_projectAssetsDirty = true;
+		}
+	}
+
+	ImGui::EndDisabled();
+
+	ImGui::SameLine();
+
+	if (ImGui::Button("Refresh"))
+	{
+		m_projectAssetsDirty = true;
+		m_projectThumbnailCache.clear();
+	}
+
+	ImGui::SameLine();
+
+	ImGui::SetNextItemWidth(180.0f);
+
+	ImGui::InputTextWithHint(
+		"##ProjectSearch",
+		"Search",
+		m_projectSearchBuffer.data(),
+		m_projectSearchBuffer.size()
+	);
+
+	ImGui::SameLine();
+
+	std::filesystem::path relativePath{};
+
+	const auto relative =
+		std::filesystem::relative(
+			m_projectCurrentPath,
+			m_projectRootPath,
+			pathError
+		);
+
+	if (!pathError &&
+		!relative.empty())
+	{
+		relativePath = relative;
+	}
+
+	const std::string displayPath =
+		relativePath.empty() ||
+		relativePath == "."
+		? "Assets"
+		: "Assets/" +
+		relativePath.generic_string();
+
+	ImGui::TextDisabled(
+		"%s",
+		displayPath.c_str()
+	);
+
+	ImGui::Separator();
+
+	const ImVec2 available =
+		ImGui::GetContentRegionAvail();
+
+	if (ImGui::BeginChild(
+		"##ProjectAssets",
+		available,
+		true
+	))
+	{
+		constexpr f32 tileWidth = 96.0f;
+		constexpr f32 thumbnailSize = 54.0f;
+
+		const int columnCount =
+			std::max(
+				1,
+				static_cast<int>(
+					ImGui::GetContentRegionAvail().x /
+					tileWidth
+				)
+			);
+
+		ImGui::Columns(
+			columnCount,
+			"##ProjectGrid",
+			false
+		);
+
+		for (auto& asset :
+			m_projectAssets)
+		{
+			if (!containsCaseInsensitive(
+				asset.name,
+				m_projectSearchBuffer.data()
+			))
+			{
+				continue;
+			}
+
+			ImGui::PushID(
+				asset.path.c_str()
+			);
+
+			const bool isSelected =
+				asset.path ==
+				m_selectedProjectAssetPath;
+
+			ImGui::BeginGroup();
+
+			bool wasClicked = false;
+
+			const ImVec4 normalButtonColor =
+				isSelected
+				? ImVec4(
+					0.20f,
+					0.36f,
+					0.58f,
+					1.0f
+				)
+				: ImVec4(
+					0.12f,
+					0.14f,
+					0.18f,
+					1.0f
+				);
+
+			const ImVec4 hoverButtonColor =
+				isSelected
+				? ImVec4(
+					0.26f,
+					0.44f,
+					0.68f,
+					1.0f
+				)
+				: ImVec4(
+					0.18f,
+					0.20f,
+					0.25f,
+					1.0f
+			);
+
+			bool assetHovered = false;
+			ProjectThumbnail* thumbnail = nullptr;
+
+			if (asset.kind ==
+				ProjectAssetKind::Image)
+			{
+				thumbnail =
+					getProjectThumbnail(
+						asset.path
+					);
+
+				if (thumbnail &&
+					thumbnail->resourceView)
+				{
+					wasClicked =
+						ImGui::ImageButton(
+							"##AssetThumbnail",
+							(ImTextureID)
+							thumbnail->
+							resourceView.Get(),
+							{
+								thumbnailSize,
+								thumbnailSize
+							},
+							{ 0.0f, 0.0f },
+							{ 1.0f, 1.0f },
+							normalButtonColor
+						);
+
+					assetHovered =
+						ImGui::IsItemHovered();
+				}
+			}
+
+			if (!wasClicked &&
+				(asset.kind !=
+				ProjectAssetKind::Image ||
+					!thumbnail ||
+					!thumbnail->resourceView))
+			{
+				ImGui::PushStyleColor(
+					ImGuiCol_Button,
+					normalButtonColor
+				);
+
+				ImGui::PushStyleColor(
+					ImGuiCol_ButtonHovered,
+					hoverButtonColor
+				);
+
+				ImGui::PushStyleColor(
+					ImGuiCol_ButtonActive,
+					hoverButtonColor
+				);
+
+				wasClicked =
+					ImGui::Button(
+						getProjectAssetIcon(
+							asset.kind
+						),
+						{
+							thumbnailSize,
+							thumbnailSize
+						}
+					);
+
+				ImGui::PopStyleColor(3);
+
+				assetHovered =
+					assetHovered ||
+					ImGui::IsItemHovered();
+			}
+
+			if (asset.kind ==
+				ProjectAssetKind::Image &&
+				ImGui::BeginDragDropSource())
+			{
+				m_selectedProjectAssetPath =
+					asset.path;
+
+				ImGui::SetDragDropPayload(
+					"DX3D_TEXTURE_PATH",
+					asset.path.c_str(),
+					asset.path.size() + 1
+				);
+
+				ImGui::TextUnformatted(
+					asset.name.c_str()
+				);
+
+				ImGui::EndDragDropSource();
+			}
+
+			if (wasClicked)
+			{
+				m_selectedProjectAssetPath =
+					asset.path;
+			}
+
+			if (assetHovered &&
+				asset.isDirectory &&
+				ImGui::IsMouseDoubleClicked(
+					ImGuiMouseButton_Left
+				))
+			{
+				m_projectCurrentPath =
+					asset.path;
+
+				m_projectAssetsDirty = true;
+				m_projectSearchBuffer[0] = '\0';
+			}
+
+			if (ImGui::BeginPopupContextItem(
+				"##ProjectAssetContext"
+			))
+			{
+				m_selectedProjectAssetPath =
+					asset.path;
+
+				if (ImGui::MenuItem(
+					"Copy Path"
+				))
+				{
+					ImGui::SetClipboardText(
+						asset.path.c_str()
+					);
+				}
+
+				if (asset.isDirectory &&
+					ImGui::MenuItem("Open"))
+				{
+					m_projectCurrentPath =
+						asset.path;
+
+					m_projectAssetsDirty = true;
+					m_projectSearchBuffer[0] = '\0';
+				}
+
+				ImGui::EndPopup();
+			}
+
+			const std::string label =
+				truncateText(
+					asset.name,
+					20
+				);
+
+			ImGui::PushTextWrapPos(
+				ImGui::GetCursorPosX() +
+				tileWidth - 10.0f
+			);
+
+			ImGui::TextWrapped(
+				"%s",
+				label.c_str()
+			);
+
+			ImGui::PopTextWrapPos();
+
+			assetHovered =
+				assetHovered ||
+				ImGui::IsItemHovered();
+
+			if (assetHovered)
+			{
+				ImGui::BeginTooltip();
+
+				ImGui::TextUnformatted(
+					asset.name.c_str()
+				);
+
+				ImGui::Separator();
+
+				ImGui::TextDisabled(
+					"%s",
+					asset.path.c_str()
+				);
+
+				if (!asset.isDirectory)
+				{
+					const std::string size =
+						formatFileSize(
+							asset.fileSize
+						);
+
+					ImGui::TextDisabled(
+						"%s",
+						size.c_str()
+					);
+				}
+
+				ImGui::EndTooltip();
+			}
+
+			ImGui::EndGroup();
+			ImGui::PopID();
+			ImGui::NextColumn();
+		}
+
+		ImGui::Columns(1);
+	}
+
+	ImGui::EndChild();
+
+	if (!m_selectedProjectAssetPath.empty())
+	{
+		ImGui::Separator();
+
+		ImGui::TextDisabled(
+			"%s",
+			m_selectedProjectAssetPath.c_str()
+		);
+	}
+
+	ImGui::End();
+}
+
 void dx3d::Game::createNewScene()
 {
 	const EditorSnapshot undoSnapshot =
@@ -2548,6 +3789,8 @@ void dx3d::Game::createNewScene()
 
 	m_cubeCounter = 0;
 	m_planeCounter = 0;
+	m_sphereCounter = 0;
+	m_capsuleCounter = 0;
 
 	m_sceneStatusMessage =
 		"New scene created";
@@ -2629,11 +3872,107 @@ void dx3d::Game::loadScene()
 	m_planeCounter =
 		result.planeCount;
 
+	m_sphereCounter =
+		result.sphereCount;
+
+	m_capsuleCounter =
+		result.capsuleCount;
+
 	m_sceneStatusMessage =
 		"Loaded: Scene.dx3dscene";
 
 	DX3DLogInfo(
 		"Scene loaded."
+	);
+
+	if (!areEditorSnapshotsEqual(
+		undoSnapshot,
+		captureEditorSnapshot()
+	))
+	{
+		pushUndoSnapshot(
+			undoSnapshot
+		);
+	}
+}
+
+void dx3d::Game::saveLevel()
+{
+	const bool saved =
+		SceneSerializer::saveLevel(
+			*m_world,
+			"Scene.level"
+		);
+
+	if (saved)
+	{
+		m_sceneStatusMessage =
+			"Exported: Scene.level";
+
+		DX3DLogInfo(
+			"Level exported."
+		);
+	}
+	else
+	{
+		m_sceneStatusMessage =
+			"Level export failed";
+
+		DX3DLogError(
+			"Level export failed."
+		);
+	}
+}
+
+void dx3d::Game::loadLevel()
+{
+	const EditorSnapshot undoSnapshot =
+		captureEditorSnapshot();
+
+	m_world->stopPhysics();
+
+	const SceneLoadResult result =
+		SceneSerializer::loadLevel(
+			*m_world,
+			"Scene.level"
+		);
+
+	if (!result.success)
+	{
+		m_sceneStatusMessage =
+			"Level import failed or file not found";
+
+		DX3DLogError(
+			"Level import failed."
+		);
+
+		return;
+	}
+
+	m_world->flushGameObjectEvents();
+
+	clearSelection();
+
+	m_objectClipboard =
+		ObjectCopyData{};
+
+	m_cubeCounter =
+		result.cubeCount;
+
+	m_planeCounter =
+		result.planeCount;
+
+	m_sphereCounter =
+		result.sphereCount;
+
+	m_capsuleCounter =
+		result.capsuleCount;
+
+	m_sceneStatusMessage =
+		"Imported: Scene.level";
+
+	DX3DLogInfo(
+		"Level imported."
 	);
 
 	if (!areEditorSnapshotsEqual(
@@ -2773,6 +4112,22 @@ void dx3d::Game::onInternalUpdate()
 
 			ImGui::Separator();
 
+			if (ImGui::MenuItem(
+				"Export .level"
+			))
+			{
+				saveLevel();
+			}
+
+			if (ImGui::MenuItem(
+				"Import .level"
+			))
+			{
+				loadLevel();
+			}
+
+			ImGui::Separator();
+
 			ImGui::TextDisabled(
 				"%s",
 				m_sceneStatusMessage.c_str()
@@ -2860,6 +4215,98 @@ void dx3d::Game::onInternalUpdate()
 				);
 
 				selectOnly(cube);
+			}
+
+			if (ImGui::MenuItem("Create Sphere"))
+			{
+				pushUndoSnapshot(
+					frameStartSnapshot
+				);
+
+				++m_sphereCounter;
+
+				auto* sphere =
+					m_world->createGameObject<GameObject>();
+
+				if (m_sphereCounter == 1)
+				{
+					sphere->setName("Sphere");
+				}
+				else
+				{
+					sphere->setName(
+						"Sphere (" +
+						std::to_string(
+							m_sphereCounter
+						) +
+						")"
+					);
+				}
+
+				sphere->createOrGetComponent<
+					SphereComponent>();
+
+				sphere->getTransform().setPosition(
+					{
+						static_cast<f32>(
+							m_sphereCounter - 1
+						) * 1.5f,
+						0.5f,
+						2.0f
+					}
+				);
+
+				sphere->getTransform().setScale(
+					{ 1.0f, 1.0f, 1.0f }
+				);
+
+				selectOnly(sphere);
+			}
+
+			if (ImGui::MenuItem("Create Capsule"))
+			{
+				pushUndoSnapshot(
+					frameStartSnapshot
+				);
+
+				++m_capsuleCounter;
+
+				auto* capsule =
+					m_world->createGameObject<GameObject>();
+
+				if (m_capsuleCounter == 1)
+				{
+					capsule->setName("Capsule");
+				}
+				else
+				{
+					capsule->setName(
+						"Capsule (" +
+						std::to_string(
+							m_capsuleCounter
+						) +
+						")"
+					);
+				}
+
+				capsule->createOrGetComponent<
+					CapsuleComponent>();
+
+				capsule->getTransform().setPosition(
+					{
+						static_cast<f32>(
+							m_capsuleCounter - 1
+						) * 1.5f,
+						1.0f,
+						-2.0f
+					}
+				);
+
+				capsule->getTransform().setScale(
+					{ 1.0f, 1.0f, 1.0f }
+				);
+
+				selectOnly(capsule);
 			}
 
 			ImGui::Separator();
@@ -3497,6 +4944,14 @@ void dx3d::Game::onInternalUpdate()
 		if (ImGui::BeginMenu("Tools"))
 		{
 			ImGui::MenuItem(
+				"Project Window",
+				nullptr,
+				&m_showProjectWindow
+			);
+
+			ImGui::Separator();
+
+			ImGui::MenuItem(
 				"Physics Debug Overlay",
 				nullptr,
 				&m_showPhysicsDebugOverlay
@@ -3712,6 +5167,17 @@ void dx3d::Game::onInternalUpdate()
 		gizmoViewport
 	);
 
+	if (m_showProjectWindow)
+	{
+		drawProjectWindow(
+			workPosition.x,
+			workPosition.y,
+			workSize.x,
+			workSize.y,
+			panelWidth
+		);
+	}
+
 	// Scene Outliner begins here.
 	ImGui::SetNextWindowPos(
 		{
@@ -3761,6 +5227,38 @@ void dx3d::Game::onInternalUpdate()
 			{
 				selectOnly(object);
 			}
+		}
+
+		if (canObjectAcceptTexture(object) &&
+			ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload =
+				ImGui::AcceptDragDropPayload(
+					"DX3D_TEXTURE_PATH"
+				))
+			{
+				const char* payloadText =
+					static_cast<const char*>(
+						payload->Data
+					);
+
+				if (payloadText &&
+					payload->DataSize > 0)
+				{
+					pushUndoSnapshot(
+						frameStartSnapshot
+					);
+
+					assignTextureToObject(
+						object,
+						std::string(payloadText)
+					);
+
+					selectOnly(object);
+				}
+			}
+
+			ImGui::EndDragDropTarget();
 		}
 
 		ImGui::PopID();
@@ -3899,6 +5397,190 @@ void dx3d::Game::onInternalUpdate()
 			);
 		}
 
+		if (canObjectAcceptTexture(
+			m_selectedObject
+		))
+		{
+			ImGui::Spacing();
+			ImGui::Separator();
+			ImGui::Text("Material");
+			ImGui::Spacing();
+
+			auto* material =
+				m_selectedObject->getComponent<
+				MaterialComponent>();
+
+			auto* modelComponent =
+				m_selectedObject->getComponent<
+				ModelComponent>();
+
+			const std::string* texturePath =
+				nullptr;
+
+			if (material &&
+				material->hasTexture())
+			{
+				texturePath =
+					&material->getTexturePath();
+			}
+			else if (modelComponent &&
+				modelComponent->hasTexture())
+			{
+				texturePath =
+					&modelComponent->getTexturePath();
+			}
+
+			ImGui::TextWrapped(
+				"Texture: %s",
+				texturePath
+				? texturePath->c_str()
+				: "None"
+			);
+
+			ImGui::Button(
+				"Drop Texture Here",
+				{ -1.0f, 0.0f }
+			);
+
+			if (ImGui::BeginDragDropTarget())
+			{
+				if (const ImGuiPayload* payload =
+					ImGui::AcceptDragDropPayload(
+						"DX3D_TEXTURE_PATH"
+					))
+				{
+					const char* payloadText =
+						static_cast<const char*>(
+							payload->Data
+						);
+
+					if (payloadText &&
+						payload->DataSize > 0)
+					{
+						pushUndoSnapshot(
+							frameStartSnapshot
+						);
+
+						assignTextureToObject(
+							m_selectedObject,
+							std::string(payloadText)
+						);
+
+						material =
+							m_selectedObject->
+							getComponent<
+							MaterialComponent>();
+					}
+				}
+
+				ImGui::EndDragDropTarget();
+			}
+
+			if (!texturePath &&
+				material &&
+				material->hasTexture())
+			{
+				texturePath =
+					&material->getTexturePath();
+			}
+
+			const bool hasAssignedTexture =
+				texturePath != nullptr;
+
+			ImGui::BeginDisabled(
+				!hasAssignedTexture
+			);
+
+			if (ImGui::Button(
+				"Clear Texture"
+			))
+			{
+				pushUndoSnapshot(
+					frameStartSnapshot
+				);
+
+				if (material)
+				{
+					material->clearTexture();
+				}
+
+				if (modelComponent)
+				{
+					modelComponent->clearTexture();
+				}
+			}
+
+			ImGui::EndDisabled();
+
+			if (material ||
+				hasAssignedTexture)
+			{
+				Vec2 uvTiling =
+					material
+					? material->getUvTiling()
+					: Vec2{ 1.0f, 1.0f };
+
+				Vec2 uvOffset =
+					material
+					? material->getUvOffset()
+					: Vec2{};
+
+				float uvTilingValues[2]
+				{
+					uvTiling.x,
+					uvTiling.y
+				};
+
+				float uvOffsetValues[2]
+				{
+					uvOffset.x,
+					uvOffset.y
+				};
+
+				if (ImGui::DragFloat2(
+					"UV Tiling",
+					uvTilingValues,
+					0.02f,
+					0.01f,
+					100.0f
+				))
+				{
+					material =
+						m_selectedObject->
+						createOrGetComponent<
+						MaterialComponent>();
+
+					material->setUvTiling(
+						{
+							uvTilingValues[0],
+							uvTilingValues[1]
+						}
+					);
+				}
+
+				if (ImGui::DragFloat2(
+					"UV Offset",
+					uvOffsetValues,
+					0.02f,
+					-100.0f,
+					100.0f
+				))
+				{
+					material =
+						m_selectedObject->
+						createOrGetComponent<
+						MaterialComponent>();
+
+					material->setUvOffset(
+						{
+							uvOffsetValues[0],
+							uvOffsetValues[1]
+						}
+					);
+				}
+			}
+		}
+
 		auto* rigidBody =
 			m_selectedObject->getComponent<
 			RigidBodyComponent
@@ -3907,6 +5589,12 @@ void dx3d::Game::onInternalUpdate()
 		const bool canAddRigidBody =
 			m_selectedObject->getComponent<
 			CubeComponent
+			>() != nullptr ||
+			m_selectedObject->getComponent<
+			SphereComponent
+			>() != nullptr ||
+			m_selectedObject->getComponent<
+			CapsuleComponent
 			>() != nullptr;
 
 		if (rigidBody || canAddRigidBody)
