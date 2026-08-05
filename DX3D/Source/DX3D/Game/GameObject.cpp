@@ -8,8 +8,6 @@ dx3d::GameObject::GameObject(const GameObjectDesc& desc)
 	m_world(desc.world),
 	m_gameContext(desc.gameContext)
 {
-	m_transform =
-		createOrGetComponent<TransformComponent>();
 }
 
 void dx3d::GameObject::setName(
@@ -47,41 +45,6 @@ dx3d::InputSystem&
 dx3d::GameObject::getInputSystem() noexcept
 {
 	return m_gameContext.input;
-}
-
-dx3d::Component*
-dx3d::GameObject::createComponentInternal(
-	UniquePtr<Component>& component
-)
-{
-	if (!component)
-		return {};
-
-	auto typeId = component->getTypeId();
-	auto ptr = component.get();
-
-	if (m_components.find(typeId) != m_components.end())
-		return {};
-
-	m_components.emplace(
-		typeId,
-		std::move(component)
-	);
-
-	m_world.addComponentInternal(*ptr);
-
-	return ptr;
-}
-
-dx3d::Component*
-dx3d::GameObject::getComponentInternal(size_t id)
-{
-	auto it = m_components.find(id);
-
-	if (it == m_components.end())
-		return {};
-
-	return it->second.get();
 }
 
 dx3d::ui64 dx3d::GameObject::getEntityId() const noexcept

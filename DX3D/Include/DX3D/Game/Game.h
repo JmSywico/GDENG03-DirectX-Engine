@@ -7,6 +7,7 @@
 #include <DX3D/Editor/TransformGizmo.h>
 #include <DX3D/Component/MaterialComponent.h>
 #include <DX3D/Component/RigidBodyComponent.h>
+#include <DX3D/Component/ColliderComponent.h>
 
 #include <string>
 #include <chrono>
@@ -82,13 +83,17 @@ namespace dx3d
 			Vec3 materialEmissive{};
 			f32 materialEmissionStrength{};
 			bool hasRigidBody{};
-			RigidBodyType rigidBodyType{ RigidBodyType::Dynamic };
+			RigidBodyType rigidBodyType{ RigidBodyType::Static };
+			f32 rigidBodyFriction{ 0.5f };
+			f32 rigidBodyRestitution{};
+			f32 rigidBodyLinearDamping{ 0.05f };
+			f32 rigidBodyAngularDamping{ 0.05f };
+			f32 rigidBodyGravityFactor{ 1.0f };
+			bool rigidBodyEnabled{ true };
+			bool hasCollider{};
 			ColliderShape colliderShape{ ColliderShape::Box };
 			Vec3 colliderHalfExtents{ 0.5f, 0.5f, 0.5f };
 			f32 colliderRadius{ 0.5f };
-			f32 rigidBodyMass{ 1.0f };
-			f32 rigidBodyRestitution{ 0.1f };
-			bool gravityEnabled{ true };
 
 			ui32 pasteCount{};
 		};

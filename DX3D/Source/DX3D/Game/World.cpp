@@ -2,7 +2,11 @@
 #include <DX3D/Game/GameObject.h>
 #include <DX3D/Game/Component.h>
 #include <DX3D/Component/TransformComponent.h>
+#include <DX3D/Component/RotatorComponent.h>
+#include <DX3D/Component/FlyControllerComponent.h>
+#include <DX3D/Input/InputSystem.h>
 #include <algorithm>
+#include <cmath>
 
 dx3d::World::World(const WorldDesc& desc) : Base(desc.base), m_gameContext(desc.gameContext)
 {
@@ -53,6 +57,52 @@ void dx3d::World::update(f32 deltaTime)
 	m_dirtyTransforms.clear();
 }
 
+void dx3d::World::fixedUpdate(f32 fixedDeltaTime)
+{
+	auto rotators = m_registry.view<RotatorComponent>();
+	for (auto entity : rotators)
+	{
+		auto& rotator = rotators.get<RotatorComponent>(entity);
+		if (!rotator.isEnabled()) continue;
+		auto& transform = rotator.getGameObject().getTransform();
+		transform.setRotation(
+			transform.getRotation() + rotator.getAngularVelocity() * fixedDeltaTime);
+	}
+
+	auto controllers = m_registry.view<FlyControllerComponent>();
+	for (auto entity : controllers)
+	{
+		auto& controller = controllers.get<FlyControllerComponent>(entity);
+		if (!controller.isEnabled()) continue;
+		auto& transform = controller.getGameObject().getTransform();
+		auto rotation = transform.getRotation();
+		if (m_gameContext.input.isKeyDown(KeyCode::MouseRight))
+		{
+			const auto mouse = m_gameContext.input.getMouseDelta();
+			rotation.x += mouse.y * controller.getLookSensitivity();
+			rotation.y += mouse.x * controller.getLookSensitivity();
+			const f32 limit = controller.getPitchLimitDegrees() * 0.01745329252f;
+			rotation.x = std::clamp(rotation.x, -limit, limit);
+			transform.setRotation(rotation);
+		}
+		Vec3 direction{};
+		if (m_gameContext.input.isKeyDown(KeyCode::W)) direction = direction + transform.forward();
+		if (m_gameContext.input.isKeyDown(KeyCode::S)) direction = direction + transform.forward() * -1.0f;
+		if (m_gameContext.input.isKeyDown(KeyCode::D)) direction = direction + transform.right();
+		if (m_gameContext.input.isKeyDown(KeyCode::A)) direction = direction + transform.right() * -1.0f;
+		if (m_gameContext.input.isKeyDown(KeyCode::E)) direction = direction + transform.up();
+		if (m_gameContext.input.isKeyDown(KeyCode::Q)) direction = direction + transform.up() * -1.0f;
+		const f32 lengthSquared = direction.x * direction.x + direction.y * direction.y + direction.z * direction.z;
+		if (lengthSquared > 0.000001f)
+		{
+			const f32 boost = m_gameContext.input.isKeyDown(KeyCode::Shift)
+				? controller.getBoostMultiplier() : 1.0f;
+			transform.setPosition(transform.getPosition()
+				+ Vec3::normalize(direction) * controller.getMoveSpeed() * boost * fixedDeltaTime);
+		}
+	}
+}
+
 dx3d::GameObject* dx3d::World::createGameObjectInternal(
 	UniquePtr<GameObject>& object,
 	ui64 requestedId
@@ -75,7 +125,11 @@ dx3d::GameObject* dx3d::World::createGameObjectInternal(
 	}
 
 	ptr->m_entityId = entityId;
+	ptr->m_registryEntity = m_registry.create();
 	m_entityIndex[entityId] = ptr;
+	ptr->m_transform = ptr->createOrGetComponent<TransformComponent>();
+	if (ptr->m_transform)
+		ptr->m_transform->markAsDirty();
 
 	auto index = m_pendingObjects.size();
 	m_pendingObjects.push_back(std::move(object));
@@ -209,32 +263,6 @@ void dx3d::World::destroyGameObjectInternal(GameObject* object)
 	object->m_children.clear();
 	m_entityIndex.erase(object->m_entityId);
 
-	// Remove every component belonging to this object
-	// from the World's component lists.
-	for (auto& [componentTypeId, component] : object->m_components)
-	{
-		auto componentListIt = m_components.find(componentTypeId);
-
-		if (componentListIt == m_components.end())
-			continue;
-
-		auto& componentList = componentListIt->second;
-
-		componentList.erase(
-			std::remove(
-				componentList.begin(),
-				componentList.end(),
-				component.get()
-			),
-			componentList.end()
-		);
-
-		if (componentList.empty())
-		{
-			m_components.erase(componentListIt);
-		}
-	}
-
 	m_dirtyTransforms.erase(
 		std::remove(
 			m_dirtyTransforms.begin(),
@@ -243,6 +271,11 @@ void dx3d::World::destroyGameObjectInternal(GameObject* object)
 		),
 		m_dirtyTransforms.end()
 	);
+
+	if (m_registry.valid(object->m_registryEntity))
+		m_registry.destroy(object->m_registryEntity);
+	object->m_registryEntity = entt::null;
+	object->m_transform = nullptr;
 
 	auto objectListIt = m_objects.find(object->getTypeId());
 
@@ -267,12 +300,6 @@ void dx3d::World::destroyGameObjectInternal(GameObject* object)
 	{
 		m_objects.erase(objectListIt);
 	}
-}
-
-void dx3d::World::addComponentInternal(Component& component)
-{
-	auto typeId = component.getTypeId();
-	m_components[typeId].push_back(&component);
 }
 
 void dx3d::World::addDirtyTransformInternal(TransformComponent& component)
@@ -301,15 +328,3 @@ void dx3d::World::addDirtyTransformInternal(TransformComponent& component)
 	markSubtree(markSubtree, component.getGameObject());
 }
 
-dx3d::Component* const* dx3d::World::getComponentsInternal(size_t typeId, ui32* numComponents) const noexcept
-{
-	auto it = m_components.find(typeId);
-	if (it != m_components.end())
-	{
-		*numComponents = static_cast<ui32>(it->second.size());
-		return it->second.data();
-	}
-
-	*numComponents = 0u;
-	return {};
-}

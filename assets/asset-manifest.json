@@ -1,0 +1,50 @@
+{
+  "assets": [
+    {
+      "handle": 15143732807546462377,
+      "path": "assets/Cube_2.eprefab",
+      "type": 5
+    },
+    {
+      "handle": 8896847790275728298,
+      "path": "assets/bunny.obj",
+      "type": 1
+    },
+    {
+      "handle": 13072108576431802855,
+      "path": "assets/IronMan.obj",
+      "type": 1
+    },
+    {
+      "handle": 12835847150117944795,
+      "path": "assets/armadillo.obj",
+      "type": 1
+    },
+    {
+      "handle": 8171571224768544609,
+      "path": "assets/textures/mixed_brick_wall_1k.blend/mixed_brick_wall.ematerial",
+      "type": 3
+    },
+    {
+      "handle": 5960975615781676734,
+      "path": "assets/statue.obj",
+      "type": 1
+    },
+    {
+      "handle": 7512089390442831248,
+      "path": "assets/textures/mixed_brick_wall_1k.blend/textures/mixed_brick_wall_diff_1k.jpg",
+      "type": 2
+    },
+    {
+      "handle": 5945316769753901419,
+      "path": "assets/teapot.obj",
+      "type": 1
+    },
+    {
+      "handle": 4963034899821459152,
+      "path": "assets/textures/mixed_brick_wall_1k.blend/textures/mixed_brick_wall_disp_1k.png",
+      "type": 2
+    }
+  ],
+  "version": 2
+}

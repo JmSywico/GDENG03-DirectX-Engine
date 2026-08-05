@@ -90,7 +90,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir)DX3D\External\ImGui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)DX3D\External\ImGui;$(ProjectDir)out\build\x64-debug\_deps\entt-src\src;$(ProjectDir)out\build\x64-debug\_deps\joltphysics-src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -118,18 +118,23 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;NOMINMAX;JPH_FLOATING_POINT_EXCEPTIONS_ENABLED;JPH_OBJECT_STREAM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>/Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(ProjectDir)DX3D\External\ImGui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)DX3D\External\ImGui;$(ProjectDir)out\build\x64-debug\_deps\entt-src\src;$(ProjectDir)out\build\x64-debug\_deps\joltphysics-src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Joltd.lib;d3d11.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)out\build\x64-debug\_deps\joltphysics-build;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <PreBuildEvent>
+      <Command>cmake --preset x64-debug
+cmake --build --preset x64-debug --target Jolt --parallel</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -137,20 +142,25 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;NOMINMAX;JPH_FLOATING_POINT_EXCEPTIONS_ENABLED;JPH_OBJECT_STREAM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>/Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(ProjectDir)DX3D\External\ImGui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)DX3D\External\ImGui;$(ProjectDir)out\build\x64-release\_deps\entt-src\src;$(ProjectDir)out\build\x64-release\_deps\joltphysics-src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Jolt.lib;d3d11.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)out\build\x64-release\_deps\joltphysics-build;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <PreBuildEvent>
+      <Command>cmake --preset x64-release
+cmake --build --preset x64-release --target Jolt --parallel</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="DX3D\External\ImGui\imgui.cpp">
@@ -191,9 +201,13 @@
     </ClCompile>
     <ClCompile Include="DX3D\Include\DX3D\Game\SceneSerializer.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\CameraComponent.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Component\ColliderComponent.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Component\FlyControllerComponent.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Component\RotatorComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\CircleComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\CombinedMeshComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\CubeComponent.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Component\SphereComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\DirectionalLightComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\MaterialComponent.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Component\RigidBodyComponent.cpp" />
@@ -231,7 +245,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DX3D\Include\DX3D\Component\CameraComponent.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Component\ColliderComponent.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Component\ComponentCatalog.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Component\FlyControllerComponent.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Component\RotatorComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\CubeComponent.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Component\SphereComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\CircleComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\DirectionalLightComponent.h" />
     <ClInclude Include="DX3D\Include\DX3D\Component\MaterialComponent.h" />

@@ -15,6 +15,7 @@
 #include <DX3D/Editor/ViewportPicker.h>
 
 #include <DX3D/Component/CubeComponent.h>
+#include <DX3D/Component/SphereComponent.h>
 #include <DX3D/Component/PlaneComponent.h>
 #include <DX3D/Component/TransformComponent.h>
 #include <DX3D/Component/CameraComponent.h>
@@ -22,6 +23,10 @@
 #include <DX3D/Component/DirectionalLightComponent.h>
 #include <DX3D/Component/MaterialComponent.h>
 #include <DX3D/Component/RigidBodyComponent.h>
+#include <DX3D/Component/ColliderComponent.h>
+#include <DX3D/Component/ComponentCatalog.h>
+#include <DX3D/Component/RotatorComponent.h>
+#include <DX3D/Component/FlyControllerComponent.h>
 #include <DX3D/Physics/PhysicsWorld.h>
 
 #include <string>
@@ -353,6 +358,11 @@ dx3d::Game::getObjectMeshData(
 		return &getCubeMeshData();
 	}
 
+	if (object->getComponent<SphereComponent>())
+	{
+		return &getSphereMeshData();
+	}
+
 	if (object->getComponent<PlaneComponent>())
 	{
 		return &getPlaneMeshData();
@@ -574,12 +584,19 @@ void dx3d::Game::copySelectedObject()
 	{
 		copiedData.hasRigidBody = true;
 		copiedData.rigidBodyType = rigidBody->getBodyType();
-		copiedData.colliderShape = rigidBody->getColliderShape();
-		copiedData.colliderHalfExtents = rigidBody->getHalfExtents();
-		copiedData.colliderRadius = rigidBody->getRadius();
-		copiedData.rigidBodyMass = rigidBody->getMass();
+		copiedData.rigidBodyFriction = rigidBody->getFriction();
 		copiedData.rigidBodyRestitution = rigidBody->getRestitution();
-		copiedData.gravityEnabled = rigidBody->isGravityEnabled();
+		copiedData.rigidBodyLinearDamping = rigidBody->getLinearDamping();
+		copiedData.rigidBodyAngularDamping = rigidBody->getAngularDamping();
+		copiedData.rigidBodyGravityFactor = rigidBody->getGravityFactor();
+		copiedData.rigidBodyEnabled = rigidBody->isEnabled();
+	}
+	if (auto* collider = m_selectedObject->getComponent<ColliderComponent>())
+	{
+		copiedData.hasCollider = true;
+		copiedData.colliderShape = collider->getShape();
+		copiedData.colliderHalfExtents = collider->getHalfExtents();
+		copiedData.colliderRadius = collider->getRadius();
 	}
 
 	if (auto* combinedComponent =
@@ -716,12 +733,19 @@ void dx3d::Game::pasteCopiedObject()
 	{
 		auto* rigidBody = pastedObject->createOrGetComponent<RigidBodyComponent>();
 		rigidBody->setBodyType(m_objectClipboard.rigidBodyType);
-		rigidBody->setColliderShape(m_objectClipboard.colliderShape);
-		rigidBody->setHalfExtents(m_objectClipboard.colliderHalfExtents);
-		rigidBody->setRadius(m_objectClipboard.colliderRadius);
-		rigidBody->setMass(m_objectClipboard.rigidBodyMass);
+		rigidBody->setFriction(m_objectClipboard.rigidBodyFriction);
 		rigidBody->setRestitution(m_objectClipboard.rigidBodyRestitution);
-		rigidBody->setGravityEnabled(m_objectClipboard.gravityEnabled);
+		rigidBody->setLinearDamping(m_objectClipboard.rigidBodyLinearDamping);
+		rigidBody->setAngularDamping(m_objectClipboard.rigidBodyAngularDamping);
+		rigidBody->setGravityFactor(m_objectClipboard.rigidBodyGravityFactor);
+		rigidBody->setEnabled(m_objectClipboard.rigidBodyEnabled);
+	}
+	if (m_objectClipboard.hasCollider)
+	{
+		auto* collider = pastedObject->createOrGetComponent<ColliderComponent>();
+		collider->setShape(m_objectClipboard.colliderShape);
+		collider->setHalfExtents(m_objectClipboard.colliderHalfExtents);
+		collider->setRadius(m_objectClipboard.colliderRadius);
 	}
 
 	selectOnly(
@@ -1366,6 +1390,7 @@ void dx3d::Game::onInternalUpdate()
 		while (m_fixedStepAccumulator >= fixedTimeStep && steps < 8)
 		{
 			m_world->update(fixedTimeStep);
+			m_world->fixedUpdate(fixedTimeStep);
 			m_physicsWorld->step(*m_world, fixedTimeStep);
 			m_fixedStepAccumulator -= fixedTimeStep;
 			++steps;
@@ -1374,6 +1399,7 @@ void dx3d::Game::onInternalUpdate()
 	else if (m_singleStepRequested)
 	{
 		m_world->update(fixedTimeStep);
+		m_world->fixedUpdate(fixedTimeStep);
 		m_physicsWorld->step(*m_world, fixedTimeStep);
 		m_singleStepRequested = false;
 	}
@@ -1382,7 +1408,8 @@ void dx3d::Game::onInternalUpdate()
 	m_worldRenderer->render(
 		*m_world,
 		m_display->getSwapChain(),
-		deltaTime
+		deltaTime,
+		m_editorMode != EditorMode::Editing
 	);
 
 // --------------------
@@ -1757,6 +1784,7 @@ void dx3d::Game::onInternalUpdate()
 		ImGuiWindowFlags_NoMove |
 		ImGuiWindowFlags_NoBringToFrontOnFocus |
 		ImGuiWindowFlags_NoNavFocus |
+		ImGuiWindowFlags_NoBackground |
 		ImGuiWindowFlags_NoSavedSettings
 	);
 	ImGui::PopStyleVar(3);
@@ -2071,12 +2099,14 @@ void dx3d::Game::onInternalUpdate()
 			ImGui::TableNextColumn();
 			std::string composition = "Transform";
 			if (object->getComponent<CameraComponent>()) composition += " + Camera";
+			if (object->getComponent<SphereComponent>()) composition += " + Sphere";
 			if (object->getComponent<CubeComponent>()) composition += " + Cube";
 			if (object->getComponent<PlaneComponent>()) composition += " + Plane";
 			if (object->getComponent<CombinedMeshComponent>()) composition += " + Mesh";
 			if (object->getComponent<DirectionalLightComponent>()) composition += " + Light";
 			if (object->getComponent<MaterialComponent>()) composition += " + Material";
-			if (object->getComponent<RigidBodyComponent>()) composition += " + Physics";
+			if (object->getComponent<RigidBodyComponent>()) composition += " + RigidBody";
+			if (object->getComponent<ColliderComponent>()) composition += " + Collider";
 			ImGui::TextDisabled("%s", composition.c_str());
 
 			if (hasVisibleChildren && open)
@@ -2310,6 +2340,9 @@ void dx3d::Game::onInternalUpdate()
 			float fieldOfView = camera->getFieldOfView();
 			float nearPlane = camera->getNearPlane();
 			float farPlane = camera->getFarPlane();
+			bool primary = camera->isPrimary();
+			if (m_selectedObject->getName() != "Editor Camera" && ImGui::Checkbox("Primary", &primary))
+				camera->setPrimary(primary);
 			if (ImGui::DragFloat("Field of View", &fieldOfView, 0.01f, 0.1f, 3.0f))
 				camera->setFieldOfView(fieldOfView);
 			if (ImGui::DragFloat("Near Plane", &nearPlane, 0.01f, 0.001f, farPlane - 0.01f))
@@ -2376,16 +2409,32 @@ void dx3d::Game::onInternalUpdate()
 			}
 
 			ImGui::Spacing();
-			ImGui::SeparatorText("PHYSICS BODY / COLLIDER");
-			auto* rigidBody = m_selectedObject->getComponent<RigidBodyComponent>();
-			if (!rigidBody && ImGui::Button("ADD RIGID BODY", { -1.0f, 0.0f }))
+			ImGui::SeparatorText("COMPONENT CATALOG / PHYSICS");
+			for (const auto& descriptor : ComponentCatalog::descriptors())
 			{
-				pushUndoSnapshot(inspectorSnapshot);
-				rigidBody = m_selectedObject->createOrGetComponent<RigidBodyComponent>();
-				if (m_selectedObject->getComponent<PlaneComponent>())
-					rigidBody->setBodyType(RigidBodyType::Static);
+				if (ComponentCatalog::has(*m_selectedObject, descriptor.kind)) continue;
+				ImGui::PushID(static_cast<int>(descriptor.kind));
+				const std::string addLabel = std::string("+ ") + descriptor.name;
+				if (ImGui::Button(addLabel.c_str(), { -1.0f, 0.0f }))
+				{
+					pushUndoSnapshot(inspectorSnapshot);
+					ComponentCatalog::addDefault(*m_selectedObject, descriptor.kind);
+				}
+				ImGui::PopID();
 			}
+			auto* rigidBody = m_selectedObject->getComponent<RigidBodyComponent>();
+			auto* collider = m_selectedObject->getComponent<ColliderComponent>();
 
+			if (rigidBody)
+			{
+				ImGui::SeparatorText("RIGID BODY");
+				if (ImGui::SmallButton("REMOVE##RigidBody"))
+				{
+					pushUndoSnapshot(inspectorSnapshot);
+					ComponentCatalog::remove(*m_selectedObject, ComponentKind::RigidBody);
+					rigidBody = nullptr;
+				}
+			}
 			if (rigidBody)
 			{
 				const char* bodyNames[]{ "Static", "Dynamic", "Kinematic" };
@@ -2394,40 +2443,108 @@ void dx3d::Game::onInternalUpdate()
 				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
 				if (bodyChanged) rigidBody->setBodyType(static_cast<RigidBodyType>(bodyType));
 
-				const char* shapeNames[]{ "Box", "Sphere" };
-				int shape = static_cast<int>(rigidBody->getColliderShape());
-				const bool shapeChanged = ImGui::Combo("Collider", &shape, shapeNames, IM_ARRAYSIZE(shapeNames));
+				float friction = rigidBody->getFriction();
+				const bool frictionChanged = ImGui::DragFloat("Friction", &friction, 0.01f, 0.0f, 10.0f);
 				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
-				if (shapeChanged) rigidBody->setColliderShape(static_cast<ColliderShape>(shape));
-
-				if (rigidBody->getColliderShape() == ColliderShape::Box)
-				{
-					Vec3 extent = rigidBody->getHalfExtents();
-					float values[3]{ extent.x, extent.y, extent.z };
-					const bool changed = ImGui::DragFloat3("Half Extents", values, 0.02f, 0.001f, 1000.0f);
-					if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
-					if (changed) rigidBody->setHalfExtents({ values[0], values[1], values[2] });
-				}
-				else
-				{
-					float radius = rigidBody->getRadius();
-					const bool changed = ImGui::DragFloat("Radius", &radius, 0.02f, 0.001f, 1000.0f);
-					if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
-					if (changed) rigidBody->setRadius(radius);
-				}
-
-				float mass = rigidBody->getMass();
-				const bool massChanged = ImGui::DragFloat("Mass", &mass, 0.05f, 0.001f, 10000.0f);
-				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
-				if (massChanged) rigidBody->setMass(mass);
+				if (frictionChanged) rigidBody->setFriction(friction);
 				float restitution = rigidBody->getRestitution();
 				const bool restitutionChanged = ImGui::SliderFloat("Restitution", &restitution, 0.0f, 1.0f);
 				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
 				if (restitutionChanged) rigidBody->setRestitution(restitution);
-				bool gravity = rigidBody->isGravityEnabled();
-				const bool gravityChanged = ImGui::Checkbox("Gravity", &gravity);
+				float linearDamping = rigidBody->getLinearDamping();
+				if (ImGui::DragFloat("Linear Damping", &linearDamping, 0.01f, 0.0f, 10.0f))
+					rigidBody->setLinearDamping(linearDamping);
+				float angularDamping = rigidBody->getAngularDamping();
+				if (ImGui::DragFloat("Angular Damping", &angularDamping, 0.01f, 0.0f, 10.0f))
+					rigidBody->setAngularDamping(angularDamping);
+				float gravityFactor = rigidBody->getGravityFactor();
+				const bool gravityChanged = ImGui::DragFloat("Gravity Factor", &gravityFactor, 0.01f, -10.0f, 10.0f);
 				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
-				if (gravityChanged) rigidBody->setGravityEnabled(gravity);
+				if (gravityChanged) rigidBody->setGravityFactor(gravityFactor);
+				bool enabled = rigidBody->isEnabled();
+				if (ImGui::Checkbox("Enabled", &enabled)) rigidBody->setEnabled(enabled);
+			}
+
+			if (collider)
+			{
+				ImGui::SeparatorText("COLLIDER");
+				if (ImGui::SmallButton("REMOVE##Collider"))
+				{
+					pushUndoSnapshot(inspectorSnapshot);
+					ComponentCatalog::remove(*m_selectedObject, ComponentKind::Collider);
+					collider = nullptr;
+				}
+			}
+			if (collider)
+			{
+				const char* shapeNames[]{ "Box", "Sphere" };
+				int shape = static_cast<int>(collider->getShape());
+				if (ImGui::Combo("Shape", &shape, shapeNames, IM_ARRAYSIZE(shapeNames)))
+					collider->setShape(static_cast<ColliderShape>(shape));
+				if (collider->getShape() == ColliderShape::Box)
+				{
+					Vec3 extent = collider->getHalfExtents();
+					float values[3]{ extent.x, extent.y, extent.z };
+					if (ImGui::DragFloat3("Half Extents", values, 0.02f, 0.001f, 1000.0f))
+						collider->setHalfExtents({ values[0], values[1], values[2] });
+				}
+				else
+				{
+					float radius = collider->getRadius();
+					if (ImGui::DragFloat("Radius", &radius, 0.02f, 0.001f, 1000.0f))
+						collider->setRadius(radius);
+				}
+			}
+
+			auto* rotator = m_selectedObject->getComponent<RotatorComponent>();
+			if (rotator)
+			{
+				ImGui::SeparatorText("ROTATOR");
+				if (ImGui::SmallButton("REMOVE##Rotator"))
+				{
+					pushUndoSnapshot(inspectorSnapshot);
+					ComponentCatalog::remove(*m_selectedObject, ComponentKind::Rotator);
+					rotator = nullptr;
+				}
+			}
+			if (rotator)
+			{
+				Vec3 velocity = rotator->getAngularVelocity();
+				float values[3]{ velocity.x, velocity.y, velocity.z };
+				const bool changed = ImGui::DragFloat3("Angular Velocity", values, 0.01f);
+				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+				if (changed) rotator->setAngularVelocity({ values[0], values[1], values[2] });
+				bool enabled = rotator->isEnabled();
+				if (ImGui::Checkbox("Enabled##Rotator", &enabled))
+				{
+					pushUndoSnapshot(inspectorSnapshot);
+					rotator->setEnabled(enabled);
+				}
+			}
+
+			auto* fly = m_selectedObject->getComponent<FlyControllerComponent>();
+			if (fly)
+			{
+				ImGui::SeparatorText("FLY CONTROLLER");
+				if (ImGui::SmallButton("REMOVE##FlyController"))
+				{
+					pushUndoSnapshot(inspectorSnapshot);
+					ComponentCatalog::remove(*m_selectedObject, ComponentKind::FlyController);
+					fly = nullptr;
+				}
+			}
+			if (fly)
+			{
+				float moveSpeed = fly->getMoveSpeed();
+				if (ImGui::DragFloat("Move Speed", &moveSpeed, 0.1f, 0.0f, 1000.0f)) fly->setMoveSpeed(moveSpeed);
+				float sensitivity = fly->getLookSensitivity();
+				if (ImGui::DragFloat("Look Sensitivity", &sensitivity, 0.0001f, 0.0f, 1.0f, "%.4f")) fly->setLookSensitivity(sensitivity);
+				float boost = fly->getBoostMultiplier();
+				if (ImGui::DragFloat("Boost Multiplier", &boost, 0.1f, 1.0f, 100.0f)) fly->setBoostMultiplier(boost);
+				float pitchLimit = fly->getPitchLimitDegrees();
+				if (ImGui::SliderFloat("Pitch Limit", &pitchLimit, 1.0f, 90.0f, "%.1f deg")) fly->setPitchLimitDegrees(pitchLimit);
+				bool enabled = fly->isEnabled();
+				if (ImGui::Checkbox("Enabled##FlyController", &enabled)) fly->setEnabled(enabled);
 			}
 		}
 

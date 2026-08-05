@@ -26,6 +26,10 @@ namespace dx3d
 
 		void setViewportSize(const Rect& size) noexcept;
 		Rect getViewportSize() const noexcept;
+		void setPrimary(bool value) noexcept { m_primary = value; }
+		bool isPrimary() const noexcept { return m_primary; }
+		void setAspectRatio(f32 value) noexcept;
+		f32 getAspectRatio() const noexcept { return m_aspectRatio; }
 
 	private:
 		void computeProjectionMatrix() noexcept;
@@ -37,6 +41,8 @@ namespace dx3d
 		f32 m_farPlane = 100.0f;
 		f32 m_fieldOfView = 1.3f;
 		Rect m_viewportSize { 1,1 };
+		f32 m_aspectRatio{ 16.0f / 9.0f };
+		bool m_primary{};
 
 		bool m_dirty{ true };
 	};

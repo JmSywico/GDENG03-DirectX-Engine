@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "actions": {
+    "MoveForward": [
+      { "type": 0, "code": 87, "scale": 1.0, "gamepad": 0 },
+      { "type": 0, "code": 83, "scale": -1.0, "gamepad": 0 },
+      { "type": 3, "code": 1, "scale": 1.0, "gamepad": 0 }
+    ],
+    "MoveRight": [
+      { "type": 0, "code": 68, "scale": 1.0, "gamepad": 0 },
+      { "type": 0, "code": 65, "scale": -1.0, "gamepad": 0 },
+      { "type": 3, "code": 0, "scale": 1.0, "gamepad": 0 }
+    ],
+    "MoveUp": [
+      { "type": 0, "code": 69, "scale": 1.0, "gamepad": 0 },
+      { "type": 0, "code": 81, "scale": -1.0, "gamepad": 0 }
+    ],
+    "Boost": [
+      { "type": 0, "code": 16, "scale": 1.0, "gamepad": 0 }
+    ],
+    "Jump": [
+      { "type": 0, "code": 32, "scale": 1.0, "gamepad": 0 },
+      { "type": 2, "code": 4096, "scale": 1.0, "gamepad": 0 }
+    ],
+    "Primary": [
+      { "type": 1, "code": 1, "scale": 1.0, "gamepad": 0 },
+      { "type": 2, "code": 512, "scale": 1.0, "gamepad": 0 }
+    ]
+  }
+}

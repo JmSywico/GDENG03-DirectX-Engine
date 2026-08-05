@@ -4,9 +4,9 @@
 #include <DX3D/Core/Identifiable.h>
 #include <DX3D/Game/Component.h>
 
-#include <unordered_map>
 #include <string>
 #include <vector>
+#include <entt/entt.hpp>
 
 namespace dx3d
 {
@@ -19,36 +19,15 @@ namespace dx3d
 
 		template <typename T>
 		T* createOrGetComponent()
-			requires IsRegistered<Component, T>
-		{
-			auto c = getComponent<T>();
-
-			if (c)
-				return c;
-
-			UniquePtr<Component> cp =
-				std::make_unique<T>(
-					ComponentDesc
-					{
-						{ m_logger },
-						*this,
-						m_world
-					}
-				);
-
-			return static_cast<T*>(
-				createComponentInternal(cp)
-				);
-		}
+			requires IsRegistered<Component, T>;
 
 		template <typename T>
 		T* getComponent()
-			requires IsRegistered<Component, T>
-		{
-			return static_cast<T*>(
-				getComponentInternal(T::GetTypeId())
-				);
-		}
+			requires IsRegistered<Component, T>;
+
+		template <typename T>
+		bool removeComponent()
+			requires IsRegistered<Component, T>;
 
 		void setName(const std::string& name);
 		const std::string& getName() const noexcept;
@@ -65,22 +44,11 @@ namespace dx3d
 		virtual void onUpdate(f32 deltaTime) {}
 
 	private:
-		Component* createComponentInternal(
-			UniquePtr<Component>& component
-		);
-
-		Component* getComponentInternal(size_t id);
-
-	private:
 		std::string m_name{ "GameObject" };
 		ui64 m_entityId{};
+		entt::entity m_registryEntity{ entt::null };
 		GameObject* m_parent{};
 		std::vector<GameObject*> m_children{};
-
-		std::unordered_map<
-			size_t,
-			UniquePtr<Component>
-		> m_components{};
 
 		TransformComponent* m_transform{};
 		GameContext m_gameContext;
@@ -88,4 +56,27 @@ namespace dx3d
 
 		friend class World;
 	};
+}
+
+#include <DX3D/Game/World.h>
+
+template <typename T>
+T* dx3d::GameObject::createOrGetComponent()
+	requires IsRegistered<Component, T>
+{
+	return m_world.createOrGetComponent<T>(m_registryEntity, *this);
+}
+
+template <typename T>
+T* dx3d::GameObject::getComponent()
+	requires IsRegistered<Component, T>
+{
+	return m_world.getComponent<T>(m_registryEntity);
+}
+
+template <typename T>
+bool dx3d::GameObject::removeComponent()
+	requires IsRegistered<Component, T>
+{
+	return m_world.removeComponent<T>(m_registryEntity);
 }

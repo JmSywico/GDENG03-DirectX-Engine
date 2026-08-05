@@ -1,0 +1,169 @@
+{
+  "entities": [
+    {
+      "components": {
+        "MeshRendererComponent": {
+          "albedo": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "castShadows": true,
+          "materialMode": 0,
+          "primitive": {
+            "assetHandle": 13861216675117351902,
+            "depth": 1.0,
+            "height": 1.0,
+            "radius": 0.5,
+            "size": 1.0,
+            "slices": 16,
+            "stacks": 16,
+            "type": "Cube",
+            "width": 1.0
+          },
+          "receiveShadows": true,
+          "visible": true
+        },
+        "TransformComponent": {
+          "position": [
+            1.5,
+            -1.100000023841858,
+            0.0
+          ],
+          "rotation": [
+            -0.0,
+            0.0,
+            -0.0
+          ],
+          "rotationQuaternion": [
+            -0.0,
+            0.0,
+            -0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      "id": 3,
+      "name": "Cube 1",
+      "parent": 4
+    },
+    {
+      "components": {
+        "MeshRendererComponent": {
+          "albedo": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "castShadows": true,
+          "materialMode": 0,
+          "primitive": {
+            "assetHandle": 13861216675117351902,
+            "depth": 1.0,
+            "height": 1.0,
+            "radius": 0.5,
+            "size": 1.0,
+            "slices": 16,
+            "stacks": 16,
+            "type": "Cube",
+            "width": 1.0
+          },
+          "receiveShadows": true,
+          "visible": true
+        },
+        "TransformComponent": {
+          "position": [
+            0.0,
+            1.0,
+            -2.0
+          ],
+          "rotation": [
+            -0.0,
+            0.0,
+            -0.0
+          ],
+          "rotationQuaternion": [
+            -0.0,
+            0.0,
+            -0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      "id": 5,
+      "name": "Cube 3",
+      "parent": 4
+    },
+    {
+      "components": {
+        "MeshRendererComponent": {
+          "albedo": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "castShadows": true,
+          "materialMode": 0,
+          "primitive": {
+            "assetHandle": 13861216675117351902,
+            "depth": 1.0,
+            "height": 1.0,
+            "radius": 0.5,
+            "size": 1.0,
+            "slices": 16,
+            "stacks": 16,
+            "type": "Cube",
+            "width": 1.0
+          },
+          "receiveShadows": true,
+          "visible": true
+        },
+        "TransformComponent": {
+          "position": [
+            -9.882814407348633,
+            2.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotationQuaternion": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      "id": 4,
+      "name": "Cube 2",
+      "parent": null
+    }
+  ],
+  "scene": {
+    "activeCamera": 0,
+    "activeLight": 0,
+    "name": "Prefab",
+    "version": 7
+  }
+}

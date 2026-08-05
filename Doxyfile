@@ -1,0 +1,164 @@
+# enignE API documentation
+#
+# Generate directly:
+#   doxygen Doxyfile
+#
+# Or after configuring CMake:
+#   cmake --build --preset x64-debug --target docs
+
+PROJECT_NAME           = "enignE"
+PROJECT_BRIEF          = "Windows C++20 engine prototype using bgfx, EnTT, ImGui, and chunk-based instancing"
+PROJECT_NUMBER         = "development"
+
+OUTPUT_DIRECTORY       = docs/doxygen
+CREATE_SUBDIRS         = NO
+ALLOW_UNICODE_NAMES    = YES
+OUTPUT_LANGUAGE        = English
+
+INPUT                  = README.md \
+                         docs/DOXYGEN.md \
+                         docs/DoxygenGroups.dox \
+                         docs/ENGINE_ARCHITECTURE.md \
+                         docs/DISCOVERED_SYSTEM_INVENTORY.md \
+                         enignE/Include/enignE \
+                         enignE/Source/enignE
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.hpp *.cpp *.inl *.md *.dox
+
+# Only engine-owned sources are inputs. Do not add external/ or build trees here.
+EXCLUDE                = enignE/Include/enignE/pch.h \
+                         enignE/Source/enignE/pch.cpp
+EXCLUDE_PATTERNS       = */docs/doxygen/* \
+                         */out/* \
+                         */.vs/* \
+                         */x64/* \
+                         */Debug/* \
+                         */Release/*
+
+FULL_PATH_NAMES        = YES
+STRIP_FROM_PATH        = .
+STRIP_FROM_INC_PATH    = enignE
+SHORT_NAMES            = NO
+
+MARKDOWN_SUPPORT       = YES
+AUTOLINK_SUPPORT       = YES
+USE_MDFILE_AS_MAINPAGE = README.md
+TOC_INCLUDE_HEADINGS   = 5
+
+JAVADOC_AUTOBRIEF      = YES
+JAVADOC_BANNER         = YES
+MULTILINE_CPP_IS_BRIEF = YES
+QT_AUTOBRIEF           = NO
+
+# The project is still documenting legacy surfaces. EXTRACT_ALL keeps every
+# engine-owned declaration discoverable while explicit comments are expanded.
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_PRIV_VIRTUAL   = NO
+EXTRACT_PACKAGE        = NO
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+EXTRACT_ANON_NSPACES   = NO
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_UNDOC_CLASSES     = NO
+HIDE_FRIEND_COMPOUNDS  = YES
+HIDE_IN_BODY_DOCS      = NO
+INTERNAL_DOCS          = NO
+
+BUILTIN_STL_SUPPORT    = YES
+CPP_CLI_SUPPORT        = NO
+SIP_SUPPORT            = NO
+IDL_PROPERTY_SUPPORT   = YES
+
+CASE_SENSE_NAMES       = YES
+HIDE_SCOPE_NAMES       = NO
+SHOW_INCLUDE_FILES     = YES
+SHOW_GROUPED_MEMB_INC  = YES
+FORCE_LOCAL_INCLUDES   = NO
+INLINE_INFO            = YES
+SORT_MEMBER_DOCS       = YES
+SORT_BRIEF_DOCS        = YES
+SORT_MEMBERS_CTORS_1ST = YES
+SORT_GROUP_NAMES       = YES
+
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+STRIP_CODE_COMMENTS    = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+REFERENCES_LINK_SOURCE = YES
+SOURCE_TOOLTIPS        = YES
+USE_HTAGS              = NO
+VERBATIM_HEADERS       = YES
+
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+HTML_FILE_EXTENSION    = .html
+HTML_EXTRA_STYLESHEET  = docs/doxygen-custom.css
+GENERATE_TREEVIEW      = YES
+FULL_SIDEBAR           = YES
+ENUM_VALUES_PER_LINE   = 4
+TREEVIEW_WIDTH         = 300
+EXT_LINKS_IN_WINDOW    = NO
+OBFUSCATE_EMAILS       = YES
+HTML_DYNAMIC_MENUS     = YES
+HTML_DYNAMIC_SECTIONS  = YES
+HTML_INDEX_NUM_ENTRIES = 100
+GENERATE_DOCSET        = NO
+GENERATE_HTMLHELP      = NO
+GENERATE_QHP           = NO
+GENERATE_ECLIPSEHELP   = NO
+DISABLE_INDEX          = NO
+SEARCHENGINE           = YES
+SERVER_BASED_SEARCH    = NO
+EXTERNAL_SEARCH        = NO
+
+GENERATE_LATEX         = NO
+GENERATE_RTF           = NO
+GENERATE_MAN           = NO
+GENERATE_XML           = NO
+GENERATE_DOCBOOK       = NO
+GENERATE_AUTOGEN_DEF   = NO
+GENERATE_PERLMOD       = NO
+
+# Graphviz is optional. The baseline configuration works without it. Set this
+# to YES locally after installing Graphviz to enable collaboration graphs.
+HAVE_DOT               = NO
+CLASS_GRAPH            = YES
+COLLABORATION_GRAPH    = YES
+GROUP_GRAPHS           = YES
+UML_LOOK               = YES
+UML_LIMIT_NUM_FIELDS   = 20
+TEMPLATE_RELATIONS     = YES
+INCLUDE_GRAPH          = YES
+INCLUDED_BY_GRAPH      = YES
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+GRAPHICAL_HIERARCHY    = YES
+DIRECTORY_GRAPH        = YES
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+SEARCH_INCLUDES        = YES
+INCLUDE_PATH           = enignE
+PREDEFINED             = WIN32 \
+                         _WIN32 \
+                         UNICODE \
+                         _UNICODE \
+                         WIN32_LEAN_AND_MEAN \
+                         NOMINMAX \
+                         "UNREFERENCED_PARAMETER(x)="
+SKIP_FUNCTION_MACROS   = YES
+
+QUIET                  = NO
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_IF_INCOMPLETE_DOC = YES
+WARN_NO_PARAMDOC       = NO
+WARN_IF_UNDOC_ENUM_VAL = NO
+WARN_AS_ERROR          = NO
+WARN_FORMAT            = "$file:$line: $text"
+WARN_LOGFILE           = docs/doxygen/warnings.log

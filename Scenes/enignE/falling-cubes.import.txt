@@ -1,6 +1,5 @@
 Source: D:\GitHub\source\repos\enignE\scenes\falling-cubes.escene
 Scene: Falling Cubes
 Source entities: 12
-Imported entities: 11
-Warnings: 1
-Skipped 'Physics Camera' (TransformComponent, CameraComponent, FlyControllerComponent)
+Imported entities: 12
+Warnings: 0

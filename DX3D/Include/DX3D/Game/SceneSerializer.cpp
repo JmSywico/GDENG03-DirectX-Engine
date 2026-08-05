@@ -5,11 +5,15 @@
 
 #include <DX3D/Component/CameraComponent.h>
 #include <DX3D/Component/CubeComponent.h>
+#include <DX3D/Component/SphereComponent.h>
 #include <DX3D/Component/PlaneComponent.h>
 #include <DX3D/Component/CombinedMeshComponent.h>
 #include <DX3D/Component/DirectionalLightComponent.h>
 #include <DX3D/Component/MaterialComponent.h>
 #include <DX3D/Component/RigidBodyComponent.h>
+#include <DX3D/Component/ColliderComponent.h>
+#include <DX3D/Component/RotatorComponent.h>
+#include <DX3D/Component/FlyControllerComponent.h>
 #include <DX3D/Component/TransformComponent.h>
 
 #include <DX3D/Graphics/MeshData.h>
@@ -41,7 +45,7 @@ namespace
 		'E'
 	};
 
-	constexpr dx3d::ui32 sceneVersion = 4;
+	constexpr dx3d::ui32 sceneVersion = 7;
 	constexpr dx3d::ui32 oldestSupportedSceneVersion = 1;
 	constexpr dx3d::ui32 maximumObjectCount = 100000;
 	constexpr dx3d::ui32 maximumStringLength = 1024 * 1024;
@@ -50,10 +54,12 @@ namespace
 
 	enum class SceneObjectType : dx3d::ui32
 	{
+		Empty = 0,
 		Cube = 1,
 		Plane = 2,
 		CombinedMesh = 3,
-		DirectionalLight = 4
+		DirectionalLight = 4,
+		Sphere = 5
 	};
 
 	struct SerializedSceneObject
@@ -65,6 +71,8 @@ namespace
 
 		dx3d::Vec3 position{};
 		dx3d::Vec3 rotation{};
+		dx3d::Vec4 rotationQuaternion{ 0.0f, 0.0f, 0.0f, 1.0f };
+		bool hasRotationQuaternion{};
 
 		dx3d::Vec3 scale
 		{
@@ -92,13 +100,32 @@ namespace
 		dx3d::Vec3 materialEmissive{};
 		dx3d::f32 materialEmissionStrength{};
 		bool hasRigidBody{};
-		dx3d::RigidBodyType rigidBodyType{ dx3d::RigidBodyType::Dynamic };
+		dx3d::RigidBodyType rigidBodyType{ dx3d::RigidBodyType::Static };
+		dx3d::f32 rigidBodyFriction{ 0.5f };
+		dx3d::f32 rigidBodyRestitution{};
+		dx3d::f32 rigidBodyLinearDamping{ 0.05f };
+		dx3d::f32 rigidBodyAngularDamping{ 0.05f };
+		dx3d::f32 rigidBodyGravityFactor{ 1.0f };
+		bool rigidBodyEnabled{ true };
+		bool hasCollider{};
 		dx3d::ColliderShape colliderShape{ dx3d::ColliderShape::Box };
 		dx3d::Vec3 colliderHalfExtents{ 0.5f, 0.5f, 0.5f };
 		dx3d::f32 colliderRadius{ 0.5f };
-		dx3d::f32 rigidBodyMass{ 1.0f };
-		dx3d::f32 rigidBodyRestitution{ 0.1f };
-		bool gravityEnabled{ true };
+		bool hasRotator{};
+		dx3d::Vec3 rotatorAngularVelocity{ 0.0f, 1.0f, 0.0f };
+		bool rotatorEnabled{ true };
+		bool hasFlyController{};
+		dx3d::f32 flyMoveSpeed{ 5.0f };
+		dx3d::f32 flyLookSensitivity{ 0.0025f };
+		dx3d::f32 flyBoostMultiplier{ 4.0f };
+		dx3d::f32 flyPitchLimitDegrees{ 89.0f };
+		bool flyEnabled{ true };
+		bool hasCamera{};
+		dx3d::f32 cameraNearPlane{ 0.01f };
+		dx3d::f32 cameraFarPlane{ 100.0f };
+		dx3d::f32 cameraFieldOfView{ 1.3f };
+		dx3d::f32 cameraAspectRatio{ 16.0f / 9.0f };
+		bool cameraPrimary{};
 	};
 
 	template <typename T>
@@ -153,7 +180,6 @@ namespace
 		{
 			return false;
 		}
-
 		const auto length =
 			static_cast<dx3d::ui32>(
 				value.size()
@@ -425,11 +451,8 @@ namespace
 			return false;
 		}
 
-		if (
-			object->getComponent<
-			dx3d::CameraComponent
-			>()
-			)
+		// The editor camera belongs to the host, not to the authored scene.
+		if (object->getName() == "Editor Camera")
 		{
 			return false;
 		}
@@ -484,7 +507,8 @@ namespace
 			return true;
 		}
 
-		return false;
+		type = SceneObjectType::Empty;
+		return true;
 	}
 
 	bool writeSceneObject(
@@ -536,17 +560,71 @@ namespace
 		if (rigidBody)
 		{
 			const auto bodyType = static_cast<dx3d::ui32>(rigidBody->getBodyType());
-			const auto shape = static_cast<dx3d::ui32>(rigidBody->getColliderShape());
-			const dx3d::ui32 gravity = rigidBody->isGravityEnabled() ? 1u : 0u;
-			if (!writeValue(stream, bodyType) || !writeValue(stream, shape) ||
-				!writeVec3(stream, rigidBody->getHalfExtents()) ||
-				!writeValue(stream, rigidBody->getRadius()) ||
-				!writeValue(stream, rigidBody->getMass()) ||
+			const dx3d::ui32 enabled = rigidBody->isEnabled() ? 1u : 0u;
+			if (!writeValue(stream, bodyType) ||
+				!writeValue(stream, rigidBody->getFriction()) ||
 				!writeValue(stream, rigidBody->getRestitution()) ||
-				!writeValue(stream, gravity))
+				!writeValue(stream, rigidBody->getLinearDamping()) ||
+				!writeValue(stream, rigidBody->getAngularDamping()) ||
+				!writeValue(stream, rigidBody->getGravityFactor()) ||
+				!writeValue(stream, enabled))
 			{
 				return false;
 			}
+		}
+
+		if (object->getComponent<dx3d::SphereComponent>())
+		{
+			type = SceneObjectType::Sphere;
+			return true;
+		}
+
+		auto* collider = object->getComponent<dx3d::ColliderComponent>();
+		const dx3d::ui32 hasCollider = collider ? 1u : 0u;
+		if (!writeValue(stream, hasCollider)) return false;
+		if (collider)
+		{
+			const auto shape = static_cast<dx3d::ui32>(collider->getShape());
+			if (!writeValue(stream, shape) ||
+				!writeVec3(stream, collider->getHalfExtents()) ||
+				!writeValue(stream, collider->getRadius())) return false;
+		}
+
+		auto* rotator = object->getComponent<dx3d::RotatorComponent>();
+		const dx3d::ui32 hasRotator = rotator ? 1u : 0u;
+		if (!writeValue(stream, hasRotator)) return false;
+		if (rotator)
+		{
+			const dx3d::ui32 enabled = rotator->isEnabled() ? 1u : 0u;
+			if (!writeVec3(stream, rotator->getAngularVelocity()) ||
+				!writeValue(stream, enabled)) return false;
+		}
+
+		auto* fly = object->getComponent<dx3d::FlyControllerComponent>();
+		const dx3d::ui32 hasFly = fly ? 1u : 0u;
+		if (!writeValue(stream, hasFly)) return false;
+		if (fly)
+		{
+			const dx3d::ui32 enabled = fly->isEnabled() ? 1u : 0u;
+			if (!writeValue(stream, fly->getMoveSpeed()) ||
+				!writeValue(stream, fly->getLookSensitivity()) ||
+				!writeValue(stream, fly->getBoostMultiplier()) ||
+				!writeValue(stream, fly->getPitchLimitDegrees()) ||
+				!writeValue(stream, enabled)) return false;
+		}
+
+		auto* camera = object->getComponent<dx3d::CameraComponent>();
+		const dx3d::ui32 hasCamera = camera ? 1u : 0u;
+		if (!writeValue(stream, hasCamera)) return false;
+		if (camera)
+		{
+			const dx3d::ui32 primary = camera->isPrimary() ? 1u : 0u;
+			if (
+			(!writeValue(stream, camera->getNearPlane()) ||
+			 !writeValue(stream, camera->getFarPlane()) ||
+			 !writeValue(stream, camera->getFieldOfView()) ||
+			 !writeValue(stream, camera->getAspectRatio()) ||
+			 !writeValue(stream, primary))) return false;
 		}
 
 		if (
@@ -575,6 +653,7 @@ namespace
 				stream,
 				transform.getRotation()
 			) ||
+			!writeVec4(stream, transform.getRotationQuaternion()) ||
 			!writeVec3(
 				stream,
 				transform.getScale()
@@ -586,7 +665,9 @@ namespace
 
 		switch (type)
 		{
+		case SceneObjectType::Empty:
 		case SceneObjectType::Cube:
+		case SceneObjectType::Sphere:
 		case SceneObjectType::Plane:
 			return true;
 
@@ -686,7 +767,7 @@ namespace
 			}
 		}
 
-		if (storedVersion >= 4)
+		if (storedVersion == 4)
 		{
 			dx3d::ui32 hasRigidBody = 0;
 			if (!readValue(stream, hasRigidBody) || hasRigidBody > 1u) return false;
@@ -696,11 +777,12 @@ namespace
 				dx3d::ui32 bodyType = 0;
 				dx3d::ui32 shape = 0;
 				dx3d::ui32 gravity = 0;
+				dx3d::f32 ignoredMass = 1.0f;
 				if (!readValue(stream, bodyType) || bodyType > 2u ||
 					!readValue(stream, shape) || shape > 1u ||
 					!readVec3(stream, object.colliderHalfExtents) ||
 					!readValue(stream, object.colliderRadius) ||
-					!readValue(stream, object.rigidBodyMass) ||
+					!readValue(stream, ignoredMass) ||
 					!readValue(stream, object.rigidBodyRestitution) ||
 					!readValue(stream, gravity) || gravity > 1u)
 				{
@@ -708,7 +790,83 @@ namespace
 				}
 				object.rigidBodyType = static_cast<dx3d::RigidBodyType>(bodyType);
 				object.colliderShape = static_cast<dx3d::ColliderShape>(shape);
-				object.gravityEnabled = gravity != 0;
+				object.rigidBodyGravityFactor = gravity != 0 ? 1.0f : 0.0f;
+				object.hasCollider = true;
+			}
+		}
+		else if (storedVersion >= 5)
+		{
+			dx3d::ui32 hasRigidBody = 0;
+			if (!readValue(stream, hasRigidBody) || hasRigidBody > 1u) return false;
+			object.hasRigidBody = hasRigidBody != 0;
+			if (object.hasRigidBody)
+			{
+				dx3d::ui32 bodyType = 0;
+				dx3d::ui32 enabled = 0;
+				if (!readValue(stream, bodyType) || bodyType > 2u ||
+					!readValue(stream, object.rigidBodyFriction) ||
+					!readValue(stream, object.rigidBodyRestitution) ||
+					!readValue(stream, object.rigidBodyLinearDamping) ||
+					!readValue(stream, object.rigidBodyAngularDamping) ||
+					!readValue(stream, object.rigidBodyGravityFactor) ||
+					!readValue(stream, enabled) || enabled > 1u) return false;
+				object.rigidBodyType = static_cast<dx3d::RigidBodyType>(bodyType);
+				object.rigidBodyEnabled = enabled != 0;
+			}
+
+			dx3d::ui32 hasCollider = 0;
+			if (!readValue(stream, hasCollider) || hasCollider > 1u) return false;
+			object.hasCollider = hasCollider != 0;
+			if (object.hasCollider)
+			{
+				dx3d::ui32 shape = 0;
+				if (!readValue(stream, shape) || shape > 1u ||
+					!readVec3(stream, object.colliderHalfExtents) ||
+					!readValue(stream, object.colliderRadius)) return false;
+				object.colliderShape = static_cast<dx3d::ColliderShape>(shape);
+			}
+
+			if (storedVersion >= 6)
+			{
+				dx3d::ui32 hasRotator = 0;
+				if (!readValue(stream, hasRotator) || hasRotator > 1u) return false;
+				object.hasRotator = hasRotator != 0;
+				if (object.hasRotator)
+				{
+					dx3d::ui32 enabled = 0;
+					if (!readVec3(stream, object.rotatorAngularVelocity) ||
+						!readValue(stream, enabled) || enabled > 1u) return false;
+					object.rotatorEnabled = enabled != 0;
+				}
+
+				dx3d::ui32 hasFly = 0;
+				if (!readValue(stream, hasFly) || hasFly > 1u) return false;
+				object.hasFlyController = hasFly != 0;
+				if (object.hasFlyController)
+				{
+					dx3d::ui32 enabled = 0;
+					if (!readValue(stream, object.flyMoveSpeed) ||
+						!readValue(stream, object.flyLookSensitivity) ||
+						!readValue(stream, object.flyBoostMultiplier) ||
+						!readValue(stream, object.flyPitchLimitDegrees) ||
+						!readValue(stream, enabled) || enabled > 1u) return false;
+					object.flyEnabled = enabled != 0;
+				}
+
+				dx3d::ui32 hasCamera = 0;
+				if (!readValue(stream, hasCamera) || hasCamera > 1u) return false;
+				object.hasCamera = hasCamera != 0;
+				if (object.hasCamera &&
+					(!readValue(stream, object.cameraNearPlane) ||
+					 !readValue(stream, object.cameraFarPlane) ||
+					 !readValue(stream, object.cameraFieldOfView))) return false;
+				if (object.hasCamera && storedVersion >= 7)
+				{
+					dx3d::ui32 primary = 0;
+					if (!readValue(stream, object.cameraAspectRatio) ||
+						!readValue(stream, primary) || primary > 1u) return false;
+					object.cameraPrimary = primary != 0;
+				}
 			}
 		}
 
@@ -728,7 +886,9 @@ namespace
 				)
 			)
 		{
+		case SceneObjectType::Empty:
 		case SceneObjectType::Cube:
+		case SceneObjectType::Sphere:
 		case SceneObjectType::Plane:
 		case SceneObjectType::CombinedMesh:
 		case SceneObjectType::DirectionalLight:
@@ -755,6 +915,7 @@ namespace
 				stream,
 				object.rotation
 			) ||
+			(storedVersion >= 5 && !readVec4(stream, object.rotationQuaternion)) ||
 			!readVec3(
 				stream,
 				object.scale
@@ -764,9 +925,13 @@ namespace
 			return false;
 		}
 
+		object.hasRotationQuaternion = storedVersion >= 5;
+
 		switch (object.type)
 		{
+		case SceneObjectType::Empty:
 		case SceneObjectType::Cube:
+		case SceneObjectType::Sphere:
 		case SceneObjectType::Plane:
 			return true;
 
@@ -836,12 +1001,18 @@ namespace
 
 		switch (data.type)
 		{
+		case SceneObjectType::Empty:
+			break;
 		case SceneObjectType::Cube:
 			object->createOrGetComponent<
 				dx3d::CubeComponent
 			>();
 
 			++result.cubeCount;
+			break;
+
+		case SceneObjectType::Sphere:
+			object->createOrGetComponent<dx3d::SphereComponent>();
 			break;
 
 		case SceneObjectType::Plane:
@@ -907,6 +1078,8 @@ namespace
 		transform.setRotation(
 			data.rotation
 		);
+		if (data.hasRotationQuaternion)
+			transform.setRotationQuaternion(data.rotationQuaternion, data.rotation);
 
 		transform.setScale(
 			data.scale
@@ -925,12 +1098,43 @@ namespace
 		{
 			auto* rigidBody = object->createOrGetComponent<dx3d::RigidBodyComponent>();
 			rigidBody->setBodyType(data.rigidBodyType);
-			rigidBody->setColliderShape(data.colliderShape);
-			rigidBody->setHalfExtents(data.colliderHalfExtents);
-			rigidBody->setRadius(data.colliderRadius);
-			rigidBody->setMass(data.rigidBodyMass);
+			rigidBody->setFriction(data.rigidBodyFriction);
 			rigidBody->setRestitution(data.rigidBodyRestitution);
-			rigidBody->setGravityEnabled(data.gravityEnabled);
+			rigidBody->setLinearDamping(data.rigidBodyLinearDamping);
+			rigidBody->setAngularDamping(data.rigidBodyAngularDamping);
+			rigidBody->setGravityFactor(data.rigidBodyGravityFactor);
+			rigidBody->setEnabled(data.rigidBodyEnabled);
+		}
+		if (data.hasCollider)
+		{
+			auto* collider = object->createOrGetComponent<dx3d::ColliderComponent>();
+			collider->setShape(data.colliderShape);
+			collider->setHalfExtents(data.colliderHalfExtents);
+			collider->setRadius(data.colliderRadius);
+		}
+		if (data.hasRotator)
+		{
+			auto* rotator = object->createOrGetComponent<dx3d::RotatorComponent>();
+			rotator->setAngularVelocity(data.rotatorAngularVelocity);
+			rotator->setEnabled(data.rotatorEnabled);
+		}
+		if (data.hasFlyController)
+		{
+			auto* fly = object->createOrGetComponent<dx3d::FlyControllerComponent>();
+			fly->setMoveSpeed(data.flyMoveSpeed);
+			fly->setLookSensitivity(data.flyLookSensitivity);
+			fly->setBoostMultiplier(data.flyBoostMultiplier);
+			fly->setPitchLimitDegrees(data.flyPitchLimitDegrees);
+			fly->setEnabled(data.flyEnabled);
+		}
+		if (data.hasCamera)
+		{
+			auto* camera = object->createOrGetComponent<dx3d::CameraComponent>();
+			camera->setNearPlane(data.cameraNearPlane);
+			camera->setFarPlane(data.cameraFarPlane);
+			camera->setFieldOfView(data.cameraFieldOfView);
+			camera->setAspectRatio(data.cameraAspectRatio);
+			camera->setPrimary(data.cameraPrimary);
 		}
 
 		return object;
@@ -1301,11 +1505,7 @@ void dx3d::SceneSerializer::clear(
 			continue;
 		}
 
-		if (
-			object->getComponent<
-			CameraComponent
-			>()
-			)
+		if (object->getName() == "Editor Camera")
 		{
 			continue;
 		}

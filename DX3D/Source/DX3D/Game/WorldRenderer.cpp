@@ -16,6 +16,7 @@
 #include <DX3D/Component/CubeComponent.h>
 #include <DX3D/Component/PlaneComponent.h>
 #include <DX3D/Component/CircleComponent.h>
+#include <DX3D/Component/SphereComponent.h>
 #include <DX3D/Component/CameraComponent.h>
 #include <DX3D/Component/CombinedMeshComponent.h>
 #include <DX3D/Component/DirectionalLightComponent.h>
@@ -160,6 +161,12 @@ dx3d::WorldRenderer::WorldRenderer(
 			}
 		);
 
+	const auto& sphereMesh = getSphereMeshData();
+	m_sphereVertexBuffer = device.createVertexBuffer({ sphereMesh.vertices.data(),
+		static_cast<ui32>(sphereMesh.vertices.size()), sizeof(MeshVertex) });
+	m_sphereIndexBuffer = device.createIndexBuffer({ sphereMesh.indices.data(),
+		static_cast<ui32>(sphereMesh.indices.size()) });
+
 	constexpr ui32 circleSegments = 64;
 
 	std::vector<MeshVertex>
@@ -256,7 +263,8 @@ dx3d::WorldRenderer::~WorldRenderer()
 void dx3d::WorldRenderer::render(
 	const World& world,
 	SwapChain& swapChain,
-	f32 deltaTime
+	f32 deltaTime,
+	bool useSceneCamera
 )
 {
 	const Rect size =
@@ -429,7 +437,9 @@ void dx3d::WorldRenderer::render(
 			CameraComponent
 			>(
 				numComponents
-			);
+				);
+
+		CameraComponent* chosenCamera = nullptr;
 
 		for (
 			auto i :
@@ -445,17 +455,21 @@ void dx3d::WorldRenderer::render(
 			if (!component)
 				continue;
 
-			component->setViewportSize(
-				size
-			);
-
-			cameraView =
-				component->getViewMatrix();
-
-			cameraProjection =
-				component->getProjectionMatrix();
-
-			break;
+			const bool editorCamera = component->getGameObject().getName() == "Editor Camera";
+			if ((!useSceneCamera && editorCamera) ||
+				(useSceneCamera && !editorCamera && component->isPrimary()))
+			{
+				chosenCamera = component;
+				break;
+			}
+			if (!chosenCamera && (useSceneCamera ? !editorCamera : editorCamera))
+				chosenCamera = component;
+		}
+		if (chosenCamera)
+		{
+			chosenCamera->setViewportSize(size);
+			cameraView = chosenCamera->getViewMatrix();
+			cameraProjection = chosenCamera->getProjectionMatrix();
 		}
 	}
 
@@ -662,6 +676,16 @@ void dx3d::WorldRenderer::render(
 						*m_cubeVertexBuffer,
 						*m_cubeIndexBuffer
 					);
+				}
+			}
+
+			{
+				auto components = world.getComponents<SphereComponent>(numComponents);
+				for (auto i : std::views::iota(0u, numComponents))
+				{
+					auto* component = components[i];
+					if (component) drawObject(component->getGameObject(),
+						*m_sphereVertexBuffer, *m_sphereIndexBuffer);
 				}
 			}
 

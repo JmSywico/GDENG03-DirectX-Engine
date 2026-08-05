@@ -79,6 +79,14 @@ void dx3d::CameraComponent::setViewportSize(
 		return;
 
 	m_viewportSize = area;
+	m_aspectRatio = static_cast<f32>(area.width) / static_cast<f32>(area.height);
+	computeProjectionMatrix();
+}
+
+void dx3d::CameraComponent::setAspectRatio(f32 value) noexcept
+{
+	if (value <= 0.0f) return;
+	m_aspectRatio = value;
 	computeProjectionMatrix();
 }
 
@@ -98,11 +106,9 @@ void dx3d::CameraComponent::computeProjectionMatrix() noexcept
 	if (width <= 0.0f || height <= 0.0f)
 		return;
 
-	const f32 aspectRatio = width / height;
-
 	m_projection = Mat4x4::perspectiveFovLH(
 		m_fieldOfView,
-		aspectRatio,
+		m_aspectRatio,
 		m_nearPlane,
 		m_farPlane
 	);

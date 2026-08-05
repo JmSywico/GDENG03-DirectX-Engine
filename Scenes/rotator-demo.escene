@@ -1,0 +1,96 @@
+{
+  "scene": {
+    "name": "Rotator Demo",
+    "version": 7,
+    "activeCamera": 2002,
+    "activeLight": 2003
+  },
+  "entities": [
+    {
+      "id": 2001,
+      "name": "Fixed-Step Spinner",
+      "parent": null,
+      "components": {
+        "TransformComponent": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.35, 0.0, 0.2],
+          "rotationQuaternion": [0.171697, 0.017357, 0.098319, 0.980483],
+          "scale": [1.5, 1.5, 1.5]
+        },
+        "RotatorComponent": {
+          "angularVelocity": [0.0, 1.0, 0.0],
+          "enabled": true
+        },
+        "MeshRendererComponent": {
+          "visible": true,
+          "castShadows": true,
+          "receiveShadows": true,
+          "materialMode": 0,
+          "albedo": [0.18, 0.72, 1.0, 1.0],
+          "primitive": {
+            "type": "Cube",
+            "size": 1.0,
+            "width": 1.0,
+            "height": 1.0,
+            "depth": 1.0,
+            "radius": 0.5,
+            "slices": 16,
+            "stacks": 16
+          }
+        }
+      }
+    },
+    {
+      "id": 2002,
+      "name": "Demo Camera",
+      "parent": null,
+      "components": {
+        "TransformComponent": {
+          "position": [0.0, 2.2, -6.0],
+          "rotation": [0.25, 0.0, 0.0],
+          "rotationQuaternion": [0.124675, 0.0, 0.0, 0.992198],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "CameraComponent": {
+          "fovDegrees": 45.0,
+          "nearPlane": 0.1,
+          "farPlane": 1000.0,
+          "aspectRatio": 1.777778,
+          "primary": true
+		},
+		"FlyControllerComponent": {
+		  "moveSpeed": 5.0,
+		  "lookSensitivity": 0.0025,
+		  "boostMultiplier": 4.0,
+		  "pitchLimitDegrees": 89.0,
+		  "enabled": true
+        }
+      }
+    },
+    {
+      "id": 2003,
+      "name": "Demo Sun",
+      "parent": null,
+      "components": {
+        "TransformComponent": {
+          "position": [0.0, 4.0, -2.0],
+          "rotation": [0.65, -0.55, 0.0],
+          "rotationQuaternion": [0.307019, -0.256388, 0.086949, 0.912228],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "LightComponent": {
+          "type": 0,
+          "color": [1.0, 0.94, 0.82],
+          "intensity": 1.2,
+          "range": 100.0,
+          "spotAngle": 45.0,
+          "castShadows": true,
+          "shadowStrength": 0.8,
+          "shadowBias": 0.0012,
+          "shadowNormalBias": 0.02,
+          "shadowDistance": 100.0
+        }
+      }
+    }
+  ]
+}

@@ -18,6 +18,8 @@ namespace dx3d
 
 		void setRotation(const Vec3& rotation);
 		Vec3 getRotation() const noexcept;
+		void setRotationQuaternion(const Vec4& rotation, const Vec3& eulerHint);
+		Vec4 getRotationQuaternion() const noexcept;
 
 		void setScale(const Vec3& scale);
 		Vec3 getScale() const noexcept;
@@ -35,6 +37,7 @@ namespace dx3d
 	private:
 		Vec3 m_position{ 0,0,0 };
 		Vec3 m_rotation{ 0,0,0 };
+		Vec4 m_rotationQuaternion{ 0,0,0,1 };
 		Vec3 m_scale{ 1,1,1 };
 		
 		Mat4x4 m_rigidWorldMatrix{};   // rotation + translation only

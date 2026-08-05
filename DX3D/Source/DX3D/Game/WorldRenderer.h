@@ -27,7 +27,8 @@ namespace dx3d
 		void render(
 			const World& world,
 			SwapChain& swapChain,
-			f32 deltaTime
+			f32 deltaTime,
+			bool useSceneCamera
 		);
 
 	private:
@@ -71,6 +72,8 @@ namespace dx3d
 
 		RefPtr<VertexBuffer> m_circleVertexBuffer{};
 		RefPtr<IndexBuffer> m_circleIndexBuffer{};
+		RefPtr<VertexBuffer> m_sphereVertexBuffer{};
+		RefPtr<IndexBuffer> m_sphereIndexBuffer{};
 
 		std::unordered_map<
 			const CombinedMeshComponent*,

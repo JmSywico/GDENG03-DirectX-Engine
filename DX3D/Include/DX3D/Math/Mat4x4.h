@@ -108,6 +108,29 @@ namespace dx3d
 			return result;
 		}
 
+		static Mat4x4 rotateQuaternion(const Vec4& value) noexcept
+		{
+			const f32 lengthSquared = value.x * value.x + value.y * value.y
+				+ value.z * value.z + value.w * value.w;
+			if (lengthSquared <= 0.000001f) return identity();
+			const f32 inverseLength = 1.0f / std::sqrt(lengthSquared);
+			const f32 x = value.x * inverseLength;
+			const f32 y = value.y * inverseLength;
+			const f32 z = value.z * inverseLength;
+			const f32 w = value.w * inverseLength;
+			Mat4x4 result = identity();
+			result.m_data[0][0] = 1.0f - 2.0f * (y * y + z * z);
+			result.m_data[0][1] = 2.0f * (x * y + z * w);
+			result.m_data[0][2] = 2.0f * (x * z - y * w);
+			result.m_data[1][0] = 2.0f * (x * y - z * w);
+			result.m_data[1][1] = 1.0f - 2.0f * (x * x + z * z);
+			result.m_data[1][2] = 2.0f * (y * z + x * w);
+			result.m_data[2][0] = 2.0f * (x * z + y * w);
+			result.m_data[2][1] = 2.0f * (y * z - x * w);
+			result.m_data[2][2] = 1.0f - 2.0f * (x * x + y * y);
+			return result;
+		}
+
 		static Mat4x4 orthoLH(
 			f32 width,
 			f32 height,

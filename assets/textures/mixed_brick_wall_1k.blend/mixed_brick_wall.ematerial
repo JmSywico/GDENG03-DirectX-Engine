@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "albedo": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "emissive": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "metallic": 0.0,
+  "roughness": 0.78,
+  "mode": 0,
+  "albedoTexture": {
+    "handle": 0,
+    "path": "assets/textures/mixed_brick_wall_1k.blend/textures/mixed_brick_wall_diff_1k.jpg"
+  },
+  "normalTexture": {
+    "handle": 0,
+    "path": ""
+  },
+  "metallicRoughnessTexture": {
+    "handle": 0,
+    "path": ""
+  }
+}

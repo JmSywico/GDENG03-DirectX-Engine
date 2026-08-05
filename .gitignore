@@ -34,6 +34,10 @@ CMakeFiles/
 CMakeCache.txt
 *.cmake
 *.dir
+!cmake/
+!cmake/*.cmake
+/out/
+/Intermediate/
 
 # Windows Installer files
 *.cab
@@ -78,3 +82,7 @@ wwwroot/
 # Backup files
 *.bak
 *.swp
+/docs
+/Tools/GeneratePhysicsStressScene.ps1
+/Tools/Convert-EnignEScenes.ps1
+/Tools/GenerateStressScene.ps1

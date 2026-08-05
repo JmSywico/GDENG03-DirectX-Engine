@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <entt/entt.hpp>
 
 namespace dx3d
 {
@@ -41,20 +42,54 @@ namespace dx3d
 			requires IsRegistered<Component, T>
 		T* const* getComponents(ui32& numComponents) const noexcept
 		{
-			return reinterpret_cast<T* const*>(
-				getComponentsInternal(
-					T::GetTypeId(),
-					&numComponents
-				)
-				);
+			m_componentQueryCache.clear();
+			auto view = m_registry.view<T>();
+			m_componentQueryCache.reserve(view.size_hint());
+			for (auto entity : view)
+				m_componentQueryCache.push_back(&view.get<T>(entity));
+			numComponents = static_cast<ui32>(m_componentQueryCache.size());
+			return reinterpret_cast<T* const*>(m_componentQueryCache.data());
 		}
 
 		void update(f32 deltaTime);
+		void fixedUpdate(f32 fixedDeltaTime);
 
 		void destroyGameObject(GameObject* object);
 
 		std::vector<GameObject*> getGameObjects() const;
 		GameObject* findGameObject(ui64 entityId) const noexcept;
+
+		template <typename T>
+			requires IsRegistered<Component, T>
+		T* createOrGetComponent(entt::entity entity, GameObject& object)
+		{
+			if (!m_registry.valid(entity)) return nullptr;
+			if (auto* existing = m_registry.try_get<T>(entity)) return existing;
+			return &m_registry.emplace<T>(
+				entity,
+				ComponentDesc{ {m_logger}, object, *this }
+			);
+		}
+
+		template <typename T>
+			requires IsRegistered<Component, T>
+		T* getComponent(entt::entity entity) noexcept
+		{
+			return m_registry.valid(entity)
+				? m_registry.try_get<T>(entity)
+				: nullptr;
+		}
+
+		template <typename T>
+			requires IsRegistered<Component, T>
+		bool removeComponent(entt::entity entity)
+		{
+			if (!m_registry.valid(entity)) return false;
+			return m_registry.remove<T>(entity) != 0;
+		}
+
+		entt::registry& getRegistry() noexcept { return m_registry; }
+		const entt::registry& getRegistry() const noexcept { return m_registry; }
 		bool setParent(GameObject* child, GameObject* parent);
 		bool isDescendantOf(
 			const GameObject* object,
@@ -71,16 +106,9 @@ namespace dx3d
 			GameObject* object
 		);
 
-		void addComponentInternal(Component& component);
-
 		void addDirtyTransformInternal(
 			TransformComponent& component
 		);
-
-		Component* const* getComponentsInternal(
-			size_t typeId,
-			ui32* numComponents
-		) const noexcept;
 
 	private:
 		enum class EventType
@@ -106,11 +134,8 @@ namespace dx3d
 
 		std::unordered_map<ui64, GameObject*> m_entityIndex{};
 		ui64 m_nextEntityId{ 1 };
-
-		std::unordered_map<
-			size_t,
-			std::vector<Component*>
-		> m_components{};
+		mutable entt::registry m_registry{};
+		mutable std::vector<Component*> m_componentQueryCache{};
 
 		std::vector<TransformComponent*> m_dirtyTransforms{};
 
