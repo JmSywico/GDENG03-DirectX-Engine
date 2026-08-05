@@ -22,6 +22,10 @@ namespace dx3d
 		void present(
 			bool vsync = false
 		);
+		void captureSceneFrame();
+		ID3D11ShaderResourceView* getSceneFrameView() const noexcept;
+		void captureGameFrame();
+		ID3D11ShaderResourceView* getGameFrameView() const noexcept;
 
 	private:
 		void reloadBuffers();
@@ -38,6 +42,10 @@ namespace dx3d
 		Microsoft::WRL::ComPtr<
 			ID3D11DepthStencilView
 		> m_dsv{};
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> m_sceneFrame{};
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_sceneFrameView{};
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> m_gameFrame{};
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_gameFrameView{};
 
 		Rect m_size{};
 

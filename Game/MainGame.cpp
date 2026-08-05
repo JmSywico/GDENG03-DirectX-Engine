@@ -53,32 +53,8 @@ void MainGame::onCreate()
 {
 	Game::onCreate();
 
-	auto& world = getWorld();
-
-	m_editorCamera =
-		world.createGameObject<dx3d::GameObject>();
-
-	m_editorCamera->setName("Editor Camera");
-
-	auto camera = m_editorCamera;
-
-	auto cameraComponent =
-		camera->createOrGetComponent<
-		dx3d::CameraComponent>();
-
-	cameraComponent->setNearPlane(0.1f);
-	cameraComponent->setFarPlane(100.0f);
-	cameraComponent->setFieldOfView(1.0f);
-
-	camera->getTransform().setPosition(
-		{ 0.0f, 3.0f, -6.0f }
-	);
-
-	camera->getTransform().setRotation(
-		{ 0.45f, 0.0f, 0.0f }
-	);
-
 /*	// Create one uniformly scaled cube at the center.
+	auto& world = getWorld();
 	m_warpCube =
 		world.createGameObject<dx3d::GameObject>();
 
@@ -260,6 +236,7 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 	Game::onUpdate(deltaTime);
 
 	auto& input = getInputSystem();
+	m_sceneInputActions.update(input);
 
 	if (input.isKeyPressed(dx3d::KeyCode::Escape))
 	{
@@ -480,7 +457,8 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 	);
 }*/
 
-	if (!m_editorCamera)
+	auto* editorCamera = getEditorCamera();
+	if (!editorCamera)
 		return;
 
 	bool imguiWantsMouse = false;
@@ -506,8 +484,9 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		input.isKeyDown(dx3d::KeyCode::MouseRight);
 
 
+	const bool sceneViewportHovered = isSceneViewportHovered();
 	if (rightMousePressed &&
-		!imguiWantsMouse &&
+		(sceneViewportHovered || !imguiWantsMouse) &&
 		!m_isCameraControlActive)
 	{
 		m_isCameraControlActive = true;
@@ -527,13 +506,9 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 	}
 
 
-	if (!m_isCameraControlActive)
-		return;
+	auto& transform = editorCamera->getTransform();
 
-	auto& transform = m_editorCamera->getTransform();
-
-
-	if (!rightMousePressed)
+	if (m_isCameraControlActive && !rightMousePressed)
 	{
 		const auto mouseDelta = input.getMouseDelta();
 
@@ -562,11 +537,17 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		);
 	}
 
-	if (imguiWantsKeyboard)
+	const bool middleMouseDown =
+		sceneViewportHovered && input.isKeyDown(dx3d::KeyCode::MouseMiddle);
+	const float wheelDelta = sceneViewportHovered && ImGui::GetCurrentContext()
+		? ImGui::GetIO().MouseWheel : 0.0f;
+	if (!m_isCameraControlActive && !middleMouseDown && wheelDelta == 0.0f)
+		return;
+	if (imguiWantsKeyboard && m_isCameraControlActive)
 		return;
 
 	const dx3d::f32 currentSpeed =
-		input.isKeyDown(dx3d::KeyCode::Shift)
+		m_sceneInputActions.isDown("Boost")
 		? m_cameraFastSpeed
 		: m_cameraMoveSpeed;
 
@@ -581,43 +562,14 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 	const dx3d::Vec3 right = transform.right();
 
 
-	if (input.isKeyDown(dx3d::KeyCode::W))
+	if (m_isCameraControlActive)
 	{
-		movement.x += forward.x;
-		movement.y += forward.y;
-		movement.z += forward.z;
-	}
-
-	if (input.isKeyDown(dx3d::KeyCode::S))
-	{
-		movement.x -= forward.x;
-		movement.y -= forward.y;
-		movement.z -= forward.z;
-	}
-
-	if (input.isKeyDown(dx3d::KeyCode::D))
-	{
-		movement.x += right.x;
-		movement.y += right.y;
-		movement.z += right.z;
-	}
-
-	if (input.isKeyDown(dx3d::KeyCode::A))
-	{
-		movement.x -= right.x;
-		movement.y -= right.y;
-		movement.z -= right.z;
-	}
-
-
-	if (input.isKeyDown(dx3d::KeyCode::E))
-	{
-		movement.y += 1.0f;
-	}
-
-	if (input.isKeyDown(dx3d::KeyCode::Q))
-	{
-		movement.y -= 1.0f;
+		const dx3d::f32 forwardInput = m_sceneInputActions.getValue("MoveForward");
+		const dx3d::f32 rightInput = m_sceneInputActions.getValue("MoveRight");
+		const dx3d::f32 upInput = m_sceneInputActions.getValue("MoveUp");
+		movement = movement + forward * forwardInput;
+		movement = movement + right * rightInput;
+		movement.y += upInput;
 	}
 
 	const dx3d::f32 movementLength =
@@ -642,6 +594,22 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		position.y += movement.y * movementAmount;
 		position.z += movement.z * movementAmount;
 
+		transform.setPosition(position);
+	}
+
+	if (middleMouseDown || wheelDelta != 0.0f)
+	{
+		const auto mouseDelta = input.getMouseDelta();
+		auto position = transform.getPosition();
+		const dx3d::Vec3 up = transform.up();
+		const float frameScale = deltaTime * 60.0f;
+		if (middleMouseDown)
+		{
+			position = position + right * (-mouseDelta.x * m_cameraPanSpeed * frameScale);
+			position = position + up * (mouseDelta.y * m_cameraPanSpeed * frameScale);
+		}
+		if (wheelDelta != 0.0f)
+			position = position + forward * (wheelDelta * m_cameraZoomSpeed * frameScale);
 		transform.setPosition(position);
 	}
 }

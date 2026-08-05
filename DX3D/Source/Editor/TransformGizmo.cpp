@@ -247,7 +247,7 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 		return;
 
 	ImDrawList* drawList =
-		ImGui::GetBackgroundDrawList();
+		ImGui::GetForegroundDrawList();
 
 	const ImVec2 clipMinimum
 	{
@@ -278,9 +278,6 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 		mousePosition.y <=
 		viewportArea.y + viewportArea.height;
 
-	const bool imguiWantsMouse =
-		ImGui::GetIO().WantCaptureMouse;
-
 	const bool rightMouseDown =
 		ImGui::IsMouseDown(
 			ImGuiMouseButton_Right
@@ -288,7 +285,6 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 
 	const bool canHoverGizmo =
 		mouseInsideViewport &&
-		!imguiWantsMouse &&
 		!rightMouseDown;
 
 	constexpr ui32 segmentCount = 64;
@@ -787,13 +783,6 @@ void dx3d::TransformGizmo::draw(
 		return;
 	}
 
-	if (selectedObject->getComponent<CameraComponent>())
-	{
-		m_activeAxis = Axis::None;
-		m_isUsing = false;
-		return;
-	}
-
 	const Mat4x4 viewMatrix =
 		camera->getViewMatrix();
 
@@ -914,9 +903,6 @@ void dx3d::TransformGizmo::draw(
 		mousePosition.y <=
 		viewportArea.y + viewportArea.height;
 
-	const bool imguiWantsMouse =
-		ImGui::GetIO().WantCaptureMouse;
-
 	const bool rightMouseDown =
 		ImGui::IsMouseDown(
 			ImGuiMouseButton_Right
@@ -924,7 +910,6 @@ void dx3d::TransformGizmo::draw(
 
 	const bool canHoverGizmo =
 		mouseInsideViewport &&
-		!imguiWantsMouse &&
 		!rightMouseDown;
 
 	if (originVisible &&
@@ -1198,7 +1183,7 @@ void dx3d::TransformGizmo::draw(
 		return;
 
 	ImDrawList* drawList =
-		ImGui::GetBackgroundDrawList();
+		ImGui::GetForegroundDrawList();
 
 	const ImVec2 clipMinimum
 	{

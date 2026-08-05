@@ -93,35 +93,34 @@ dx3d::Window::Window(
 		);
 	}
 
-	constexpr DWORD windowStyle =
-		WS_OVERLAPPEDWINDOW;
-
-	RECT windowRectangle
-	{
-		0,
-		0,
-		m_size.width,
-		m_size.height
+	constexpr DWORD windowStyle = WS_POPUP;
+	const HMONITOR monitor = MonitorFromPoint({ 0, 0 }, MONITOR_DEFAULTTOPRIMARY);
+	MONITORINFO monitorInfo{ sizeof(MONITORINFO) };
+	if (!GetMonitorInfo(monitor, &monitorInfo))
+		DX3DLogThrowError("GetMonitorInfo failed.");
+	const RECT monitorRectangle = monitorInfo.rcMonitor;
+	const int monitorWidth = monitorRectangle.right - monitorRectangle.left;
+	const int monitorHeight = monitorRectangle.bottom - monitorRectangle.top;
+	const int restoreWidth = (std::min)(m_size.width, monitorWidth);
+	const int restoreHeight = (std::min)(m_size.height, monitorHeight);
+	m_restoreRect = {
+		monitorRectangle.left + (monitorWidth - restoreWidth) / 2,
+		monitorRectangle.top + (monitorHeight - restoreHeight) / 2,
+		restoreWidth,
+		restoreHeight
 	};
-
-	AdjustWindowRect(
-		&windowRectangle,
-		windowStyle,
-		FALSE
-	);
+	m_size = { monitorRectangle.left, monitorRectangle.top, monitorWidth, monitorHeight };
 
 	m_handle =
 		CreateWindowEx(
 			0,
 			MAKEINTATOM(windowClassId),
-			L"GDENG03 | DIRECTX Game Engine",
+			L"enignE",
 			windowStyle,
-			CW_USEDEFAULT,
-			CW_USEDEFAULT,
-			windowRectangle.right -
-			windowRectangle.left,
-			windowRectangle.bottom -
-			windowRectangle.top,
+			monitorRectangle.left,
+			monitorRectangle.top,
+			monitorWidth,
+			monitorHeight,
 			nullptr,
 			nullptr,
 			GetModuleHandle(nullptr),
@@ -139,6 +138,7 @@ dx3d::Window::Window(
 		static_cast<HWND>(m_handle),
 		SW_SHOW
 	);
+	UpdateWindow(static_cast<HWND>(m_handle));
 }
 
 void*
@@ -218,6 +218,55 @@ dx3d::Window::getClientAreaInScreenSpace()
 		bottomRight.y -
 			topLeft.y
 	};
+}
+
+void dx3d::Window::minimize()
+{
+	if (m_handle) ShowWindow(static_cast<HWND>(m_handle), SW_MINIMIZE);
+}
+
+void dx3d::Window::toggleMaximizeRestore()
+{
+	if (!m_handle) return;
+	const HWND window = static_cast<HWND>(m_handle);
+	if (m_maximized)
+	{
+		SetWindowPos(window, nullptr, m_restoreRect.left, m_restoreRect.top,
+			m_restoreRect.width, m_restoreRect.height,
+			SWP_NOZORDER | SWP_FRAMECHANGED);
+		m_maximized = false;
+		return;
+	}
+	RECT restore{};
+	GetWindowRect(window, &restore);
+	m_restoreRect = { restore.left, restore.top,
+		restore.right - restore.left, restore.bottom - restore.top };
+	const HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+	MONITORINFO info{ sizeof(MONITORINFO) };
+	if (!GetMonitorInfo(monitor, &info)) return;
+	const RECT rectangle = info.rcMonitor;
+	SetWindowPos(window, nullptr, rectangle.left, rectangle.top,
+		rectangle.right - rectangle.left, rectangle.bottom - rectangle.top,
+		SWP_NOZORDER | SWP_FRAMECHANGED);
+	m_maximized = true;
+}
+
+void dx3d::Window::close()
+{
+	if (m_handle) PostMessage(static_cast<HWND>(m_handle), WM_CLOSE, 0, 0);
+}
+
+void dx3d::Window::beginTitleBarDrag()
+{
+	if (!m_handle) return;
+	if (m_maximized) toggleMaximizeRestore();
+	ReleaseCapture();
+	SendMessage(static_cast<HWND>(m_handle), WM_NCLBUTTONDOWN, HTCAPTION, 0);
+}
+
+bool dx3d::Window::isMaximized() const noexcept
+{
+	return m_maximized;
 }
 
 dx3d::Window::~Window()

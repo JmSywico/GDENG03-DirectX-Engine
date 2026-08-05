@@ -10,9 +10,12 @@
 void dx3d::Game::run()
 {
 	onCreate();
+	ensureEditorCamera();
 
 	if (!m_startupScenePath.empty())
 		loadScene(m_startupScenePath);
+	else
+		ensureGameCamera();
 
 	MSG msg{};
 

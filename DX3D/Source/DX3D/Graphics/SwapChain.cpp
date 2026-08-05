@@ -105,6 +105,10 @@ void dx3d::SwapChain::resize(
 
 	m_rtv.Reset();
 	m_dsv.Reset();
+	m_sceneFrameView.Reset();
+	m_sceneFrame.Reset();
+	m_gameFrameView.Reset();
+	m_gameFrame.Reset();
 
 	DX3DGraphicsLogThrowOnFail(
 		m_swapChain->ResizeBuffers(
@@ -145,6 +149,34 @@ void dx3d::SwapChain::present(
 	}
 }
 
+void dx3d::SwapChain::captureSceneFrame()
+{
+	if (!m_sceneFrame) return;
+	Microsoft::WRL::ComPtr<ID3D11Texture2D> backBuffer;
+	if (FAILED(m_swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer)))) return;
+	m_graphicsDevice->getImmediateContext()->CopyResource(
+		m_sceneFrame.Get(), backBuffer.Get());
+}
+
+ID3D11ShaderResourceView* dx3d::SwapChain::getSceneFrameView() const noexcept
+{
+	return m_sceneFrameView.Get();
+}
+
+void dx3d::SwapChain::captureGameFrame()
+{
+	if (!m_gameFrame) return;
+	Microsoft::WRL::ComPtr<ID3D11Texture2D> backBuffer;
+	if (FAILED(m_swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer)))) return;
+	m_graphicsDevice->getImmediateContext()->CopyResource(
+		m_gameFrame.Get(), backBuffer.Get());
+}
+
+ID3D11ShaderResourceView* dx3d::SwapChain::getGameFrameView() const noexcept
+{
+	return m_gameFrameView.Get();
+}
+
 void dx3d::SwapChain::reloadBuffers()
 {
 	Microsoft::WRL::ComPtr<
@@ -169,6 +201,23 @@ void dx3d::SwapChain::reloadBuffers()
 		),
 		"CreateRenderTargetView failed."
 	);
+
+	D3D11_TEXTURE2D_DESC sceneFrameDesc{};
+	backBuffer->GetDesc(&sceneFrameDesc);
+	sceneFrameDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	sceneFrameDesc.MiscFlags = 0;
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateTexture2D(&sceneFrameDesc, nullptr, &m_sceneFrame),
+		"Create scene viewport texture failed.");
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateShaderResourceView(m_sceneFrame.Get(), nullptr, &m_sceneFrameView),
+		"Create scene viewport view failed.");
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateTexture2D(&sceneFrameDesc, nullptr, &m_gameFrame),
+		"Create game viewport texture failed.");
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateShaderResourceView(m_gameFrame.Get(), nullptr, &m_gameFrameView),
+		"Create game viewport view failed.");
 
 	D3D11_TEXTURE2D_DESC
 		depthTextureDesc{};

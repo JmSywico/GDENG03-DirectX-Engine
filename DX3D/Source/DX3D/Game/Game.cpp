@@ -39,6 +39,7 @@
 #include <cctype>
 #include <cstdio>
 #include <functional>
+#include <commdlg.h>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -47,6 +48,53 @@
 
 namespace
 {
+	bool projectWorldPoint(
+		const dx3d::Vec3& world,
+		const dx3d::Mat4x4& viewProjection,
+		const dx3d::TransformGizmo::ViewportArea& viewport,
+		ImVec2& screen)
+	{
+		const dx3d::Vec4 clip = viewProjection.transform(
+			{ world.x, world.y, world.z, 1.0f });
+		if (clip.w <= 0.001f) return false;
+		const float inverseW = 1.0f / clip.w;
+		const float x = clip.x * inverseW;
+		const float y = clip.y * inverseW;
+		const float z = clip.z * inverseW;
+		if (z < 0.0f || z > 1.0f) return false;
+		screen = {
+			viewport.x + (x * 0.5f + 0.5f) * viewport.width,
+			viewport.y + (-y * 0.5f + 0.5f) * viewport.height };
+		return true;
+	}
+
+	bool isEditorCamera(const dx3d::GameObject* object)
+	{
+		return object && object->getName() == "Editor Camera";
+	}
+
+	std::filesystem::path chooseScenePath(HWND owner, const std::filesystem::path& initial)
+	{
+		const DPI_AWARENESS_CONTEXT previousDpiContext =
+			SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+		wchar_t path[MAX_PATH]{};
+		if (!initial.empty()) wcsncpy_s(path, initial.c_str(), _TRUNCATE);
+		OPENFILENAMEW dialog{};
+		dialog.lStructSize = sizeof(dialog);
+		dialog.hwndOwner = owner;
+		dialog.lpstrFilter =
+			L"enignE Scenes (*.dx3dscene;*.escene)\0*.dx3dscene;*.escene\0"
+			L"DirectX enignE Scene (*.dx3dscene)\0*.dx3dscene\0"
+			L"Original enignE Scene (*.escene)\0*.escene\0All Files (*.*)\0*.*\0";
+		dialog.lpstrFile = path;
+		dialog.nMaxFile = static_cast<DWORD>(std::size(path));
+		dialog.lpstrDefExt = L"dx3dscene";
+		dialog.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+		const bool accepted = GetOpenFileNameW(&dialog) != FALSE;
+		if (previousDpiContext) SetThreadDpiAwarenessContext(previousDpiContext);
+		return accepted ? std::filesystem::path(path) : std::filesystem::path{};
+	}
+
 	ImVec4 rgba(
 		int red,
 		int green,
@@ -154,6 +202,11 @@ dx3d::Game::Game(const GameDesc& desc)
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
+	m_uiScale = std::clamp(
+		static_cast<f32>(GetDpiForWindow(
+			static_cast<HWND>(m_display->getNativeHandle()))) / 96.0f,
+		0.75f,
+		3.0f);
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -161,17 +214,19 @@ dx3d::Game::Game(const GameDesc& desc)
 
 	ImGui::StyleColorsDark();
 	applyWorkbenchStyle();
+	if (m_uiScale != 1.0f)
+		ImGui::GetStyle().ScaleAllSizes(m_uiScale);
 
 	ImFont* editorFont = io.Fonts->AddFontFromFileTTF(
 		"C:\\Windows\\Fonts\\SegUIVar.ttf",
-		16.0f
+		18.0f * m_uiScale
 	);
 
 	if (!editorFont)
 	{
 		editorFont = io.Fonts->AddFontFromFileTTF(
 			"C:\\Windows\\Fonts\\segoeui.ttf",
-			16.0f
+			18.0f * m_uiScale
 		);
 	}
 
@@ -1075,6 +1130,49 @@ void dx3d::Game::createNewScene()
 	m_sceneStatusMessage =
 		"New scene created";
 	m_sceneDirty = true;
+	ensureEditorCamera();
+	ensureGameCamera();
+}
+
+void dx3d::Game::ensureEditorCamera()
+{
+	ui32 cameraCount = 0;
+	const auto cameras = m_world->getComponents<CameraComponent>(cameraCount);
+	for (ui32 index = 0; index < cameraCount; ++index)
+	{
+		if (cameras[index] && isEditorCamera(&cameras[index]->getGameObject()))
+		{
+			m_editorCamera = &cameras[index]->getGameObject();
+			return;
+		}
+	}
+
+	m_editorCamera = m_world->createGameObject<GameObject>();
+	m_editorCamera->setName("Editor Camera");
+	auto* camera = m_editorCamera->createOrGetComponent<CameraComponent>();
+	camera->setNearPlane(0.1f);
+	camera->setFarPlane(100.0f);
+	camera->setFieldOfView(MathUtils::PI * 0.25f);
+	m_editorCamera->getTransform().setPosition({ 5.0f, 4.5f, -7.5f });
+	m_editorCamera->getTransform().setRotation({ 0.322f, -0.633f, 0.0f });
+}
+
+void dx3d::Game::ensureGameCamera()
+{
+	ui32 cameraCount = 0;
+	const auto cameras = m_world->getComponents<CameraComponent>(cameraCount);
+	for (ui32 index = 0; index < cameraCount; ++index)
+		if (cameras[index] && !isEditorCamera(&cameras[index]->getGameObject())) return;
+
+	auto* cameraObject = m_world->createGameObject<GameObject>();
+	cameraObject->setName("Main Camera");
+	auto* camera = cameraObject->createOrGetComponent<CameraComponent>();
+	camera->setNearPlane(0.1f);
+	camera->setFarPlane(100.0f);
+	camera->setFieldOfView(MathUtils::PI * 0.25f);
+	camera->setPrimary(true);
+	cameraObject->getTransform().setPosition({ 0.0f, 0.0f, -3.0f });
+	cameraObject->getTransform().setRotation({ 0.0f, 0.0f, 0.0f });
 }
 
 void dx3d::Game::saveScene()
@@ -1108,7 +1206,37 @@ void dx3d::Game::saveScene()
 
 void dx3d::Game::loadScene()
 {
-	loadScene(m_sceneFilePath);
+	if (m_editorMode != EditorMode::Editing) return;
+	if (m_sceneDirty)
+	{
+		m_requestSceneLoad = true;
+		return;
+	}
+	openSceneDialog();
+}
+
+void dx3d::Game::openSceneDialog()
+{
+	auto path = chooseScenePath(
+		static_cast<HWND>(m_display->getNativeHandle()), m_sceneFilePath);
+	if (path.extension() == ".escene")
+	{
+		auto convertedPath = path;
+		convertedPath.replace_extension(".dx3dscene");
+		if (!std::filesystem::exists(convertedPath))
+		{
+			convertedPath = std::filesystem::path("Scenes") / "enignE" / path.filename();
+			convertedPath.replace_extension(".dx3dscene");
+		}
+		if (!std::filesystem::exists(convertedPath))
+		{
+			m_sceneStatusMessage = "No DX11 counterpart exists for: " + path.string();
+			DX3DLogError("Selected .escene has no converted DX11 counterpart.");
+			return;
+		}
+		path = std::move(convertedPath);
+	}
+	if (!path.empty()) loadScene(path.string());
 }
 
 void dx3d::Game::loadScene(const std::string& filePath)
@@ -1136,6 +1264,8 @@ void dx3d::Game::loadScene(const std::string& filePath)
 
 		return;
 	}
+	ensureEditorCamera();
+	ensureGameCamera();
 
 	pushUndoSnapshot(previousScene);
 
@@ -1208,6 +1338,8 @@ void dx3d::Game::undo()
 
 	if (SceneSerializer::deserialize(*m_world, target).success)
 	{
+		ensureEditorCamera();
+		ensureGameCamera();
 		clearSelection();
 		m_sceneDirty = true;
 		m_sceneStatusMessage = "Undo";
@@ -1232,6 +1364,8 @@ void dx3d::Game::redo()
 
 	if (SceneSerializer::deserialize(*m_world, target).success)
 	{
+		ensureEditorCamera();
+		ensureGameCamera();
 		clearSelection();
 		m_sceneDirty = true;
 		m_sceneStatusMessage = "Redo";
@@ -1255,10 +1389,13 @@ void dx3d::Game::startPlayMode()
 	// Reconstruct authorable objects so runtime mutations are isolated from
 	// the editor scene. The editor camera is intentionally preserved.
 	SceneSerializer::deserialize(*m_world, m_editorSceneSnapshot);
+	ensureEditorCamera();
+	ensureGameCamera();
 	m_physicsWorld->reset(*m_world);
 	clearSelection();
 	m_fixedStepAccumulator = 0.0f;
 	m_editorMode = EditorMode::Playing;
+	m_focusGameViewRequested = true;
 	m_sceneStatusMessage = "Play Mode";
 }
 
@@ -1273,6 +1410,8 @@ void dx3d::Game::stopPlayMode()
 			*m_world,
 			m_editorSceneSnapshot
 		);
+		ensureEditorCamera();
+		ensureGameCamera();
 	}
 
 	clearSelection();
@@ -1280,6 +1419,7 @@ void dx3d::Game::stopPlayMode()
 	m_fixedStepAccumulator = 0.0f;
 	m_singleStepRequested = false;
 	m_editorMode = EditorMode::Editing;
+	m_focusSceneViewRequested = true;
 	m_sceneStatusMessage = "Edit Mode";
 }
 
@@ -1311,27 +1451,19 @@ void dx3d::Game::refreshAssetLens()
 
 			if (iterator->is_regular_file(error))
 			{
-				m_assetPaths.push_back(
-					iterator->path().generic_string()
-				);
+				std::string extension = iterator->path().extension().string();
+				std::transform(extension.begin(), extension.end(), extension.begin(),
+					[](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+				if (extension == ".meta" || extension == ".escene" ||
+					extension == ".dx3dscene" || extension == ".json" ||
+					iterator->path().filename() == ".DS_Store") continue;
+				m_assetPaths.push_back(iterator->path().generic_string());
 			}
 		}
 	};
 
+	scanRoot("assets");
 	scanRoot(std::filesystem::path("DX3D") / "Assets");
-	scanRoot("Scenes");
-
-	for (const auto& entry : std::filesystem::directory_iterator(
-		std::filesystem::current_path(),
-		error
-	))
-	{
-		if (entry.is_regular_file(error) &&
-			entry.path().extension() == ".dx3dscene")
-		{
-			m_assetPaths.push_back(entry.path().filename().generic_string());
-		}
-	}
 
 	std::sort(m_assetPaths.begin(), m_assetPaths.end());
 	m_assetPaths.erase(
@@ -1409,20 +1541,62 @@ void dx3d::Game::onInternalUpdate()
 		*m_world,
 		m_display->getSwapChain(),
 		deltaTime,
-		m_editorMode != EditorMode::Editing
+		false
 	);
+	m_display->getSwapChain().captureSceneFrame();
+	m_worldRenderer->render(
+		*m_world,
+		m_display->getSwapChain(),
+		deltaTime,
+		true
+	);
+	m_display->getSwapChain().captureGameFrame();
 
-// --------------------
-// Main editor menu
-// --------------------
+	// Native enignE chrome: a fixed 32 px title bar owns the menus and the
+	// borderless Win32 caption controls.
+	const ImGuiViewport* viewport = ImGui::GetMainViewport();
+	const float titleBarHeight = 32.0f * m_uiScale;
+	const float captionButtonWidth = 46.0f * m_uiScale;
+	const float captionControlsWidth = captionButtonWidth * 3.0f;
+	ImGui::SetNextWindowPos(viewport->Pos, ImGuiCond_Always);
+	ImGui::SetNextWindowSize({ viewport->Size.x, titleBarHeight }, ImGuiCond_Always);
+	ImGui::SetNextWindowViewport(viewport->ID);
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, rgba(18, 18, 20));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.0f, 0.0f });
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	const ImGuiWindowFlags titleBarFlags =
+		ImGuiWindowFlags_NoDecoration |
+		ImGuiWindowFlags_NoMove |
+		ImGuiWindowFlags_NoSavedSettings |
+		ImGuiWindowFlags_NoBringToFrontOnFocus |
+		ImGuiWindowFlags_NoNavFocus;
 
-	if (ImGui::BeginMainMenuBar())
+	if (ImGui::Begin("##TitleBar", nullptr, titleBarFlags))
 	{
-		ImGui::TextColored(rgba(235, 171, 77), "enignE / DX11");
-		ImGui::Separator();
-		if (ImGui::BeginMenu("File"))
+		const ImVec2 barMin = ImGui::GetWindowPos();
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const ImU32 captionText = IM_COL32(224, 222, 216, 255);
+		const ImVec2 iconMin{ barMin.x + 10.0f * m_uiScale, barMin.y + 9.0f * m_uiScale };
+		const ImVec2 iconMax{ iconMin.x + 14.0f * m_uiScale, iconMin.y + 14.0f * m_uiScale };
+		drawList->AddRect(iconMin, iconMax, captionText);
+		drawList->AddLine({ iconMin.x + 1.0f, iconMin.y + 4.0f },
+			{ iconMax.x - 1.0f, iconMin.y + 4.0f }, captionText);
+		drawList->AddText(
+			{ barMin.x + 32.0f * m_uiScale, barMin.y + (titleBarHeight - ImGui::GetFontSize()) * 0.5f },
+			captionText, m_sceneDirty ? "enignE  *" : "enignE");
+
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.07f, 0.07f, 0.075f, 0.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.215f, 0.205f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.36f, 0.285f, 0.15f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 8.0f * m_uiScale, 4.0f * m_uiScale });
+
+		ImGui::SetCursorScreenPos({ barMin.x + 92.0f * m_uiScale, barMin.y + 4.0f * m_uiScale });
+		if (ImGui::Button("File", { 48.0f * m_uiScale, 24.0f * m_uiScale }))
+			ImGui::OpenPopup("##FileMenu");
+		if (ImGui::BeginPopup("##FileMenu"))
 		{
-			if (ImGui::MenuItem(
+			if (false && ImGui::MenuItem(
 				"New Scene"
 			))
 			{
@@ -1430,57 +1604,30 @@ void dx3d::Game::onInternalUpdate()
 			}
 
 			if (ImGui::MenuItem(
-				"Save Scene"
+				"Save", "Ctrl+S"
 			))
 			{
 				saveScene();
 			}
 
 			if (ImGui::MenuItem(
-				"Load Scene"
+				"Load", "Ctrl+O", false, m_editorMode == EditorMode::Editing
 			))
 			{
 				loadScene();
 			}
 
-			if (ImGui::BeginMenu("Scene Library"))
-			{
-				bool foundScene = false;
-				for (const auto& path : m_assetPaths)
-				{
-					const std::filesystem::path scenePath(path);
-					if (scenePath.extension() != ".dx3dscene")
-						continue;
-
-					foundScene = true;
-					const std::string label =
-						scenePath.filename().generic_string() + "##" + path;
-					ImGui::BeginDisabled(m_editorMode != EditorMode::Editing);
-					if (ImGui::MenuItem(label.c_str()))
-						loadScene(path);
-					ImGui::EndDisabled();
-				}
-
-				if (!foundScene)
-					ImGui::TextDisabled("No native scenes discovered");
-
-				ImGui::Separator();
-				if (ImGui::MenuItem("Refresh Library"))
-					refreshAssetLens();
-				ImGui::EndMenu();
-			}
-
 			ImGui::Separator();
+			if (ImGui::MenuItem("Exit")) m_requestEditorClose = true;
 
-			ImGui::TextDisabled(
-				"%s",
-				m_sceneStatusMessage.c_str()
-			);
-
-			ImGui::EndMenu();
+			ImGui::EndPopup();
 		}
 
-		if (ImGui::BeginMenu("Game Object"))
+		constexpr bool showLegacyChromeMenus = false;
+		ImGui::SetCursorScreenPos({ barMin.x + 196.0f * m_uiScale, barMin.y + 4.0f * m_uiScale });
+		if (showLegacyChromeMenus && ImGui::Button("Create", { 56.0f * m_uiScale, 24.0f * m_uiScale }))
+			ImGui::OpenPopup("##CreateMenu");
+		if (ImGui::BeginPopup("##CreateMenu"))
 		{
 			if (ImGui::MenuItem("Create Cube"))
 			{
@@ -1687,10 +1834,13 @@ void dx3d::Game::onInternalUpdate()
 				);
 			}
 
-			ImGui::EndMenu();
+			ImGui::EndPopup();
 		}
 
-		if (ImGui::BeginMenu("Edit"))
+		ImGui::SetCursorScreenPos({ barMin.x + 144.0f * m_uiScale, barMin.y + 4.0f * m_uiScale });
+		if (ImGui::Button("Edit", { 48.0f * m_uiScale, 24.0f * m_uiScale }))
+			ImGui::OpenPopup("##EditMenu");
+		if (ImGui::BeginPopup("##EditMenu"))
 		{
 			if (ImGui::MenuItem(
 				"Undo", "Ctrl+Z", false,
@@ -1705,17 +1855,38 @@ void dx3d::Game::onInternalUpdate()
 			{
 				redo();
 			}
-			ImGui::EndMenu();
+			ImGui::Separator();
+			if (ImGui::MenuItem("Copy", "Ctrl+C", false, canCopySelectedObject()))
+				copySelectedObject();
+			if (ImGui::MenuItem("Paste", "Ctrl+V", false, m_objectClipboard.isValid))
+				pasteCopiedObject();
+			if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, canCopySelectedObject()))
+				duplicateSelectedObject();
+			const bool canDelete = m_selectedObject && !isEditorCamera(m_selectedObject);
+			if (ImGui::MenuItem("Delete Selected", "Del", false, canDelete))
+			{
+				pushUndoSnapshot();
+				GameObject* objectToDelete = m_selectedObject;
+				m_world->destroyGameObject(objectToDelete);
+				removeObjectFromSelection(objectToDelete);
+			}
+			ImGui::EndPopup();
 		}
 
-		if (ImGui::BeginMenu("View"))
+		ImGui::SetCursorScreenPos({ barMin.x + 256.0f * m_uiScale, barMin.y + 4.0f * m_uiScale });
+		if (showLegacyChromeMenus && ImGui::Button("View", { 48.0f * m_uiScale, 24.0f * m_uiScale }))
+			ImGui::OpenPopup("##ViewMenu");
+		if (ImGui::BeginPopup("##ViewMenu"))
 		{
 			ImGui::MenuItem("Stats", nullptr, &m_showStats);
 			ImGui::MenuItem("Asset Lens", nullptr, &m_showAssetLens);
-			ImGui::EndMenu();
+			ImGui::EndPopup();
 		}
 
-		if (ImGui::BeginMenu("Gizmo"))
+		ImGui::SetCursorScreenPos({ barMin.x + 308.0f * m_uiScale, barMin.y + 4.0f * m_uiScale });
+		if (showLegacyChromeMenus && ImGui::Button("Gizmo", { 56.0f * m_uiScale, 24.0f * m_uiScale }))
+			ImGui::OpenPopup("##GizmoMenu");
+		if (ImGui::BeginPopup("##GizmoMenu"))
 		{
 			if (ImGui::MenuItem(
 				"Translate",
@@ -1753,20 +1924,150 @@ void dx3d::Game::onInternalUpdate()
 				);
 			}
 
-			ImGui::EndMenu();
+			ImGui::EndPopup();
 		}
 
-		ImGui::EndMainMenuBar();
+		ImGui::PopStyleVar();
+		ImGui::PopStyleColor(3);
+
+		const ImVec2 dragMin{ barMin.x + 204.0f * m_uiScale, barMin.y };
+		const ImVec2 dragMax{
+			barMin.x + ImGui::GetWindowWidth() - captionControlsWidth,
+			barMin.y + titleBarHeight
+		};
+		if (ImGui::IsMouseHoveringRect(dragMin, dragMax) &&
+			ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+		{
+			m_display->toggleMaximizeRestore();
+		}
+		else if (ImGui::IsMouseHoveringRect(dragMin, dragMax) &&
+			ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+		{
+			m_display->beginTitleBarDrag();
+		}
+
+		const auto drawCaptionButton = [drawList, barMin, captionButtonWidth, titleBarHeight](
+			const char* id, float x, ImU32 hoveredColor, ImU32 activeColor,
+			const std::function<void(ImVec2, ImU32)>& drawGlyph)
+		{
+			const ImVec2 position{ x, barMin.y };
+			ImGui::SetCursorScreenPos(position);
+			ImGui::InvisibleButton(id, { captionButtonWidth, titleBarHeight });
+			if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+			{
+				drawList->AddRectFilled(position,
+					{ position.x + captionButtonWidth, position.y + titleBarHeight },
+					ImGui::IsItemActive() ? activeColor : hoveredColor);
+			}
+			drawGlyph({ position.x + captionButtonWidth * 0.5f,
+				position.y + titleBarHeight * 0.5f }, IM_COL32(245, 245, 245, 255));
+			return ImGui::IsItemClicked();
+		};
+
+		const float controlsX = barMin.x + ImGui::GetWindowWidth() - captionControlsWidth;
+		if (drawCaptionButton("##Minimize", controlsX,
+			IM_COL32(44, 43, 42, 255), IM_COL32(72, 58, 34, 255),
+			[drawList](ImVec2 center, ImU32 color)
+			{
+				drawList->AddLine({ center.x - 5.0f, center.y + 3.0f },
+					{ center.x + 5.0f, center.y + 3.0f }, color);
+			})) m_display->minimize();
+
+		const bool maximized = m_display->isMaximized();
+		if (drawCaptionButton("##MaximizeRestore", controlsX + captionButtonWidth,
+			IM_COL32(44, 43, 42, 255), IM_COL32(72, 58, 34, 255),
+			[drawList, maximized](ImVec2 center, ImU32 color)
+			{
+				if (maximized)
+				{
+					drawList->AddRect({ center.x - 3.0f, center.y - 5.0f },
+						{ center.x + 5.0f, center.y + 3.0f }, color);
+					drawList->AddRect({ center.x - 5.0f, center.y - 3.0f },
+						{ center.x + 3.0f, center.y + 5.0f }, color);
+				}
+				else drawList->AddRect({ center.x - 5.0f, center.y - 5.0f },
+					{ center.x + 5.0f, center.y + 5.0f }, color);
+			})) m_display->toggleMaximizeRestore();
+
+		if (drawCaptionButton("##Close", controlsX + captionButtonWidth * 2.0f,
+			IM_COL32(196, 43, 54, 255), IM_COL32(160, 32, 42, 255),
+			[drawList](ImVec2 center, ImU32 color)
+			{
+				drawList->AddLine({ center.x - 5.0f, center.y - 5.0f },
+					{ center.x + 5.0f, center.y + 5.0f }, color);
+				drawList->AddLine({ center.x + 5.0f, center.y - 5.0f },
+					{ center.x - 5.0f, center.y + 5.0f }, color);
+			})) m_requestEditorClose = true;
+	}
+	ImGui::End();
+	ImGui::PopStyleVar(3);
+	ImGui::PopStyleColor();
+
+	if (m_requestSceneLoad)
+	{
+		m_requestSceneLoad = false;
+		ImGui::OpenPopup("Unsaved scene");
+	}
+	if (ImGui::BeginPopupModal(
+		"Unsaved scene", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		ImGui::TextUnformatted("The current scene has unsaved changes.");
+		ImGui::TextUnformatted("Save before loading another scene?");
+		if (ImGui::Button("Save and load"))
+		{
+			saveScene();
+			if (!m_sceneDirty)
+			{
+				openSceneDialog();
+				ImGui::CloseCurrentPopup();
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Discard and load"))
+		{
+			openSceneDialog();
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+		ImGui::EndPopup();
 	}
 
-	const ImGuiViewport* viewport =
-		ImGui::GetMainViewport();
+	if (m_requestEditorClose)
+	{
+		m_requestEditorClose = false;
+		if (m_sceneDirty) ImGui::OpenPopup("Unsaved scene before exit");
+		else m_display->close();
+	}
+	if (ImGui::BeginPopupModal(
+		"Unsaved scene before exit", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		ImGui::TextUnformatted("The current scene has unsaved changes.");
+		if (ImGui::Button("Save and exit"))
+		{
+			saveScene();
+			if (!m_sceneDirty)
+			{
+				m_display->close();
+				ImGui::CloseCurrentPopup();
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Discard and exit"))
+		{
+			m_display->close();
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+		ImGui::EndPopup();
+	}
 
 	const ImVec2 workPosition =
-		viewport->WorkPos;
+		{ viewport->Pos.x, viewport->Pos.y + titleBarHeight };
 
 	const ImVec2 workSize =
-		viewport->WorkSize;
+		{ viewport->Size.x, viewport->Size.y - titleBarHeight };
 
 	ImGui::SetNextWindowPos(workPosition, ImGuiCond_Always);
 	ImGui::SetNextWindowSize(workSize, ImGuiCond_Always);
@@ -1790,7 +2091,7 @@ void dx3d::Game::onInternalUpdate()
 	ImGui::PopStyleVar(3);
 
 	const ImGuiID dockspaceId =
-		ImGui::GetID("EngineWorkbenchDockspaceV4");
+		ImGui::GetID("EngineWorkbenchDockspaceV5");
 
 	if (!m_defaultDockLayoutBuilt)
 	{
@@ -1812,10 +2113,12 @@ void dx3d::Game::onInternalUpdate()
 			const ImGuiID assets = ImGui::DockBuilderSplitNode(
 				elements, ImGuiDir_Right, 0.62f, nullptr, &elements);
 
-			ImGui::DockBuilderDockWindow("ELEMENTS##Workbench", elements);
-			ImGui::DockBuilderDockWindow("ASSET LENS##Workbench", assets);
-			ImGui::DockBuilderDockWindow("STATS##Workbench", signal);
-			ImGui::DockBuilderDockWindow("INSPECTOR##Workbench", signal);
+			ImGui::DockBuilderDockWindow("Scene", center);
+			ImGui::DockBuilderDockWindow("Game", center);
+			ImGui::DockBuilderDockWindow("Elements##Workbench", elements);
+			ImGui::DockBuilderDockWindow("Asset Lens##Workbench", assets);
+			ImGui::DockBuilderDockWindow("Stats##Workbench", signal);
+			ImGui::DockBuilderDockWindow("Inspector##Workbench", signal);
 			ImGui::DockBuilderFinish(dockspaceId);
 		}
 		m_defaultDockLayoutBuilt = true;
@@ -1828,75 +2131,143 @@ void dx3d::Game::onInternalUpdate()
 	);
 	ImGui::End();
 
-	// Compact engine-state toolbar. It deliberately exposes simulation state
-	// without turning the editor into a ribbon-heavy clone.
-	ImGui::SetNextWindowPos(workPosition, ImGuiCond_Always);
-	ImGui::SetNextWindowSize(
-		{ std::max(260.0f, workSize.x - 390.0f), 42.0f },
-		ImGuiCond_FirstUseEver
-	);
-	ImGui::Begin(
-		"FRAME CONTROL##Workbench",
-		nullptr,
-		ImGuiWindowFlags_NoTitleBar |
-		ImGuiWindowFlags_NoResize |
-		ImGuiWindowFlags_NoMove |
-		ImGuiWindowFlags_NoScrollbar |
-		ImGuiWindowFlags_NoSavedSettings
-	);
+	ImVec2 sceneViewportOrigin = workPosition;
+	ImVec2 sceneViewportSize = workSize;
+	bool sceneViewportVisible = false;
+	m_sceneViewportHovered = false;
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.0f, 0.0f });
+	if (m_focusSceneViewRequested)
+	{
+		ImGui::SetNextWindowFocus();
+		m_focusSceneViewRequested = false;
+	}
+	sceneViewportVisible = ImGui::Begin("Scene", nullptr,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+		ImGuiWindowFlags_NoBackground);
+	if (sceneViewportVisible)
+	{
+		sceneViewportOrigin = ImGui::GetCursorScreenPos();
+		sceneViewportSize = ImGui::GetContentRegionAvail();
+		if (ID3D11ShaderResourceView* sceneView =
+			m_display->getSwapChain().getSceneFrameView())
+			ImGui::Image(sceneView, sceneViewportSize);
+		else
+			ImGui::Dummy(sceneViewportSize);
+		m_sceneViewportHovered = ImGui::IsItemHovered();
+	}
+	ImGui::End();
+	if (m_focusGameViewRequested)
+	{
+		ImGui::SetNextWindowFocus();
+		m_focusGameViewRequested = false;
+	}
+	if (ImGui::Begin("Game", nullptr,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+		ImGuiWindowFlags_NoBackground))
+	{
+		const ImVec2 available = ImGui::GetContentRegionAvail();
+		if (ID3D11ShaderResourceView* gameView =
+			m_display->getSwapChain().getGameFrameView())
+			ImGui::Image(gameView, available);
+		else
+			ImGui::Dummy(available);
+	}
+	ImGui::End();
+	ImGui::PopStyleVar();
 
+	// Match the reference floating viewport tool cluster. It belongs only to
+	// the Scene tab; the Game tab remains a clean runtime surface.
+	if (sceneViewportVisible)
+	{
+	ImGui::SetNextWindowPos(
+		{ sceneViewportOrigin.x + 12.0f * m_uiScale, sceneViewportOrigin.y + 12.0f * m_uiScale },
+		ImGuiCond_Always);
+	ImGui::SetNextWindowBgAlpha(0.78f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 5.0f * m_uiScale, 5.0f * m_uiScale });
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 4.0f * m_uiScale, 0.0f });
+	ImGui::Begin("##ViewportTools", nullptr,
+		ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+		ImGuiWindowFlags_NoDocking);
+	const auto drawToolButton = [this](const char* id, bool active, const char* tooltip,
+		const std::function<void(ImDrawList*, ImVec2, ImVec2, ImU32)>& drawIcon)
+	{
+		if (active)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.38f, 0.30f, 0.155f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.46f, 0.36f, 0.18f, 1.0f));
+		}
+		const bool pressed = ImGui::Button(id, { 30.0f * m_uiScale, 30.0f * m_uiScale });
+		const ImVec2 minimum = ImGui::GetItemRectMin();
+		const ImVec2 maximum = ImGui::GetItemRectMax();
+		const ImU32 color = active ? IM_COL32(245, 194, 105, 255) : IM_COL32(205, 215, 210, 255);
+		drawIcon(ImGui::GetWindowDrawList(), minimum, maximum, color);
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tooltip);
+		if (active) ImGui::PopStyleColor(2);
+		return pressed;
+	};
+	if (drawToolButton("##MoveTool",
+		m_transformGizmo.getOperation() == TransformGizmo::Operation::Translate, "Move [W]",
+		[](ImDrawList* list, ImVec2 minimum, ImVec2 maximum, ImU32 color)
+		{
+			const ImVec2 center{ (minimum.x + maximum.x) * 0.5f, (minimum.y + maximum.y) * 0.5f };
+			list->AddLine({ center.x - 8.0f, center.y }, { center.x + 8.0f, center.y }, color, 2.0f);
+			list->AddLine({ center.x, center.y - 8.0f }, { center.x, center.y + 8.0f }, color, 2.0f);
+			list->AddTriangleFilled({ center.x + 8.0f, center.y }, { center.x + 4.0f, center.y - 3.0f }, { center.x + 4.0f, center.y + 3.0f }, color);
+			list->AddTriangleFilled({ center.x, center.y - 8.0f }, { center.x - 3.0f, center.y - 4.0f }, { center.x + 3.0f, center.y - 4.0f }, color);
+		})) m_transformGizmo.setOperation(TransformGizmo::Operation::Translate);
+	ImGui::SameLine();
+	if (drawToolButton("##RotateTool",
+		m_transformGizmo.getOperation() == TransformGizmo::Operation::Rotate, "Rotate [E]",
+		[](ImDrawList* list, ImVec2 minimum, ImVec2 maximum, ImU32 color)
+		{
+			const ImVec2 center{ (minimum.x + maximum.x) * 0.5f, (minimum.y + maximum.y) * 0.5f };
+			list->AddCircle(center, 8.0f, color, 24, 2.0f);
+			list->AddTriangleFilled({ center.x + 8.0f, center.y - 4.0f }, { center.x + 12.0f, center.y - 4.0f }, { center.x + 9.0f, center.y }, color);
+		})) m_transformGizmo.setOperation(TransformGizmo::Operation::Rotate);
+	ImGui::SameLine();
+	if (drawToolButton("##ScaleTool",
+		m_transformGizmo.getOperation() == TransformGizmo::Operation::Scale, "Scale [R]",
+		[](ImDrawList* list, ImVec2 minimum, ImVec2 maximum, ImU32 color)
+		{
+			const ImVec2 center{ (minimum.x + maximum.x) * 0.5f, (minimum.y + maximum.y) * 0.5f };
+			list->AddRect({ center.x - 7.0f, center.y - 7.0f }, { center.x + 7.0f, center.y + 7.0f }, color, 1.5f, 0, 2.0f);
+			list->AddLine({ center.x - 10.0f, center.y + 10.0f }, { center.x - 4.0f, center.y + 4.0f }, color, 2.0f);
+			list->AddLine({ center.x + 4.0f, center.y - 4.0f }, { center.x + 10.0f, center.y - 10.0f }, color, 2.0f);
+		})) m_transformGizmo.setOperation(TransformGizmo::Operation::Scale);
+	ImGui::SameLine();
+	ImGui::TextDisabled("|");
+	ImGui::SameLine();
 	if (m_editorMode == EditorMode::Editing)
 	{
-		if (ImGui::Button("PLAY  >"))
-			startPlayMode();
+		if (ImGui::Button("Run", { 42.0f * m_uiScale, 30.0f * m_uiScale })) startPlayMode();
 	}
 	else
 	{
-		if (ImGui::Button("STOP  []"))
-			stopPlayMode();
-
+		if (ImGui::Button("Stop", { 42.0f * m_uiScale, 30.0f * m_uiScale })) stopPlayMode();
 		ImGui::SameLine();
 		const bool paused = m_editorMode == EditorMode::Paused;
-		if (ImGui::Button(paused ? "RESUME  >" : "PAUSE  ||"))
+		if (ImGui::Button(paused ? "Resume" : "Pause", { 58.0f * m_uiScale, 30.0f * m_uiScale }))
+			m_editorMode = paused ? EditorMode::Playing : EditorMode::Paused;
+		if (paused)
 		{
-			m_editorMode = paused
-				? EditorMode::Playing
-				: EditorMode::Paused;
+			ImGui::SameLine();
+			if (ImGui::Button("Step", { 42.0f * m_uiScale, 30.0f * m_uiScale })) m_singleStepRequested = true;
 		}
-
-		ImGui::SameLine();
-		ImGui::BeginDisabled(!paused);
-		if (ImGui::Button("STEP  >|"))
-			m_singleStepRequested = true;
-		ImGui::EndDisabled();
 	}
-
-	ImGui::SameLine();
-	ImGui::Separator();
-	ImGui::SameLine();
-	const char* modeText = m_editorMode == EditorMode::Editing
-		? "EDIT"
-		: (m_editorMode == EditorMode::Playing ? "PLAY" : "PAUSED");
-	ImGui::TextColored(
-		m_editorMode == EditorMode::Editing
-			? rgba(150, 160, 158)
-			: rgba(235, 171, 77),
-		"%s  /  %s%s",
-		modeText,
-		m_sceneStatusMessage.c_str(),
-		m_sceneDirty ? "  *" : ""
-	);
 	ImGui::End();
+	ImGui::PopStyleVar(2);
+	}
 
 	const float panelWidth = std::clamp(
 		workSize.x * 0.245f,
-		300.0f,
-		380.0f
+		300.0f * m_uiScale,
+		380.0f * m_uiScale
 	);
 	const float elementsHeight = std::clamp(
 		workSize.y * 0.38f,
-		210.0f,
-		340.0f
+		210.0f * m_uiScale,
+		340.0f * m_uiScale
 	);
 
 	CameraComponent* editorCameraComponent = nullptr;
@@ -1912,7 +2283,7 @@ void dx3d::Game::onInternalUpdate()
 		auto* cameraComponent =
 			object->getComponent<CameraComponent>();
 
-		if (cameraComponent)
+		if (cameraComponent && isEditorCamera(object))
 		{
 			editorCameraComponent =
 				cameraComponent;
@@ -1923,10 +2294,10 @@ void dx3d::Game::onInternalUpdate()
 
 	const TransformGizmo::ViewportArea gizmoViewport
 	{
-		workPosition.x,
-		workPosition.y + 42.0f,
-		workSize.x * 0.72f,
-		std::max(1.0f, workSize.y * 0.76f - 42.0f)
+		sceneViewportOrigin.x,
+		sceneViewportOrigin.y,
+		std::max(1.0f, sceneViewportSize.x),
+		std::max(1.0f, sceneViewportSize.y)
 	};
 
 	if (m_editorMode == EditorMode::Editing &&
@@ -1942,6 +2313,91 @@ void dx3d::Game::onInternalUpdate()
 		editorCameraComponent,
 		gizmoViewport
 	);
+
+	// Authored cameras are scene objects. Draw the same compact camera marker
+	// and selected-camera frustum used by enignE's Scene viewport.
+	if (editorCameraComponent)
+	{
+		const Mat4x4 viewProjection = editorCameraComponent->getViewMatrix() *
+			editorCameraComponent->getProjectionMatrix();
+		ImDrawList* overlay = ImGui::GetForegroundDrawList();
+		overlay->PushClipRect(
+			{ gizmoViewport.x, gizmoViewport.y },
+			{ gizmoViewport.x + gizmoViewport.width,
+			  gizmoViewport.y + gizmoViewport.height }, true);
+
+		for (auto* object : sceneObjects)
+		{
+			if (!object || isEditorCamera(object)) continue;
+			auto* camera = object->getComponent<CameraComponent>();
+			if (!camera) continue;
+
+			ImVec2 icon{};
+			if (!projectWorldPoint(object->getTransform().getPosition(),
+				viewProjection, gizmoViewport, icon)) continue;
+
+			const bool selected = isObjectSelected(object);
+			const ImU32 color = selected
+				? IM_COL32(255, 194, 72, 255)
+				: camera->isPrimary()
+					? IM_COL32(92, 218, 164, 255)
+					: IM_COL32(112, 190, 255, 255);
+			const float scale = m_uiScale;
+			const ImVec2 bodyMin{ icon.x - 10.0f * scale, icon.y - 7.0f * scale };
+			const ImVec2 bodyMax{ icon.x + 5.0f * scale, icon.y + 7.0f * scale };
+			overlay->AddRect(bodyMin, bodyMax, color, 2.0f * scale, 0,
+				selected ? 2.5f * scale : 2.0f * scale);
+			overlay->AddTriangle(
+				{ bodyMax.x, icon.y - 5.0f * scale },
+				{ icon.x + 12.0f * scale, icon.y - 9.0f * scale },
+				{ icon.x + 12.0f * scale, icon.y + 9.0f * scale },
+				color, selected ? 2.5f * scale : 2.0f * scale);
+			overlay->AddCircleFilled(icon, selected ? 2.5f * scale : 2.0f * scale, color);
+
+			if (!selected) continue;
+			auto& transform = object->getTransform();
+			const Vec3 origin = transform.getPosition();
+			const Vec3 forward = transform.forward();
+			const Vec3 right = transform.right();
+			const Vec3 up = transform.up();
+			const float distance = 1.5f;
+			const float halfHeight = std::tan(camera->getFieldOfView() * 0.5f) * distance;
+			const float halfWidth = halfHeight *
+				(std::max(1.0f, sceneViewportSize.x) / std::max(1.0f, sceneViewportSize.y));
+			const Vec3 center{
+				origin.x + forward.x * distance,
+				origin.y + forward.y * distance,
+				origin.z + forward.z * distance };
+			const std::array<Vec3, 4> corners{{
+				{ center.x - right.x * halfWidth - up.x * halfHeight,
+				  center.y - right.y * halfWidth - up.y * halfHeight,
+				  center.z - right.z * halfWidth - up.z * halfHeight },
+				{ center.x + right.x * halfWidth - up.x * halfHeight,
+				  center.y + right.y * halfWidth - up.y * halfHeight,
+				  center.z + right.z * halfWidth - up.z * halfHeight },
+				{ center.x + right.x * halfWidth + up.x * halfHeight,
+				  center.y + right.y * halfWidth + up.y * halfHeight,
+				  center.z + right.z * halfWidth + up.z * halfHeight },
+				{ center.x - right.x * halfWidth + up.x * halfHeight,
+				  center.y - right.y * halfWidth + up.y * halfHeight,
+				  center.z - right.z * halfWidth + up.z * halfHeight }
+			}};
+			std::array<ImVec2, 4> projected{};
+			bool visible = true;
+			for (size_t index = 0; index < corners.size(); ++index)
+				visible = projectWorldPoint(corners[index], viewProjection,
+					gizmoViewport, projected[index]) && visible;
+			if (visible)
+			{
+				for (const ImVec2& corner : projected)
+					overlay->AddLine(icon, corner, color, 1.5f * scale);
+				for (size_t index = 0; index < projected.size(); ++index)
+					overlay->AddLine(projected[index], projected[(index + 1) % 4],
+						color, 1.5f * scale);
+			}
+		}
+		overlay->PopClipRect();
+	}
 
 	ImGui::SetNextWindowPos(
 		{
@@ -1959,40 +2415,17 @@ void dx3d::Game::onInternalUpdate()
 		ImGuiCond_FirstUseEver
 	);
 
-	ImGui::Begin("ELEMENTS##Workbench");
+	ImGui::Begin("Elements##Workbench");
 
 	const auto objects = m_world->getGameObjects();
 
-	ImGui::SetNextItemWidth(-1.0f);
-	ImGui::InputTextWithHint(
-		"##RegistryFilter",
-		"Filter registry by name...",
-		m_registryFilter,
-		sizeof(m_registryFilter)
-	);
-	ImGui::TextDisabled("REGISTRY LENS  /  %zu ENTITIES", objects.size());
-
-	auto normalizedContains = [](const std::string& value, const char* filter)
-	{
-		if (!filter || filter[0] == '\0') return true;
-		std::string haystack = value;
-		std::string needle = filter;
-		std::transform(haystack.begin(), haystack.end(), haystack.begin(),
-			[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-		std::transform(needle.begin(), needle.end(), needle.begin(),
-			[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-		return haystack.find(needle) != std::string::npos;
-	};
-
-	std::function<bool(GameObject*)> subtreeMatches;
-	subtreeMatches = [&](GameObject* object)
-	{
-		if (!object) return false;
-		if (normalizedContains(object->getName(), m_registryFilter)) return true;
-		for (auto* child : object->getChildren())
-			if (subtreeMatches(child)) return true;
-		return false;
-	};
+	const size_t authoredObjectCount = static_cast<size_t>(std::count_if(
+		objects.begin(), objects.end(), [](const GameObject* object)
+		{ return object && !isEditorCamera(object); }));
+	ImGui::TextUnformatted("Scene");
+	ImGui::SameLine();
+	ImGui::TextDisabled("%zu elements", authoredObjectCount);
+	ImGui::Separator();
 
 	GameObject* requestedChild = nullptr;
 	GameObject* requestedParent = nullptr;
@@ -2000,130 +2433,90 @@ void dx3d::Game::onInternalUpdate()
 	GameObject* requestedDuplicate = nullptr;
 	bool reparentRequested = false;
 
-	if (ImGui::BeginTable(
-		"RegistryLens", 4,
-		ImGuiTableFlags_RowBg |
-		ImGuiTableFlags_BordersInnerH |
-		ImGuiTableFlags_BordersInnerV |
-		ImGuiTableFlags_Resizable |
-		ImGuiTableFlags_ScrollY))
+	std::function<void(GameObject*)> drawEntity;
+	drawEntity = [&](GameObject* object)
 	{
-		ImGui::TableSetupColumn("ENTITY", ImGuiTableColumnFlags_WidthStretch, 0.44f);
-		ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 56.0f);
-		ImGui::TableSetupColumn("PARENT", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-		ImGui::TableSetupColumn("COMPOSITION", ImGuiTableColumnFlags_WidthStretch, 0.30f);
-		ImGui::TableHeadersRow();
+		if (!object || isEditorCamera(object)) return;
 
-		std::function<void(GameObject*)> drawEntity;
-		drawEntity = [&](GameObject* object)
+		const bool hasVisibleChildren = std::any_of(
+			object->getChildren().begin(), object->getChildren().end(),
+			[](GameObject* child) { return child && !isEditorCamera(child); });
+		ImGuiTreeNodeFlags flags =
+			ImGuiTreeNodeFlags_SpanAvailWidth |
+			ImGuiTreeNodeFlags_OpenOnArrow;
+		if (!hasVisibleChildren)
+			flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+		if (isObjectSelected(object))
+			flags |= ImGuiTreeNodeFlags_Selected;
+
+		ImGui::PushID(object);
+		const bool open = ImGui::TreeNodeEx(
+			"##Entity", flags, "%s", object->getName().c_str());
+
+		if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
 		{
-			if (!object || !subtreeMatches(object)) return;
+			if (ImGui::GetIO().KeyCtrl) toggleObjectSelection(object);
+			else selectOnly(object);
+		}
 
-			const bool hasVisibleChildren = std::any_of(
-				object->getChildren().begin(), object->getChildren().end(),
-				[&](GameObject* child) { return subtreeMatches(child); });
-			ImGuiTreeNodeFlags flags =
-				ImGuiTreeNodeFlags_SpanAllColumns |
-				ImGuiTreeNodeFlags_OpenOnArrow |
-				ImGuiTreeNodeFlags_OpenOnDoubleClick;
-			if (!hasVisibleChildren)
-				flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-			if (isObjectSelected(object))
-				flags |= ImGuiTreeNodeFlags_Selected;
+		if (m_editorMode == EditorMode::Editing && ImGui::BeginDragDropSource())
+		{
+			const ui64 entityId = object->getEntityId();
+			ImGui::SetDragDropPayload("DX3D_ENTITY_ID", &entityId, sizeof(entityId));
+			ImGui::TextUnformatted(object->getName().c_str());
+			ImGui::EndDragDropSource();
+		}
 
-			ImGui::PushID(object);
-			ImGui::TableNextRow();
-			ImGui::TableNextColumn();
-			const bool open = ImGui::TreeNodeEx(
-				"##Entity", flags, "%s", object->getName().c_str());
-
-			if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
+		if (m_editorMode == EditorMode::Editing && ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload =
+				ImGui::AcceptDragDropPayload("DX3D_ENTITY_ID"))
 			{
-				if (ImGui::GetIO().KeyCtrl) toggleObjectSelection(object);
-				else selectOnly(object);
+				const ui64 draggedId = *static_cast<const ui64*>(payload->Data);
+				requestedChild = m_world->findGameObject(draggedId);
+				requestedParent = object;
+				reparentRequested = true;
 			}
+			ImGui::EndDragDropTarget();
+		}
 
-			if (m_editorMode == EditorMode::Editing && ImGui::BeginDragDropSource())
+		if (ImGui::BeginPopupContextItem("EntityActions"))
+		{
+			if (ImGui::MenuItem("Duplicate", "Ctrl+D", false,
+				m_editorMode == EditorMode::Editing &&
+				object->getComponent<CameraComponent>() == nullptr))
 			{
-				const ui64 entityId = object->getEntityId();
-				ImGui::SetDragDropPayload("DX3D_ENTITY_ID", &entityId, sizeof(entityId));
-				ImGui::Text("Parent %s", object->getName().c_str());
-				ImGui::EndDragDropSource();
+				requestedDuplicate = object;
 			}
-
-			if (m_editorMode == EditorMode::Editing && ImGui::BeginDragDropTarget())
+			if (ImGui::MenuItem("Move to Root", nullptr, false,
+				m_editorMode == EditorMode::Editing && object->getParent() != nullptr))
 			{
-				if (const ImGuiPayload* payload =
-					ImGui::AcceptDragDropPayload("DX3D_ENTITY_ID"))
-				{
-					const ui64 draggedId = *static_cast<const ui64*>(payload->Data);
-					requestedChild = m_world->findGameObject(draggedId);
-					requestedParent = object;
-					reparentRequested = true;
-				}
-				ImGui::EndDragDropTarget();
+				requestedChild = object;
+				requestedParent = nullptr;
+				reparentRequested = true;
 			}
-
-			if (ImGui::BeginPopupContextItem("EntityActions"))
+			if (ImGui::MenuItem("Delete", "Delete", false,
+				m_editorMode == EditorMode::Editing))
 			{
-				if (ImGui::MenuItem("Duplicate", "Ctrl+D", false,
-					m_editorMode == EditorMode::Editing &&
-					object->getComponent<CameraComponent>() == nullptr))
-				{
-					requestedDuplicate = object;
-				}
-				if (ImGui::MenuItem("Unparent", nullptr, false,
-					m_editorMode == EditorMode::Editing && object->getParent() != nullptr))
-				{
-					requestedChild = object;
-					requestedParent = nullptr;
-					reparentRequested = true;
-				}
-				if (ImGui::MenuItem("Delete", "Delete", false,
-					m_editorMode == EditorMode::Editing &&
-					object->getComponent<CameraComponent>() == nullptr))
-				{
-					requestedDelete = object;
-				}
-				ImGui::EndPopup();
+				requestedDelete = object;
 			}
+			ImGui::EndPopup();
+		}
 
-			ImGui::TableNextColumn();
-			ImGui::Text("%llu", static_cast<unsigned long long>(object->getEntityId()));
-			ImGui::TableNextColumn();
-			if (object->getParent())
-				ImGui::Text("%llu", static_cast<unsigned long long>(object->getParent()->getEntityId()));
-			else
-				ImGui::TextDisabled("ROOT");
+		if (hasVisibleChildren && open)
+		{
+			for (auto* child : object->getChildren()) drawEntity(child);
+			ImGui::TreePop();
+		}
+		ImGui::PopID();
+	};
 
-			ImGui::TableNextColumn();
-			std::string composition = "Transform";
-			if (object->getComponent<CameraComponent>()) composition += " + Camera";
-			if (object->getComponent<SphereComponent>()) composition += " + Sphere";
-			if (object->getComponent<CubeComponent>()) composition += " + Cube";
-			if (object->getComponent<PlaneComponent>()) composition += " + Plane";
-			if (object->getComponent<CombinedMeshComponent>()) composition += " + Mesh";
-			if (object->getComponent<DirectionalLightComponent>()) composition += " + Light";
-			if (object->getComponent<MaterialComponent>()) composition += " + Material";
-			if (object->getComponent<RigidBodyComponent>()) composition += " + RigidBody";
-			if (object->getComponent<ColliderComponent>()) composition += " + Collider";
-			ImGui::TextDisabled("%s", composition.c_str());
+	for (auto* object : objects)
+		if (object && object->getParent() == nullptr) drawEntity(object);
 
-			if (hasVisibleChildren && open)
-			{
-				for (auto* child : object->getChildren()) drawEntity(child);
-				ImGui::TreePop();
-			}
-			ImGui::PopID();
-		};
-
-		for (auto* object : objects)
-			if (object && object->getParent() == nullptr) drawEntity(object);
-
-		ImGui::EndTable();
-	}
-
-	ImGui::TextDisabled("DROP HERE TO MOVE ENTITY TO ROOT");
+	ImGui::InvisibleButton("##HierarchyRootTarget",
+		{ ImGui::GetContentRegionAvail().x,
+		  std::max(24.0f * m_uiScale, ImGui::GetContentRegionAvail().y) });
 	if (m_editorMode == EditorMode::Editing && ImGui::BeginDragDropTarget())
 	{
 		if (const ImGuiPayload* payload =
@@ -2177,7 +2570,7 @@ void dx3d::Game::onInternalUpdate()
 		ImGuiCond_FirstUseEver
 	);
 
-	ImGui::Begin("INSPECTOR##Workbench");
+	ImGui::Begin("Inspector##Workbench");
 
 	if (!m_selectedObject)
 	{
@@ -2683,7 +3076,7 @@ void dx3d::Game::onInternalUpdate()
 			ImGuiCond_FirstUseEver
 		);
 
-		if (ImGui::Begin("STATS##Workbench", &m_showStats))
+		if (ImGui::Begin("Stats##Workbench", &m_showStats))
 		{
 			f32 averageFrameMs = 0.0f;
 			for (const f32 frameMs : m_frameTimes)
@@ -2780,7 +3173,7 @@ void dx3d::Game::onInternalUpdate()
 			ImGuiCond_FirstUseEver
 		);
 
-		if (ImGui::Begin("ASSET LENS##Workbench", &m_showAssetLens))
+		if (ImGui::Begin("Asset Lens##Workbench"))
 		{
 			ImGui::SetNextItemWidth(-82.0f);
 			ImGui::InputTextWithHint(
@@ -2816,6 +3209,22 @@ void dx3d::Game::onInternalUpdate()
 				ImGui::TableSetupColumn("PATH");
 				ImGui::TableHeadersRow();
 
+				auto assetType = [](std::string extension)
+				{
+					std::transform(extension.begin(), extension.end(), extension.begin(),
+						[](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+					if (extension == ".obj" || extension == ".fbx" || extension == ".gltf" ||
+						extension == ".glb" || extension == ".dae" || extension == ".3ds" ||
+						extension == ".stl" || extension == ".ply" || extension == ".blend") return "MODEL";
+					if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" ||
+						extension == ".tga" || extension == ".bmp" || extension == ".dds" ||
+						extension == ".hdr" || extension == ".exr") return "TEX";
+					if (extension == ".ematerial" || extension == ".mtl") return "MAT";
+					if (extension == ".eprefab") return "PREFAB";
+					if (extension == ".hlsl") return "SHADER";
+					return "FILE";
+				};
+
 				for (const auto& path : m_assetPaths)
 				{
 					if (!containsFilter(path)) continue;
@@ -2823,29 +3232,9 @@ void dx3d::Game::onInternalUpdate()
 						std::filesystem::path(path).extension().string();
 					ImGui::TableNextRow();
 					ImGui::TableNextColumn();
-					ImGui::TextColored(rgba(150, 190, 176), "%s",
-						extension.empty() ? "FILE" : extension.c_str() + 1);
+					ImGui::TextColored(rgba(150, 190, 176), "%s", assetType(extension));
 					ImGui::TableNextColumn();
-					if (extension == ".dx3dscene")
-					{
-						ImGui::BeginDisabled(m_editorMode != EditorMode::Editing);
-						const bool activated = ImGui::Selectable(
-							path.c_str(), false,
-							ImGuiSelectableFlags_AllowDoubleClick
-						);
-						if (activated && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-							loadScene(path);
-						ImGui::EndDisabled();
-
-						if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-							ImGui::SetTooltip("Double-click to open this native scene");
-					}
-					else
-					{
-						ImGui::TextUnformatted(path.c_str());
-						if (extension == ".escene" && ImGui::IsItemHovered())
-							ImGui::SetTooltip("Original enignE source; open its .dx3dscene counterpart");
-					}
+					ImGui::Selectable(path.c_str(), false);
 				}
 				ImGui::EndTable();
 			}
@@ -2929,7 +3318,15 @@ void dx3d::Game::onInternalUpdate()
 
 	if (allowClipboardShortcuts)
 	{
-		if (m_inputSystem->isKeyPressed(KeyCode::Z))
+		if (m_inputSystem->isKeyPressed(KeyCode::S))
+		{
+			saveScene();
+		}
+		else if (m_inputSystem->isKeyPressed(KeyCode::O))
+		{
+			loadScene();
+		}
+		else if (m_inputSystem->isKeyPressed(KeyCode::Z))
 		{
 			undo();
 		}
@@ -2969,7 +3366,7 @@ void dx3d::Game::onInternalUpdate()
 		!editingInspectorValue &&
 		!typingText &&
 		m_selectedObject &&
-		m_selectedObject->getComponent<CameraComponent>() == nullptr)
+		!isEditorCamera(m_selectedObject))
 	{
 		pushUndoSnapshot();
 		GameObject* objectToDelete =

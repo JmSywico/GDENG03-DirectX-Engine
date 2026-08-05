@@ -132,8 +132,8 @@
       <AdditionalLibraryDirectories>$(ProjectDir)out\build\x64-debug\_deps\joltphysics-build;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
-      <Command>cmake --preset x64-debug
-cmake --build --preset x64-debug --target Jolt --parallel</Command>
+      <Command>&quot;$(DevEnvDir)CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe&quot; --preset x64-debug
+&quot;$(DevEnvDir)CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe&quot; --build --preset x64-debug --target Jolt --parallel</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -158,8 +158,8 @@ cmake --build --preset x64-debug --target Jolt --parallel</Command>
       <AdditionalLibraryDirectories>$(ProjectDir)out\build\x64-release\_deps\joltphysics-build;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
-      <Command>cmake --preset x64-release
-cmake --build --preset x64-release --target Jolt --parallel</Command>
+      <Command>&quot;$(DevEnvDir)CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe&quot; --preset x64-release
+&quot;$(DevEnvDir)CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe&quot; --build --preset x64-release --target Jolt --parallel</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -220,6 +220,7 @@ cmake --build --preset x64-release --target Jolt --parallel</Command>
     <ClCompile Include="DX3D\Source\DX3D\Graphics\PrimitiveMeshData.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Graphics\ShadowMap.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Input\InputSystem.cpp" />
+    <ClCompile Include="DX3D\Source\DX3D\Input\InputActionMap.cpp" />
     <ClCompile Include="DX3D\Source\Editor\ViewportPicker.cpp" />
     <ClCompile Include="Game\Objects\Player.cpp" />
     <ClCompile Include="DX3D\Source\DX3D\Game\GameObject.cpp" />
@@ -263,6 +264,7 @@ cmake --build --preset x64-release --target Jolt --parallel</Command>
     <ClInclude Include="DX3D\Include\DX3D\Game\Component.h" />
     <ClInclude Include="DX3D\Include\DX3D\Game\SceneSerializer.h" />
     <ClInclude Include="DX3D\Include\DX3D\Input\InputSystem.h" />
+    <ClInclude Include="DX3D\Include\DX3D\Input\InputActionMap.h" />
     <ClInclude Include="DX3D\Include\DX3D\Math\MathUtils.h" />
     <ClInclude Include="DX3D\Include\DX3D\Math\Vec2.h" />
     <ClInclude Include="DX3D\Source\DX3D\Component\CombinedMeshComponent.h" />

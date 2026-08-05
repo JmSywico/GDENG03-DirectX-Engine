@@ -39,6 +39,8 @@ namespace dx3d
 		virtual void onUpdate(f32 deltaTime) {}
 
 		void requestExit() noexcept;
+		bool isSceneViewportHovered() const noexcept { return m_sceneViewportHovered; }
+		GameObject* getEditorCamera() noexcept { return m_editorCamera; }
 
 	private:
 		enum class EditorMode
@@ -140,10 +142,13 @@ namespace dx3d
 		void duplicateSelectedObject();
 
 		void createNewScene();
+		void ensureEditorCamera();
+		void ensureGameCamera();
 
 		void saveScene();
 
 		void loadScene();
+		void openSceneDialog();
 		void loadScene(const std::string& filePath);
 
 		void pushUndoSnapshot();
@@ -163,6 +168,7 @@ namespace dx3d
 
 		UniquePtr<WorldRenderer> m_worldRenderer{};
 		UniquePtr<PhysicsWorld> m_physicsWorld{};
+		GameObject* m_editorCamera{};
 
 		GameObject* m_selectedObject{};
 		std::vector<GameObject*> m_selectedObjects{};
@@ -191,9 +197,15 @@ namespace dx3d
 		f32 m_fixedStepAccumulator{};
 		bool m_singleStepRequested{};
 		bool m_sceneDirty{};
+		bool m_requestSceneLoad{};
+		bool m_requestEditorClose{};
 		bool m_showStats{ true };
 		bool m_showAssetLens{ true };
 		bool m_defaultDockLayoutBuilt{};
+		bool m_focusSceneViewRequested{ true };
+		bool m_focusGameViewRequested{};
+		bool m_sceneViewportHovered{};
+		f32 m_uiScale{ 1.0f };
 		char m_assetFilter[128]{};
 		char m_registryFilter[128]{};
 

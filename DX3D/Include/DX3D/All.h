@@ -18,4 +18,5 @@
 #include <DX3D/Game/World.h>
 
 #include <DX3D/Input/InputSystem.h>
+#include <DX3D/Input/InputActionMap.h>
 #include <DX3D/Game/Game.h>

@@ -19,9 +19,16 @@ namespace dx3d
 		Rect getClientSize() const noexcept;
 
 		Rect getClientAreaInScreenSpace();
+		void minimize();
+		void toggleMaximizeRestore();
+		void close();
+		void beginTitleBarDrag();
+		bool isMaximized() const noexcept;
 
 	protected:
 		void* m_handle{};
 		Rect m_size{};
+		Rect m_restoreRect{};
+		bool m_maximized{ true };
 	};
 }

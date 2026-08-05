@@ -1,8 +1,10 @@
 #include "MainGame.h"
+#include <Windows.h>
 
 
 int main(int argumentCount, char* arguments[])
 {
+	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 	try
 	{
 		const std::string startupScene = argumentCount > 1

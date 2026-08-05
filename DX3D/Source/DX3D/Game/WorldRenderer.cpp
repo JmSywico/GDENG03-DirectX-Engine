@@ -830,12 +830,9 @@ void dx3d::WorldRenderer::render(
 
 	context.clearAndSetBackBuffer(
 		swapChain,
-		{
-			0.08f,
-			0.10f,
-			0.14f,
-			1.0f
-		}
+		useSceneCamera
+			? Vec4{ 0.094f, 0.129f, 0.169f, 1.0f }
+			: Vec4{ 0.20f, 0.298f, 0.40f, 1.0f }
 	);
 
 	context.setGraphicsPipelineState(
