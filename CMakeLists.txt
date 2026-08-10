@@ -110,18 +110,18 @@ target_link_libraries(enignE PRIVATE
     d3d11 d3dcompiler dxgi user32 gdi32 shell32 comdlg32 winmm)
 
 add_library(enignE_dx11_backend STATIC
-    "${CMAKE_SOURCE_DIR}/enignE/Source/enignE/Graphics/DX11/DX11Context.cpp"
-    "${CMAKE_SOURCE_DIR}/enignE/Include/enignE/Graphics/DX11/DX11Context.h"
-    "${CMAKE_SOURCE_DIR}/enignE/Source/enignE/Graphics/Mesh.cpp"
-    "${CMAKE_SOURCE_DIR}/enignE/Include/enignE/Graphics/Mesh.h"
-    "${CMAKE_SOURCE_DIR}/enignE/Include/enignE/Graphics/VertexTypes.h"
-    "${CMAKE_SOURCE_DIR}/enignE/Source/enignE/Graphics/Texture2D.cpp"
-    "${CMAKE_SOURCE_DIR}/enignE/Include/enignE/Graphics/Texture2D.h")
+    "${CMAKE_SOURCE_DIR}/engine/Source/enignE/Graphics/DX11/DX11Context.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/Include/engine/Graphics/DX11/DX11Context.h"
+    "${CMAKE_SOURCE_DIR}/engine/Source/enignE/Graphics/Mesh.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/Include/engine/Graphics/Mesh.h"
+    "${CMAKE_SOURCE_DIR}/engine/Include/engine/Graphics/VertexTypes.h"
+    "${CMAKE_SOURCE_DIR}/engine/Source/enignE/Graphics/Texture2D.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/Include/engine/Graphics/Texture2D.h")
 target_sources(enignE_dx11_backend PRIVATE
-    "${CMAKE_SOURCE_DIR}/enignE/Source/enignE/Graphics/ShadowRenderer.cpp"
-    "${CMAKE_SOURCE_DIR}/enignE/Include/enignE/Graphics/ShadowRenderer.h")
+    "${CMAKE_SOURCE_DIR}/engine/Source/enignE/Graphics/ShadowRenderer.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/Include/engine/Graphics/ShadowRenderer.h")
 target_include_directories(enignE_dx11_backend PUBLIC
-    "${CMAKE_SOURCE_DIR}/enignE/Include/enignE")
+    "${CMAKE_SOURCE_DIR}/engine/Include/engine")
 target_compile_definitions(enignE_dx11_backend PRIVATE
     UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(enignE_dx11_backend PRIVATE /W4 /permissive- /Zc:preprocessor)
@@ -131,19 +131,19 @@ target_link_libraries(enignE_dx11_backend PUBLIC d3d11 dxgi windowscodecs ole32 
 # translated from bgfx to DX11. This keeps panel, command, viewport-SRV, and
 # profiler code continuously compile-checked during the backend migration.
 add_library(enignE_editor_ui STATIC
-    enignE/Source/enignE/Layer/Layer.cpp
-    enignE/Source/enignE/Layer/LayerStack.cpp
-    enignE/Source/enignE/Layer/EditorLayer.cpp
-    enignE/Source/enignE/Layer/DebugLayer.cpp
-    enignE/Source/enignE/Editor/EditorContext.cpp
-    enignE/Source/enignE/Editor/UI/EditorLoadingWindow.cpp
-    enignE/Source/enignE/Editor/UI/Chrome/TitleBar.cpp
-    enignE/Source/enignE/Editor/UI/Panels/AssetBrowserPanel.cpp
-    enignE/Source/enignE/Editor/UI/Panels/InspectorPanel.cpp
-    enignE/Source/enignE/Editor/UI/Panels/SceneHierarchyPanel.cpp
-    enignE/Source/enignE/Editor/UI/Widgets/GizmoToolbar.cpp)
+    engine/Source/enignE/Layer/Layer.cpp
+    engine/Source/enignE/Layer/LayerStack.cpp
+    engine/Source/enignE/Layer/EditorLayer.cpp
+    engine/Source/enignE/Layer/DebugLayer.cpp
+    engine/Source/enignE/Editor/EditorContext.cpp
+    engine/Source/enignE/Editor/UI/EditorLoadingWindow.cpp
+    engine/Source/enignE/Editor/UI/Chrome/TitleBar.cpp
+    engine/Source/enignE/Editor/UI/Panels/AssetBrowserPanel.cpp
+    engine/Source/enignE/Editor/UI/Panels/InspectorPanel.cpp
+    engine/Source/enignE/Editor/UI/Panels/SceneHierarchyPanel.cpp
+    engine/Source/enignE/Editor/UI/Widgets/GizmoToolbar.cpp)
 target_include_directories(enignE_editor_ui PUBLIC
-    "${CMAKE_SOURCE_DIR}/enignE/Include/enignE"
+    "${CMAKE_SOURCE_DIR}/engine/Include/engine"
     "${imgui_docking_SOURCE_DIR}")
 target_compile_definitions(enignE_editor_ui PRIVATE
     UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
@@ -154,33 +154,33 @@ target_link_libraries(enignE_editor_ui PUBLIC
 if(BUILD_TESTING)
     add_executable(enignE_scene_tests
         Tests/SceneRegressionTests.cpp
-        enignE/Source/enignE/Core/JobSystem.cpp
-        enignE/Source/enignE/Scene/Scene.cpp
-        enignE/Source/enignE/Scene/ComponentCatalog.cpp
-        enignE/Source/enignE/Scene/SceneFactory.cpp
-        enignE/Source/enignE/Scene/Serialization/SceneSerializer.cpp
-        enignE/Source/enignE/Scene/Serialization/SceneMigration.cpp
-        enignE/Source/enignE/Editor/Commands/EditorCommand.cpp
-        enignE/Source/enignE/Editor/Commands/CommandStack.cpp
-        enignE/Source/enignE/Editor/Commands/EntitySnapshot.cpp
-        enignE/Source/enignE/Editor/PrefabAsset.cpp
-        enignE/Source/enignE/Input/InputActions.cpp
-        enignE/Source/enignE/ECS/Systems/HierarchySystem.cpp
-        enignE/Source/enignE/ECS/Systems/FlyControllerSystem.cpp
-        enignE/Source/enignE/ECS/Systems/RotatorSystem.cpp
-        enignE/Source/enignE/ECS/Systems/TransformPropagationSystem.cpp
-        enignE/Source/enignE/Graphics/Instancing/ChunkManager.cpp
-        enignE/Source/enignE/Graphics/Instancing/RenderChunk.cpp
-        enignE/Source/enignE/Graphics/ProcGen/ProcGen.cpp
-        enignE/Source/enignE/Graphics/AssetRegistry.cpp
-        enignE/Source/enignE/Graphics/ModelLoader.cpp
-        enignE/Source/enignE/Graphics/MaterialAsset.cpp
-        enignE/Source/enignE/Project/ProjectConfig.cpp
-        enignE/Source/enignE/Physics/PhysicsWorld.cpp
-        enignE/Source/enignE/Logging/Logging.cpp
-        enignE/Source/enignE/Logging/Logging.win.cpp)
+        engine/Source/enignE/Core/JobSystem.cpp
+        engine/Source/enignE/Scene/Scene.cpp
+        engine/Source/enignE/Scene/ComponentCatalog.cpp
+        engine/Source/enignE/Scene/SceneFactory.cpp
+        engine/Source/enignE/Scene/Serialization/SceneSerializer.cpp
+        engine/Source/enignE/Scene/Serialization/SceneMigration.cpp
+        engine/Source/enignE/Editor/Commands/EditorCommand.cpp
+        engine/Source/enignE/Editor/Commands/CommandStack.cpp
+        engine/Source/enignE/Editor/Commands/EntitySnapshot.cpp
+        engine/Source/enignE/Editor/PrefabAsset.cpp
+        engine/Source/enignE/Input/InputActions.cpp
+        engine/Source/enignE/ECS/Systems/HierarchySystem.cpp
+        engine/Source/enignE/ECS/Systems/FlyControllerSystem.cpp
+        engine/Source/enignE/ECS/Systems/RotatorSystem.cpp
+        engine/Source/enignE/ECS/Systems/TransformPropagationSystem.cpp
+        engine/Source/enignE/Graphics/Instancing/ChunkManager.cpp
+        engine/Source/enignE/Graphics/Instancing/RenderChunk.cpp
+        engine/Source/enignE/Graphics/ProcGen/ProcGen.cpp
+        engine/Source/enignE/Graphics/AssetRegistry.cpp
+        engine/Source/enignE/Graphics/ModelLoader.cpp
+        engine/Source/enignE/Graphics/MaterialAsset.cpp
+        engine/Source/enignE/Project/ProjectConfig.cpp
+        engine/Source/enignE/Physics/PhysicsWorld.cpp
+        engine/Source/enignE/Logging/Logging.cpp
+        engine/Source/enignE/Logging/Logging.win.cpp)
     target_include_directories(enignE_scene_tests PRIVATE
-        "${CMAKE_SOURCE_DIR}/enignE/Include/enignE")
+        "${CMAKE_SOURCE_DIR}/engine/Include/engine")
     target_compile_definitions(enignE_scene_tests PRIVATE
         UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_compile_options(enignE_scene_tests PRIVATE /W4 /permissive- /Zc:preprocessor /bigobj)
