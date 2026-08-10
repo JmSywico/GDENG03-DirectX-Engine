@@ -1,0 +1,59 @@
+/**
+@defgroup production Production application
+@brief The runnable DX3D editor and application implementation.
+
+@defgroup production_core Core and platform
+@ingroup production
+@brief Application lifetime, logging, windowing, timing, and common types.
+
+@defgroup production_scene World and components
+@ingroup production
+@brief GameObject ownership, EnTT-backed components, hierarchy, transforms, and persistence.
+
+@defgroup production_rendering Rendering
+@ingroup production
+@brief DirectX 11 resources, render passes, shaders, viewports, materials, and shadows.
+
+@defgroup production_editor Editor
+@ingroup production
+@brief Workbench panels, selection, gizmos, commands, assets, and simulation controls.
+
+@defgroup production_physics Physics
+@ingroup production
+@brief Jolt-backed bodies, shapes, synchronization, contacts, raycasts, and statistics.
+
+@defgroup production_input Input
+@ingroup production
+@brief Keyboard, mouse, cursor capture, and named input actions.
+
+@defgroup canonical Canonical engine layer
+@brief Modular engine libraries compiled and regression-tested during integration.
+
+@defgroup scene Canonical scene API
+@ingroup canonical
+@brief Stable-ID scenes, components, hierarchy, persistence, and migration.
+
+@defgroup editor Canonical editor API
+@ingroup canonical
+@brief Commands, snapshots, contexts, panels, prefabs, and editor workflows.
+
+@defgroup canonical_scene Canonical scene and ECS
+@ingroup canonical
+@brief Stable-ID scene storage, components, systems, invalidation, serialization, and migration.
+
+@defgroup canonical_rendering Canonical DX11 and render planning
+@ingroup canonical
+@brief DX11 context/resources, chunks, culling, instance planning, materials, and assets.
+
+@defgroup canonical_editor Canonical editor
+@ingroup canonical
+@brief Layered editor context, commands, panels, chrome, prefabs, and viewport planning.
+
+@defgroup canonical_physics Canonical physics
+@ingroup canonical
+@brief Backend-private physics API and regression-tested Jolt implementation.
+
+@defgroup canonical_core Canonical core services
+@ingroup canonical
+@brief Jobs, logging, project configuration, events, input, and simulation support.
+*/

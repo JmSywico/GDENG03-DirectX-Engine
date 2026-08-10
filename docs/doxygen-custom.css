@@ -1,0 +1,31 @@
+:root {
+  --page-background-color: #111315;
+  --page-foreground-color: #deddd8;
+  --header-background: #171a1d;
+  --header-foreground: #e5e3dd;
+  --primary-color: #d9a74a;
+  --primary-dark-color: #a77a2e;
+  --primary-light-color: #f0c66f;
+  --side-nav-background: #15181a;
+  --fragment-background: #191d20;
+  --fragment-foreground: #d8ddd9;
+}
+
+html,
+body {
+  font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
+}
+
+code,
+pre,
+.fragment {
+  font-family: "Cascadia Code", Consolas, monospace;
+}
+
+#projectname {
+  letter-spacing: 0.04em;
+}
+
+.contents {
+  max-width: 1120px;
+}

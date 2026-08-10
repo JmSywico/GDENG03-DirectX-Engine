@@ -7,7 +7,7 @@
 #   cmake --build --preset x64-debug --target docs
 
 PROJECT_NAME           = "enignE"
-PROJECT_BRIEF          = "Windows C++20 engine prototype using DirectX 11, EnTT, ImGui, and chunk-based instancing"
+PROJECT_BRIEF          = "Windows C++20 native DirectX 11 game engine and editor"
 PROJECT_NUMBER         = "development"
 
 OUTPUT_DIRECTORY       = docs/doxygen
@@ -18,16 +18,25 @@ OUTPUT_LANGUAGE        = English
 INPUT                  = README.md \
                          docs/DOXYGEN.md \
                          docs/DoxygenGroups.dox \
-                         docs/ENGINE_ARCHITECTURE.md \
-                         docs/DISCOVERED_SYSTEM_INVENTORY.md \
-                         enignE/Include/enignE \
-                         enignE/Source/enignE
+                         docs/ARCHITECTURE.md \
+                         docs/DEVELOPMENT.md \
+                         docs/GETTING_STARTED.md \
+                         docs/PROJECT_STATUS.md \
+                         docs/SCENES_AND_ASSETS.md \
+                         docs/USER_GUIDE.md \
+                         DX3D/Include/DX3D \
+                         DX3D/Source/DX3D \
+                         engine/Include/engine \
+                         engine/Source/enignE \
+                         Game
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.hpp *.cpp *.inl *.md *.dox
 
 # Only engine-owned sources are inputs. Do not add external/ or build trees here.
-EXCLUDE                = enignE/Include/enignE/pch.h \
-                         enignE/Source/enignE/pch.cpp
+EXCLUDE                = engine/Include/engine/pch.h \
+                         engine/Source/enignE/pch.cpp \
+                         DX3D/Source/DX3D/Graphics/MeshMerger.cpp \
+                         DX3D/External
 EXCLUDE_PATTERNS       = */docs/doxygen/* \
                          */out/* \
                          */.vs/* \
@@ -37,7 +46,7 @@ EXCLUDE_PATTERNS       = */docs/doxygen/* \
 
 FULL_PATH_NAMES        = YES
 STRIP_FROM_PATH        = .
-STRIP_FROM_INC_PATH    = enignE
+STRIP_FROM_INC_PATH    = DX3D/Include engine/Include/engine
 SHORT_NAMES            = NO
 
 MARKDOWN_SUPPORT       = YES
@@ -142,13 +151,15 @@ ENABLE_PREPROCESSING   = YES
 MACRO_EXPANSION        = YES
 EXPAND_ONLY_PREDEF     = YES
 SEARCH_INCLUDES        = YES
-INCLUDE_PATH           = enignE
+INCLUDE_PATH           = DX3D/Include engine/Include/engine
 PREDEFINED             = WIN32 \
                          _WIN32 \
                          UNICODE \
                          _UNICODE \
                          WIN32_LEAN_AND_MEAN \
                          NOMINMAX \
+                         "dx3d_typeid(x)=" \
+                         "dx3d_disable_copy_and_move(x)=" \
                          "UNREFERENCED_PARAMETER(x)="
 SKIP_FUNCTION_MACROS   = YES
 
