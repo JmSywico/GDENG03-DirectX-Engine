@@ -27,6 +27,7 @@ namespace dx3d
 		void setShadowMap(
 			const ShadowMap& shadowMap
 		);
+		void setAlbedoTexture(ID3D11ShaderResourceView* view, ID3D11SamplerState* sampler);
 
 		void setGraphicsPipelineState(
 			const GraphicsPipelineState& pipeline

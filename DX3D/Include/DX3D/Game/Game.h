@@ -57,6 +57,9 @@ namespace dx3d
 		{
 			None,
 			Cube,
+			Sphere,
+			Cylinder,
+			Capsule,
 			Plane,
 			CombinedMesh
 		};
@@ -88,6 +91,9 @@ namespace dx3d
 			Vec4 materialAlbedo{ 1.0f, 1.0f, 1.0f, 1.0f };
 			Vec3 materialEmissive{};
 			f32 materialEmissionStrength{};
+			bool hasTexture{};
+			std::string textureAssetPath{};
+			bool textureEnabled{ true };
 			bool hasRigidBody{};
 			RigidBodyType rigidBodyType{ RigidBodyType::Static };
 			f32 rigidBodyFriction{ 0.5f };
@@ -103,6 +109,8 @@ namespace dx3d
 
 			ui32 pasteCount{};
 		};
+
+		enum class PrimitiveKind { Cube, Sphere, Cylinder, Capsule, Plane };
 
 	private:
 		void onInternalUpdate();
@@ -144,6 +152,10 @@ namespace dx3d
 
 		void pasteCopiedObject();
 		void duplicateSelectedObject();
+		GameObject* createPrimitiveObject(PrimitiveKind kind, const Vec3& position);
+		void drawObjectCreationMenu(const Vec3& position);
+		GameObject* importObjAsset(const std::string& assetPath, const Vec3& position);
+		Vec3 getSceneSpawnPosition() const noexcept;
 
 		void createNewScene();
 		void ensureEditorCamera();
@@ -164,6 +176,7 @@ namespace dx3d
 		void togglePauseMode();
 		void stepSimulation();
 		void setGameInputCaptured(bool captured);
+		void updateFlyControllers(f32 deltaTime);
 		void refreshAssetLens();
 
 	private:
@@ -208,9 +221,12 @@ namespace dx3d
 		bool m_requestEditorClose{};
 		bool m_showStats{ true };
 		bool m_showAssetLens{ true };
+		bool m_showConsole{ true };
+		bool m_consoleAutoScroll{ true };
 		bool m_defaultDockLayoutBuilt{};
 		bool m_focusSceneViewRequested{ true };
 		bool m_focusGameViewRequested{};
+		bool m_focusAssetLensRequested{ true };
 		bool m_sceneViewportHovered{};
 		bool m_sceneViewportFocused{};
 		bool m_gameInputCaptured{};
@@ -218,6 +234,7 @@ namespace dx3d
 		f32 m_uiScale{ 1.0f };
 		char m_assetFilter[128]{};
 		char m_registryFilter[128]{};
+		char m_consoleFilter[128]{};
 
 		bool m_isRunning{ true };
 

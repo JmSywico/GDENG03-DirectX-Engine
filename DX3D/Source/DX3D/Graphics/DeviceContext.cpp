@@ -137,6 +137,14 @@ void dx3d::DeviceContext::setShadowMap(
 	);
 }
 
+void dx3d::DeviceContext::setAlbedoTexture(
+	ID3D11ShaderResourceView* view,
+	ID3D11SamplerState* sampler)
+{
+	m_context->PSSetShaderResources(1, 1, &view);
+	m_context->PSSetSamplers(1, 1, &sampler);
+}
+
 void dx3d::DeviceContext::setGraphicsPipelineState(
 	const GraphicsPipelineState& pipeline
 )

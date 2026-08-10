@@ -5,12 +5,13 @@
 #include <DX3D/Component/FlyControllerComponent.h>
 #include <DX3D/Component/RigidBodyComponent.h>
 #include <DX3D/Component/ColliderComponent.h>
+#include <DX3D/Component/TextureComponent.h>
 
 #include <array>
 
 namespace dx3d
 {
-	enum class ComponentKind : ui32 { Rotator, FlyController, RigidBody, Collider };
+	enum class ComponentKind : ui32 { Rotator, FlyController, RigidBody, Collider, Texture };
 
 	struct ComponentDescriptor
 	{
@@ -24,13 +25,14 @@ namespace dx3d
 	class ComponentCatalog final
 	{
 	public:
-		static const std::array<ComponentDescriptor, 4>& descriptors()
+		static const std::array<ComponentDescriptor, 5>& descriptors()
 		{
 			static constexpr std::array values{
 				ComponentDescriptor{ ComponentKind::Rotator, "Rotator", "Simulation" },
 				ComponentDescriptor{ ComponentKind::FlyController, "Fly Controller", "Simulation" },
 				ComponentDescriptor{ ComponentKind::RigidBody, "Rigid Body", "Physics" },
-				ComponentDescriptor{ ComponentKind::Collider, "Collider", "Physics" }
+				ComponentDescriptor{ ComponentKind::Collider, "Collider", "Physics" },
+				ComponentDescriptor{ ComponentKind::Texture, "Texture", "Rendering" }
 			};
 			return values;
 		}
@@ -43,6 +45,7 @@ namespace dx3d
 			case ComponentKind::FlyController: return object.getComponent<FlyControllerComponent>() != nullptr;
 			case ComponentKind::RigidBody: return object.getComponent<RigidBodyComponent>() != nullptr;
 			case ComponentKind::Collider: return object.getComponent<ColliderComponent>() != nullptr;
+			case ComponentKind::Texture: return object.getComponent<TextureComponent>() != nullptr;
 			}
 			return false;
 		}
@@ -56,6 +59,7 @@ namespace dx3d
 			case ComponentKind::FlyController: return object.createOrGetComponent<FlyControllerComponent>() != nullptr;
 			case ComponentKind::RigidBody: return object.createOrGetComponent<RigidBodyComponent>() != nullptr;
 			case ComponentKind::Collider: return object.createOrGetComponent<ColliderComponent>() != nullptr;
+			case ComponentKind::Texture: return object.createOrGetComponent<TextureComponent>() != nullptr;
 			}
 			return false;
 		}
@@ -68,6 +72,7 @@ namespace dx3d
 			case ComponentKind::FlyController: return object.removeComponent<FlyControllerComponent>();
 			case ComponentKind::RigidBody: return object.removeComponent<RigidBodyComponent>();
 			case ComponentKind::Collider: return object.removeComponent<ColliderComponent>();
+			case ComponentKind::Texture: return object.removeComponent<TextureComponent>();
 			}
 			return false;
 		}

@@ -16,6 +16,8 @@
 
 #include <DX3D/Component/CubeComponent.h>
 #include <DX3D/Component/SphereComponent.h>
+#include <DX3D/Component/CylinderComponent.h>
+#include <DX3D/Component/CapsuleComponent.h>
 #include <DX3D/Component/PlaneComponent.h>
 #include <DX3D/Component/TransformComponent.h>
 #include <DX3D/Component/CameraComponent.h>
@@ -27,6 +29,7 @@
 #include <DX3D/Component/ComponentCatalog.h>
 #include <DX3D/Component/RotatorComponent.h>
 #include <DX3D/Component/FlyControllerComponent.h>
+#include <DX3D/Component/TextureComponent.h>
 #include <DX3D/Physics/PhysicsWorld.h>
 
 #include <string>
@@ -39,6 +42,8 @@
 #include <cctype>
 #include <cstdio>
 #include <functional>
+#include <sstream>
+#include <fstream>
 #include <commdlg.h>
 
 #include <imgui.h>
@@ -48,6 +53,88 @@
 
 namespace
 {
+	bool loadObjMeshData(const std::filesystem::path& path, dx3d::MeshData& output)
+	{
+		std::ifstream stream(path);
+		if (!stream) return false;
+		std::vector<dx3d::Vec3> positions{};
+		std::vector<dx3d::Vec3> normals{};
+		struct Reference { int position{}; int normal{}; };
+		auto resolveIndex = [](int index, size_t count) -> int
+		{
+			if (index > 0) return index - 1;
+			if (index < 0) return static_cast<int>(count) + index;
+			return -1;
+		};
+		auto parseReference = [](const std::string& token)
+		{
+			Reference result{};
+			const size_t first = token.find('/');
+			const size_t second = first == std::string::npos ? std::string::npos : token.find('/', first + 1);
+			try
+			{
+				result.position = std::stoi(token.substr(0, first));
+				if (second != std::string::npos && second + 1 < token.size())
+					result.normal = std::stoi(token.substr(second + 1));
+			}
+			catch (...) { return Reference{}; }
+			return result;
+		};
+		std::string line{};
+		while (std::getline(stream, line))
+		{
+			std::istringstream row(line);
+			std::string kind{};
+			row >> kind;
+			if (kind == "v")
+			{
+				dx3d::Vec3 value{};
+				if (row >> value.x >> value.y >> value.z) positions.push_back(value);
+			}
+			else if (kind == "vn")
+			{
+				dx3d::Vec3 value{};
+				if (row >> value.x >> value.y >> value.z) normals.push_back(value);
+			}
+			else if (kind == "f")
+			{
+				std::vector<Reference> face{};
+				std::string token{};
+				while (row >> token) face.push_back(parseReference(token));
+				for (size_t triangle = 1; triangle + 1 < face.size(); ++triangle)
+				{
+					const Reference references[3]{ face[0], face[triangle], face[triangle + 1] };
+					dx3d::Vec3 vertices[3]{};
+					bool valid = true;
+					for (size_t corner = 0; corner < 3; ++corner)
+					{
+						const int index = resolveIndex(references[corner].position, positions.size());
+						if (index < 0 || static_cast<size_t>(index) >= positions.size()) { valid = false; break; }
+						vertices[corner] = positions[index];
+					}
+					if (!valid) continue;
+					const dx3d::Vec3 first{ vertices[1].x - vertices[0].x, vertices[1].y - vertices[0].y, vertices[1].z - vertices[0].z };
+					const dx3d::Vec3 second{ vertices[2].x - vertices[0].x, vertices[2].y - vertices[0].y, vertices[2].z - vertices[0].z };
+					dx3d::Vec3 faceNormal{
+						first.y * second.z - first.z * second.y,
+						first.z * second.x - first.x * second.z,
+						first.x * second.y - first.y * second.x };
+					const float normalLength = std::sqrt(faceNormal.x * faceNormal.x + faceNormal.y * faceNormal.y + faceNormal.z * faceNormal.z);
+					if (normalLength > 0.00001f) faceNormal = faceNormal * (1.0f / normalLength);
+					for (size_t corner = 0; corner < 3; ++corner)
+					{
+						dx3d::Vec3 normal = faceNormal;
+						const int normalIndex = resolveIndex(references[corner].normal, normals.size());
+						if (normalIndex >= 0 && static_cast<size_t>(normalIndex) < normals.size()) normal = normals[normalIndex];
+						output.indices.push_back(static_cast<dx3d::ui32>(output.vertices.size()));
+						output.vertices.push_back({ vertices[corner], { 1, 1, 1, 1 }, normal });
+					}
+				}
+			}
+		}
+		return !output.empty();
+	}
+
 	bool projectWorldPoint(
 		const dx3d::Vec3& world,
 		const dx3d::Mat4x4& viewProjection,
@@ -418,6 +505,12 @@ dx3d::Game::getObjectMeshData(
 		return &getSphereMeshData();
 	}
 
+	if (object->getComponent<CylinderComponent>())
+		return &getCylinderMeshData();
+
+	if (object->getComponent<CapsuleComponent>())
+		return &getCapsuleMeshData();
+
 	if (object->getComponent<PlaneComponent>())
 	{
 		return &getPlaneMeshData();
@@ -589,6 +682,9 @@ bool dx3d::Game::canCopySelectedObject() const noexcept
 	{
 		return true;
 	}
+	if (m_selectedObject->getComponent<SphereComponent>() ||
+		m_selectedObject->getComponent<CylinderComponent>() ||
+		m_selectedObject->getComponent<CapsuleComponent>()) return true;
 
 	if (m_selectedObject->getComponent<
 		PlaneComponent>())
@@ -647,6 +743,12 @@ void dx3d::Game::copySelectedObject()
 		copiedData.rigidBodyGravityFactor = rigidBody->getGravityFactor();
 		copiedData.rigidBodyEnabled = rigidBody->isEnabled();
 	}
+	if (auto* texture = m_selectedObject->getComponent<TextureComponent>())
+	{
+		copiedData.hasTexture = true;
+		copiedData.textureAssetPath = texture->getAssetPath();
+		copiedData.textureEnabled = texture->isEnabled();
+	}
 	if (auto* collider = m_selectedObject->getComponent<ColliderComponent>())
 	{
 		copiedData.hasCollider = true;
@@ -672,6 +774,12 @@ void dx3d::Game::copySelectedObject()
 		copiedData.type =
 			CopiedObjectType::Cube;
 	}
+	else if (m_selectedObject->getComponent<SphereComponent>())
+		copiedData.type = CopiedObjectType::Sphere;
+	else if (m_selectedObject->getComponent<CylinderComponent>())
+		copiedData.type = CopiedObjectType::Cylinder;
+	else if (m_selectedObject->getComponent<CapsuleComponent>())
+		copiedData.type = CopiedObjectType::Capsule;
 	else if (
 		m_selectedObject->getComponent<
 		PlaneComponent>())
@@ -705,6 +813,15 @@ void dx3d::Game::pasteCopiedObject()
 	case CopiedObjectType::Cube:
 		pastedObject->createOrGetComponent<
 			CubeComponent>();
+		break;
+	case CopiedObjectType::Sphere:
+		pastedObject->createOrGetComponent<SphereComponent>();
+		break;
+	case CopiedObjectType::Cylinder:
+		pastedObject->createOrGetComponent<CylinderComponent>();
+		break;
+	case CopiedObjectType::Capsule:
+		pastedObject->createOrGetComponent<CapsuleComponent>();
 		break;
 
 	case CopiedObjectType::Plane:
@@ -796,6 +913,12 @@ void dx3d::Game::pasteCopiedObject()
 		rigidBody->setAngularDamping(m_objectClipboard.rigidBodyAngularDamping);
 		rigidBody->setGravityFactor(m_objectClipboard.rigidBodyGravityFactor);
 		rigidBody->setEnabled(m_objectClipboard.rigidBodyEnabled);
+	}
+	if (m_objectClipboard.hasTexture)
+	{
+		auto* texture = pastedObject->createOrGetComponent<TextureComponent>();
+		texture->setAssetPath(m_objectClipboard.textureAssetPath);
+		texture->setEnabled(m_objectClipboard.textureEnabled);
 	}
 	if (m_objectClipboard.hasCollider)
 	{
@@ -1169,6 +1292,106 @@ void dx3d::Game::createNewScene()
 	ensureGameCamera();
 }
 
+dx3d::Vec3 dx3d::Game::getSceneSpawnPosition() const noexcept
+{
+	if (!m_editorCamera) return {};
+	auto& transform = m_editorCamera->getTransform();
+	return transform.getPosition() + transform.forward() * 5.0f;
+}
+
+dx3d::GameObject* dx3d::Game::createPrimitiveObject(PrimitiveKind kind, const Vec3& position)
+{
+	if (m_editorMode != EditorMode::Editing) return nullptr;
+	pushUndoSnapshot();
+	auto* object = m_world->createGameObject<GameObject>();
+	const char* baseName = "Object";
+	switch (kind)
+	{
+	case PrimitiveKind::Cube: baseName = "Cube"; object->createOrGetComponent<CubeComponent>(); break;
+	case PrimitiveKind::Sphere: baseName = "Sphere"; object->createOrGetComponent<SphereComponent>(); break;
+	case PrimitiveKind::Cylinder: baseName = "Cylinder"; object->createOrGetComponent<CylinderComponent>(); break;
+	case PrimitiveKind::Capsule: baseName = "Capsule"; object->createOrGetComponent<CapsuleComponent>(); break;
+	case PrimitiveKind::Plane: baseName = "Plane"; object->createOrGetComponent<PlaneComponent>(); break;
+	}
+	ui32 matchingNames = 0;
+	for (auto* existing : m_world->getGameObjects())
+		if (existing && existing != object && existing->getName().starts_with(baseName)) ++matchingNames;
+	object->setName(matchingNames == 0 ? baseName : std::string(baseName) + " " + std::to_string(matchingNames + 1));
+	object->createOrGetComponent<MaterialComponent>();
+	object->getTransform().setPosition(position);
+	if (kind == PrimitiveKind::Plane) object->getTransform().setScale({ 5.0f, 1.0f, 5.0f });
+	selectOnly(object);
+	m_sceneDirty = true;
+	return object;
+}
+
+dx3d::GameObject* dx3d::Game::importObjAsset(const std::string& assetPath, const Vec3& position)
+{
+	if (m_editorMode != EditorMode::Editing) return nullptr;
+	MeshData mesh{};
+	if (!loadObjMeshData(assetPath, mesh))
+	{
+		m_sceneStatusMessage = "OBJ import failed: " + assetPath;
+		DX3DLogError("OBJ import failed: {}", assetPath);
+		return nullptr;
+	}
+	pushUndoSnapshot();
+	auto* object = m_world->createGameObject<GameObject>();
+	object->setName(std::filesystem::path(assetPath).stem().string());
+	auto* combined = object->createOrGetComponent<CombinedMeshComponent>();
+	combined->setMeshData(std::move(mesh));
+	object->createOrGetComponent<MaterialComponent>();
+	object->getTransform().setPosition(position);
+	selectOnly(object);
+	m_sceneDirty = true;
+	m_sceneStatusMessage = "Imported OBJ: " + assetPath;
+	DX3DLogInfo("Imported OBJ: {}", assetPath);
+	return object;
+}
+
+void dx3d::Game::drawObjectCreationMenu(const Vec3& position)
+{
+	if (ImGui::MenuItem("Empty object"))
+	{
+		pushUndoSnapshot();
+		auto* object = m_world->createGameObject<GameObject>();
+		object->setName("Empty Object");
+		object->getTransform().setPosition(position);
+		selectOnly(object);
+		m_sceneDirty = true;
+	}
+	if (ImGui::BeginMenu("3D object"))
+	{
+		if (ImGui::MenuItem("Cube")) createPrimitiveObject(PrimitiveKind::Cube, position);
+		if (ImGui::MenuItem("Sphere")) createPrimitiveObject(PrimitiveKind::Sphere, position);
+		if (ImGui::MenuItem("Capsule")) createPrimitiveObject(PrimitiveKind::Capsule, position);
+		if (ImGui::MenuItem("Cylinder")) createPrimitiveObject(PrimitiveKind::Cylinder, position);
+		if (ImGui::MenuItem("Plane")) createPrimitiveObject(PrimitiveKind::Plane, position);
+		ImGui::EndMenu();
+	}
+	if (ImGui::MenuItem("Camera"))
+	{
+		pushUndoSnapshot();
+		auto* object = m_world->createGameObject<GameObject>();
+		object->setName("Camera");
+		object->createOrGetComponent<CameraComponent>();
+		object->createOrGetComponent<FlyControllerComponent>();
+		object->getTransform().setPosition(position);
+		selectOnly(object);
+		m_sceneDirty = true;
+	}
+	if (ImGui::MenuItem("Directional light"))
+	{
+		pushUndoSnapshot();
+		auto* object = m_world->createGameObject<GameObject>();
+		object->setName("Directional Light");
+		object->createOrGetComponent<DirectionalLightComponent>();
+		object->getTransform().setPosition(position);
+		selectOnly(object);
+		m_sceneDirty = true;
+	}
+}
+
 void dx3d::Game::ensureEditorCamera()
 {
 	ui32 cameraCount = 0;
@@ -1196,8 +1419,20 @@ void dx3d::Game::ensureGameCamera()
 {
 	ui32 cameraCount = 0;
 	const auto cameras = m_world->getComponents<CameraComponent>(cameraCount);
+	CameraComponent* firstGameCamera = nullptr;
+	bool hasPrimary = false;
 	for (ui32 index = 0; index < cameraCount; ++index)
-		if (cameras[index] && !isEditorCamera(&cameras[index]->getGameObject())) return;
+		if (cameras[index] && !isEditorCamera(&cameras[index]->getGameObject()))
+		{
+			cameras[index]->getGameObject().createOrGetComponent<FlyControllerComponent>();
+			if (!firstGameCamera) firstGameCamera = cameras[index];
+			hasPrimary = hasPrimary || cameras[index]->isPrimary();
+		}
+	if (firstGameCamera)
+	{
+		if (!hasPrimary) firstGameCamera->setPrimary(true);
+		return;
+	}
 
 	auto* cameraObject = m_world->createGameObject<GameObject>();
 	cameraObject->setName("Main Camera");
@@ -1208,10 +1443,13 @@ void dx3d::Game::ensureGameCamera()
 	camera->setPrimary(true);
 	cameraObject->getTransform().setPosition({ 0.0f, 0.0f, -3.0f });
 	cameraObject->getTransform().setRotation({ 0.0f, 0.0f, 0.0f });
+	cameraObject->createOrGetComponent<FlyControllerComponent>();
 }
 
 void dx3d::Game::saveScene()
 {
+	if (m_editorMode != EditorMode::Editing) stopPlayMode();
+	if (m_editorMode != EditorMode::Editing) return;
 	const bool saved =
 		SceneSerializer::save(
 			*m_world,
@@ -1241,6 +1479,7 @@ void dx3d::Game::saveScene()
 
 void dx3d::Game::loadScene()
 {
+	if (m_editorMode != EditorMode::Editing) stopPlayMode();
 	if (m_editorMode != EditorMode::Editing) return;
 	if (m_sceneDirty)
 	{
@@ -1276,6 +1515,7 @@ void dx3d::Game::openSceneDialog()
 
 void dx3d::Game::loadScene(const std::string& filePath)
 {
+	if (m_editorMode != EditorMode::Editing) stopPlayMode();
 	if (filePath.empty() || m_editorMode != EditorMode::Editing)
 		return;
 
@@ -1459,6 +1699,48 @@ void dx3d::Game::setGameInputCaptured(bool captured)
 	m_inputSystem->setCursorVisible(!allowed);
 }
 
+void dx3d::Game::updateFlyControllers(f32 deltaTime)
+{
+	if (m_editorMode != EditorMode::Playing || !m_gameInputCaptured) return;
+	ui32 controllerCount = 0;
+	auto controllers = m_world->getComponents<FlyControllerComponent>(controllerCount);
+	const Vec2 mouseDelta = m_inputSystem->getMouseDelta();
+	for (ui32 index = 0; index < controllerCount; ++index)
+	{
+		auto* controller = controllers[index];
+		if (!controller || !controller->isEnabled()) continue;
+		auto& object = controller->getGameObject();
+		auto* camera = object.getComponent<CameraComponent>();
+		if (!object.isActiveInHierarchy() || !camera || !camera->isPrimary()) continue;
+
+		auto& transform = object.getTransform();
+		Vec3 rotation = transform.getRotation();
+		rotation.y += mouseDelta.x * controller->getLookSensitivity();
+		rotation.x += mouseDelta.y * controller->getLookSensitivity();
+		const f32 pitchLimit = controller->getPitchLimitDegrees() * MathUtils::PI / 180.0f;
+		rotation.x = std::clamp(rotation.x, -pitchLimit, pitchLimit);
+		rotation.z = 0.0f;
+		transform.setRotation(rotation);
+
+		Vec3 movement{};
+		const Vec3 forward = transform.forward();
+		const Vec3 right = transform.right();
+		if (m_inputSystem->isKeyDown(KeyCode::W)) movement = movement + forward;
+		if (m_inputSystem->isKeyDown(KeyCode::S)) movement = movement + forward * -1.0f;
+		if (m_inputSystem->isKeyDown(KeyCode::D)) movement = movement + right;
+		if (m_inputSystem->isKeyDown(KeyCode::A)) movement = movement + right * -1.0f;
+		if (m_inputSystem->isKeyDown(KeyCode::E) || m_inputSystem->isKeyDown(KeyCode::Space)) movement.y += 1.0f;
+		if (m_inputSystem->isKeyDown(KeyCode::Q)) movement.y -= 1.0f;
+		const f32 length = std::sqrt(movement.x * movement.x + movement.y * movement.y + movement.z * movement.z);
+		if (length <= 0.0001f) continue;
+		movement = movement * (1.0f / length);
+		const f32 boost = m_inputSystem->isKeyDown(KeyCode::Shift)
+			? controller->getBoostMultiplier() : 1.0f;
+		transform.setPosition(transform.getPosition() +
+			movement * (controller->getMoveSpeed() * boost * deltaTime));
+	}
+}
+
 void dx3d::Game::togglePauseMode()
 {
 	if (m_editorMode == EditorMode::Editing)
@@ -1630,6 +1912,7 @@ void dx3d::Game::onInternalUpdate()
 		(m_frameTimeCursor + 1) % m_frameTimes.size();
 
 	onUpdate(deltaTime);
+	updateFlyControllers(deltaTime);
 
 	if (!m_isRunning)
 		return;
@@ -1741,7 +2024,7 @@ void dx3d::Game::onInternalUpdate()
 			}
 
 			if (ImGui::MenuItem(
-				"Load", "Ctrl+O", false, m_editorMode == EditorMode::Editing
+				"Load", "Ctrl+O"
 			))
 			{
 				loadScene();
@@ -2009,15 +2292,21 @@ void dx3d::Game::onInternalUpdate()
 		}
 		ImGui::PopStyleVar(2);
 
-		ImGui::SetCursorScreenPos({ barMin.x + 256.0f * m_uiScale, barMin.y + 4.0f * m_uiScale });
-		if (showLegacyChromeMenus && ImGui::Button("View", { 48.0f * m_uiScale, 24.0f * m_uiScale }))
+		ImGui::SetCursorScreenPos({ barMin.x + 196.0f * m_uiScale, barMin.y + 4.0f * m_uiScale });
+		if (ImGui::Button("Window", { 64.0f * m_uiScale, 24.0f * m_uiScale }))
 			ImGui::OpenPopup("##ViewMenu");
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+			{ 14.0f * m_uiScale, 10.0f * m_uiScale });
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+			{ 10.0f * m_uiScale, 7.0f * m_uiScale });
 		if (ImGui::BeginPopup("##ViewMenu"))
 		{
 			ImGui::MenuItem("Stats", nullptr, &m_showStats);
 			ImGui::MenuItem("Asset Lens", nullptr, &m_showAssetLens);
+			ImGui::MenuItem("Console", nullptr, &m_showConsole);
 			ImGui::EndPopup();
 		}
+		ImGui::PopStyleVar(2);
 
 		ImGui::SetCursorScreenPos({ barMin.x + 308.0f * m_uiScale, barMin.y + 4.0f * m_uiScale });
 		if (showLegacyChromeMenus && ImGui::Button("Gizmo", { 56.0f * m_uiScale, 24.0f * m_uiScale }))
@@ -2066,7 +2355,7 @@ void dx3d::Game::onInternalUpdate()
 		ImGui::PopStyleVar();
 		ImGui::PopStyleColor(3);
 
-		const ImVec2 dragMin{ barMin.x + 204.0f * m_uiScale, barMin.y };
+		const ImVec2 dragMin{ barMin.x + 268.0f * m_uiScale, barMin.y };
 		const ImVec2 dragMax{
 			barMin.x + ImGui::GetWindowWidth() - captionControlsWidth,
 			barMin.y + titleBarHeight
@@ -2253,6 +2542,7 @@ void dx3d::Game::onInternalUpdate()
 			// Dock Scene last so a fresh workbench selects it by default.
 			ImGui::DockBuilderDockWindow("Scene", center);
 			ImGui::DockBuilderDockWindow("Elements##Workbench", elements);
+			ImGui::DockBuilderDockWindow("Console##Workbench", assets);
 			ImGui::DockBuilderDockWindow("Asset Lens##Workbench", assets);
 			ImGui::DockBuilderDockWindow("Stats##Workbench", signal);
 			ImGui::DockBuilderDockWindow("Inspector##Workbench", signal);
@@ -2291,6 +2581,31 @@ void dx3d::Game::onInternalUpdate()
 		else
 			ImGui::Dummy(sceneViewportSize);
 		m_sceneViewportHovered = ImGui::IsItemHovered();
+		if (m_editorMode == EditorMode::Editing && ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DX3D_ASSET_PATH"))
+			{
+				const char* path = static_cast<const char*>(payload->Data);
+				std::string extension = std::filesystem::path(path).extension().string();
+				std::transform(extension.begin(), extension.end(), extension.begin(),
+					[](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+				if (extension == ".obj") importObjAsset(path, getSceneSpawnPosition());
+			}
+			ImGui::EndDragDropTarget();
+		}
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+			{ 14.0f * m_uiScale, 10.0f * m_uiScale });
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+			{ 10.0f * m_uiScale, 7.0f * m_uiScale });
+		if (m_editorMode == EditorMode::Editing &&
+			ImGui::BeginPopupContextItem("##SceneObjectCreation", ImGuiPopupFlags_MouseButtonRight))
+		{
+			ImGui::TextDisabled("ADD TO SCENE");
+			ImGui::Separator();
+			drawObjectCreationMenu(getSceneSpawnPosition());
+			ImGui::EndPopup();
+		}
+		ImGui::PopStyleVar(2);
 	}
 	else
 	{
@@ -2620,6 +2935,21 @@ void dx3d::Game::onInternalUpdate()
 	ImGui::SameLine();
 	ImGui::TextDisabled("%zu elements", authoredObjectCount);
 	ImGui::Separator();
+	ImGui::BeginDisabled(m_editorMode != EditorMode::Editing);
+	if (ImGui::Button("+ Add object", { -1.0f, 0.0f }))
+		ImGui::OpenPopup("##HierarchyAddObject");
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+		{ 14.0f * m_uiScale, 10.0f * m_uiScale });
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+		{ 10.0f * m_uiScale, 7.0f * m_uiScale });
+	if (ImGui::BeginPopup("##HierarchyAddObject"))
+	{
+		drawObjectCreationMenu({});
+		ImGui::EndPopup();
+	}
+	ImGui::PopStyleVar(2);
+	ImGui::EndDisabled();
+	ImGui::Spacing();
 
 	GameObject* requestedChild = nullptr;
 	GameObject* requestedParent = nullptr;
@@ -2927,6 +3257,8 @@ void dx3d::Game::onInternalUpdate()
 		const bool isRenderable =
 			m_selectedObject->getComponent<CubeComponent>() ||
 			m_selectedObject->getComponent<SphereComponent>() ||
+			m_selectedObject->getComponent<CylinderComponent>() ||
+			m_selectedObject->getComponent<CapsuleComponent>() ||
 			m_selectedObject->getComponent<PlaneComponent>() ||
 			m_selectedObject->getComponent<CombinedMeshComponent>();
 
@@ -3004,6 +3336,56 @@ void dx3d::Game::onInternalUpdate()
 			}
 			auto* rigidBody = m_selectedObject->getComponent<RigidBodyComponent>();
 			auto* collider = m_selectedObject->getComponent<ColliderComponent>();
+			auto* texture = m_selectedObject->getComponent<TextureComponent>();
+
+			if (texture)
+			{
+				ImGui::SeparatorText("TEXTURE");
+				if (ImGui::SmallButton("REMOVE##Texture"))
+				{
+					pushUndoSnapshot(inspectorSnapshot);
+					ComponentCatalog::remove(*m_selectedObject, ComponentKind::Texture);
+					texture = nullptr;
+				}
+			}
+			if (texture)
+			{
+				char texturePath[512]{};
+				std::snprintf(texturePath, sizeof(texturePath), "%s", texture->getAssetPath().c_str());
+				if (ImGui::InputTextWithHint("Asset", "Drop a texture or enter its path",
+					texturePath, sizeof(texturePath)))
+				{
+					texture->setAssetPath(texturePath);
+					m_sceneDirty = true;
+				}
+				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+				if (ImGui::BeginDragDropTarget())
+				{
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DX3D_ASSET_PATH"))
+					{
+						const char* path = static_cast<const char*>(payload->Data);
+						std::string extension = std::filesystem::path(path).extension().string();
+						std::transform(extension.begin(), extension.end(), extension.begin(),
+							[](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+						if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" ||
+							extension == ".bmp" || extension == ".dds" || extension == ".tga")
+						{
+							pushUndoSnapshot(inspectorSnapshot);
+							texture->setAssetPath(path);
+							m_sceneDirty = true;
+						}
+					}
+					ImGui::EndDragDropTarget();
+				}
+				bool enabled = texture->isEnabled();
+				if (ImGui::Checkbox("Enabled##Texture", &enabled))
+				{
+					pushUndoSnapshot(inspectorSnapshot);
+					texture->setEnabled(enabled);
+					m_sceneDirty = true;
+				}
+				ImGui::TextDisabled("Loaded and sampled by the DX11 material pipeline.");
+			}
 
 			if (rigidBody)
 			{
@@ -3414,18 +3796,84 @@ void dx3d::Game::onInternalUpdate()
 				for (const auto& path : m_assetPaths)
 				{
 					if (!containsFilter(path)) continue;
-					const std::string extension =
+					std::string extension =
 						std::filesystem::path(path).extension().string();
+					std::transform(extension.begin(), extension.end(), extension.begin(),
+						[](unsigned char value) { return static_cast<char>(std::tolower(value)); });
 					ImGui::TableNextRow();
 					ImGui::TableNextColumn();
 					ImGui::TextColored(rgba(150, 190, 176), "%s", assetType(extension));
 					ImGui::TableNextColumn();
-					ImGui::Selectable(path.c_str(), false);
+					const bool selectedAsset = ImGui::Selectable(path.c_str(), false);
+					if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
+					{
+						ImGui::SetDragDropPayload("DX3D_ASSET_PATH", path.c_str(), path.size() + 1);
+						ImGui::TextUnformatted(path.c_str());
+						ImGui::EndDragDropSource();
+					}
+					if (selectedAsset && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
+						extension == ".obj" && m_editorMode == EditorMode::Editing)
+						importObjAsset(path, getSceneSpawnPosition());
 				}
 				ImGui::EndTable();
 			}
 		}
 		ImGui::End();
+	}
+
+	if (m_showConsole)
+	{
+		if (ImGuiWindow* assetsWindow = ImGui::FindWindowByName("Asset Lens##Workbench");
+			assetsWindow && assetsWindow->DockId != 0)
+			ImGui::SetNextWindowDockID(assetsWindow->DockId, ImGuiCond_FirstUseEver);
+		ImGui::Begin("Console##Workbench", &m_showConsole);
+		ImGui::SetNextItemWidth(-190.0f * m_uiScale);
+		ImGui::InputTextWithHint("##ConsoleFilter", "Filter log messages...",
+			m_consoleFilter, sizeof(m_consoleFilter));
+		ImGui::SameLine();
+		ImGui::Checkbox("Follow", &m_consoleAutoScroll);
+		ImGui::SameLine();
+		if (ImGui::Button("Clear")) m_logger->clear();
+		ImGui::Separator();
+		const std::string filter = m_consoleFilter;
+		const auto entries = m_logger->getEntries();
+		ImGui::BeginChild("##ConsoleRows", { 0.0f, 0.0f }, false,
+			ImGuiWindowFlags_HorizontalScrollbar);
+		for (const auto& entry : entries)
+		{
+			if (!filter.empty() && entry.message.find(filter) == std::string::npos) continue;
+			const char* level = "INFO";
+			ImVec4 color = rgba(158, 188, 180);
+			if (entry.level == Logger::LogLevel::Warning)
+			{
+				level = "WARN";
+				color = rgba(226, 174, 85);
+			}
+			else if (entry.level == Logger::LogLevel::Error)
+			{
+				level = "ERROR";
+				color = rgba(225, 102, 92);
+			}
+			ImGui::TextColored(color, "%s", level);
+			ImGui::SameLine(62.0f * m_uiScale);
+			ImGui::TextUnformatted(entry.message.c_str());
+		}
+		if (m_consoleAutoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 2.0f)
+			ImGui::SetScrollHereY(1.0f);
+		ImGui::EndChild();
+		ImGui::End();
+	}
+
+	if (m_focusAssetLensRequested && m_showAssetLens)
+	{
+		ImGuiWindow* assetWindow = ImGui::FindWindowByName("Asset Lens##Workbench");
+		ImGuiWindow* sceneWindow = ImGui::FindWindowByName("Scene");
+		if (assetWindow)
+		{
+			ImGui::FocusWindow(assetWindow);
+			if (sceneWindow) ImGui::FocusWindow(sceneWindow);
+			m_focusAssetLensRequested = false;
+		}
 	}
 
 	if (sceneViewportVisible)

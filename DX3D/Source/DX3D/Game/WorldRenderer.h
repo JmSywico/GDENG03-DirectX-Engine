@@ -8,6 +8,10 @@
 #include <DX3D/Graphics/MeshData.h>
 
 #include <unordered_map>
+#include <unordered_set>
+#include <string>
+#include <d3d11.h>
+#include <wrl.h>
 
 namespace dx3d
 {
@@ -57,6 +61,15 @@ namespace dx3d
 			ui32 meshRevision{};
 		};
 
+		struct TextureRenderResource
+		{
+			Microsoft::WRL::ComPtr<ID3D11Texture2D> texture{};
+			Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> view{};
+			Microsoft::WRL::ComPtr<ID3D11SamplerState> sampler{};
+		};
+
+		TextureRenderResource* getTextureResource(const std::string& path);
+
 	private:
 		GraphicsDevice& m_graphicsDevice;
 
@@ -74,11 +87,17 @@ namespace dx3d
 		RefPtr<IndexBuffer> m_circleIndexBuffer{};
 		RefPtr<VertexBuffer> m_sphereVertexBuffer{};
 		RefPtr<IndexBuffer> m_sphereIndexBuffer{};
+		RefPtr<VertexBuffer> m_cylinderVertexBuffer{};
+		RefPtr<IndexBuffer> m_cylinderIndexBuffer{};
+		RefPtr<VertexBuffer> m_capsuleVertexBuffer{};
+		RefPtr<IndexBuffer> m_capsuleIndexBuffer{};
 
 		std::unordered_map<
 			const CombinedMeshComponent*,
 			CombinedMeshRenderResources
 		> m_combinedMeshResources{};
+		std::unordered_map<std::string, TextureRenderResource> m_textureResources{};
+		std::unordered_set<std::string> m_failedTexturePaths{};
 
 		RefPtr<ConstantBuffer> m_cb{};
 	};

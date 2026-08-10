@@ -11,6 +11,7 @@ struct VSOutput
     float4 color : COLOR0;
     float3 worldNormal : NORMAL0;
     float4 lightPosition : TEXCOORD0;
+    float3 objectPosition : TEXCOORD1;
 };
 
 cbuffer ConstantData : register(b0)
@@ -32,9 +33,11 @@ cbuffer ConstantData : register(b0)
 };
 
 Texture2D shadowMap : register(t0);
+Texture2D albedoMap : register(t1);
 
 SamplerComparisonState shadowSampler :
     register(s0);
+SamplerState albedoSampler : register(s1);
 
 VSOutput VSMain(
     VSInput input
@@ -90,6 +93,8 @@ VSOutput VSMain(
                 )
             ).xyz
         );
+
+    output.objectPosition = input.position;
 
     return output;
 }
@@ -253,6 +258,14 @@ float4 PSMain(
         directLighting;
 
     float3 surfaceColor = input.color.rgb * materialAlbedo.rgb;
+    if (materialParameters.y > 0.5f)
+    {
+        const float3 blend = abs(normal);
+        const float2 uv = blend.y >= blend.x && blend.y >= blend.z
+            ? input.objectPosition.xz + 0.5f
+            : (blend.x >= blend.z ? input.objectPosition.zy + 0.5f : input.objectPosition.xy + 0.5f);
+        surfaceColor *= albedoMap.Sample(albedoSampler, uv).rgb;
+    }
     float appliedLighting = lightingStrength;
 
     const int materialMode = (int)(materialParameters.x + 0.5f);

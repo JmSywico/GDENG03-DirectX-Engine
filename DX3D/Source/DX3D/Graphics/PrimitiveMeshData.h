@@ -7,4 +7,6 @@ namespace dx3d
 	const MeshData& getCubeMeshData() noexcept;
 	const MeshData& getPlaneMeshData() noexcept;
 	const MeshData& getSphereMeshData() noexcept;
+	const MeshData& getCylinderMeshData() noexcept;
+	const MeshData& getCapsuleMeshData() noexcept;
 }

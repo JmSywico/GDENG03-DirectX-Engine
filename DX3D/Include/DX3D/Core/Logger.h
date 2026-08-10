@@ -1,6 +1,10 @@
 #pragma once
 #include <DX3D/Core/Core.h>
 #include <format>
+#include <deque>
+#include <mutex>
+#include <string>
+#include <vector>
 
 namespace dx3d
 {
@@ -15,6 +19,12 @@ namespace dx3d
 			Info
 		};
 
+		struct Entry
+		{
+			LogLevel level{};
+			std::string message{};
+		};
+
 		explicit Logger(LogLevel logLevel = LogLevel::Error);
 		~Logger();
 
@@ -26,10 +36,14 @@ namespace dx3d
 				str.c_str()
 			);
 		}
+		std::vector<Entry> getEntries() const;
+		void clear();
 	private:
 		void _log(LogLevel level, const char* message);
 	private:
 		LogLevel m_logLevel = LogLevel::Error;
+		mutable std::mutex m_entriesMutex{};
+		std::deque<Entry> m_entries{};
 	};
 }
 

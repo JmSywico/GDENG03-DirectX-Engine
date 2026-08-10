@@ -17,10 +17,13 @@
 #include <DX3D/Component/PlaneComponent.h>
 #include <DX3D/Component/CircleComponent.h>
 #include <DX3D/Component/SphereComponent.h>
+#include <DX3D/Component/CylinderComponent.h>
+#include <DX3D/Component/CapsuleComponent.h>
 #include <DX3D/Component/CameraComponent.h>
 #include <DX3D/Component/CombinedMeshComponent.h>
 #include <DX3D/Component/DirectionalLightComponent.h>
 #include <DX3D/Component/MaterialComponent.h>
+#include <DX3D/Component/TextureComponent.h>
 
 #include <DX3D/Math/MathUtils.h>
 
@@ -29,6 +32,74 @@
 #include <vector>
 #include <cmath>
 #include <unordered_set>
+#include <filesystem>
+#include <limits>
+#include <wincodec.h>
+
+dx3d::WorldRenderer::TextureRenderResource*
+dx3d::WorldRenderer::getTextureResource(const std::string& path)
+{
+	if (path.empty()) return nullptr;
+	if (auto found = m_textureResources.find(path); found != m_textureResources.end())
+		return &found->second;
+	if (m_failedTexturePaths.contains(path)) return nullptr;
+
+	const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+	if (FAILED(initialized) && initialized != RPC_E_CHANGED_MODE)
+	{
+		m_failedTexturePaths.insert(path);
+		return nullptr;
+	}
+	Microsoft::WRL::ComPtr<IWICImagingFactory> factory{};
+	Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder{};
+	Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame{};
+	Microsoft::WRL::ComPtr<IWICFormatConverter> converter{};
+	UINT width = 0, height = 0;
+	const std::wstring widePath = std::filesystem::path(path).wstring();
+	if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+		IID_PPV_ARGS(&factory))) ||
+		FAILED(factory->CreateDecoderFromFilename(widePath.c_str(), nullptr, GENERIC_READ,
+			WICDecodeMetadataCacheOnDemand, &decoder)) ||
+		FAILED(decoder->GetFrame(0, &frame)) || FAILED(frame->GetSize(&width, &height)) ||
+		width == 0 || height == 0 || FAILED(factory->CreateFormatConverter(&converter)) ||
+		FAILED(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA,
+			WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom)))
+	{
+		m_failedTexturePaths.insert(path);
+		DX3DLogWarning("Could not load texture: {}", path);
+		return nullptr;
+	}
+	const size_t byteCount = static_cast<size_t>(width) * height * 4u;
+	if (byteCount > std::numeric_limits<UINT>::max()) return nullptr;
+	std::vector<unsigned char> pixels(byteCount);
+	if (FAILED(converter->CopyPixels(nullptr, width * 4u,
+		static_cast<UINT>(byteCount), pixels.data()))) return nullptr;
+
+	TextureRenderResource resource{};
+	D3D11_TEXTURE2D_DESC description{};
+	description.Width = width;
+	description.Height = height;
+	description.MipLevels = 1;
+	description.ArraySize = 1;
+	description.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	description.SampleDesc.Count = 1;
+	description.Usage = D3D11_USAGE_IMMUTABLE;
+	description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	D3D11_SUBRESOURCE_DATA initial{ pixels.data(), width * 4u, 0 };
+	auto* device = m_graphicsDevice.getD3DDevice();
+	if (!device || FAILED(device->CreateTexture2D(&description, &initial, &resource.texture)) ||
+		FAILED(device->CreateShaderResourceView(resource.texture.Get(), nullptr, &resource.view)))
+		return nullptr;
+	D3D11_SAMPLER_DESC sampler{};
+	sampler.Filter = D3D11_FILTER_ANISOTROPIC;
+	sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampler.MaxAnisotropy = 8;
+	sampler.MaxLOD = D3D11_FLOAT32_MAX;
+	if (FAILED(device->CreateSamplerState(&sampler, &resource.sampler))) return nullptr;
+	auto [inserted, unused] = m_textureResources.emplace(path, std::move(resource));
+	DX3DLogInfo("Loaded texture: {}", path);
+	return &inserted->second;
+}
 
 dx3d::WorldRenderer::WorldRenderer(
 	const WorldRendererDesc& desc
@@ -166,6 +237,18 @@ dx3d::WorldRenderer::WorldRenderer(
 		static_cast<ui32>(sphereMesh.vertices.size()), sizeof(MeshVertex) });
 	m_sphereIndexBuffer = device.createIndexBuffer({ sphereMesh.indices.data(),
 		static_cast<ui32>(sphereMesh.indices.size()) });
+
+	const auto& cylinderMesh = getCylinderMeshData();
+	m_cylinderVertexBuffer = device.createVertexBuffer({ cylinderMesh.vertices.data(),
+		static_cast<ui32>(cylinderMesh.vertices.size()), sizeof(MeshVertex) });
+	m_cylinderIndexBuffer = device.createIndexBuffer({ cylinderMesh.indices.data(),
+		static_cast<ui32>(cylinderMesh.indices.size()) });
+
+	const auto& capsuleMesh = getCapsuleMeshData();
+	m_capsuleVertexBuffer = device.createVertexBuffer({ capsuleMesh.vertices.data(),
+		static_cast<ui32>(capsuleMesh.vertices.size()), sizeof(MeshVertex) });
+	m_capsuleIndexBuffer = device.createIndexBuffer({ capsuleMesh.indices.data(),
+		static_cast<ui32>(capsuleMesh.indices.size()) });
 
 	constexpr ui32 circleSegments = 64;
 
@@ -603,6 +686,7 @@ void dx3d::WorldRenderer::render(
 			data.materialAlbedo = { 1.0f, 1.0f, 1.0f, 1.0f };
 			data.materialEmissiveAndStrength = {};
 			data.materialParameters = {};
+			context.setAlbedoTexture(nullptr, nullptr);
 
 			if (auto* material = object.getComponent<MaterialComponent>())
 			{
@@ -614,6 +698,15 @@ void dx3d::WorldRenderer::render(
 					material->getEmissionStrength()
 				};
 				data.materialParameters.x = static_cast<f32>(material->getMode());
+			}
+			if (auto* texture = object.getComponent<TextureComponent>();
+				texture && texture->isEnabled() && !texture->getAssetPath().empty())
+			{
+				if (auto* resource = getTextureResource(texture->getAssetPath()))
+				{
+					data.materialParameters.y = 1.0f;
+					context.setAlbedoTexture(resource->view.Get(), resource->sampler.Get());
+				}
 			}
 
 			data.world =
@@ -683,7 +776,6 @@ void dx3d::WorldRenderer::render(
 					);
 				}
 			}
-
 			{
 				auto components = world.getComponents<SphereComponent>(numComponents);
 				for (auto i : std::views::iota(0u, numComponents))
@@ -692,6 +784,20 @@ void dx3d::WorldRenderer::render(
 					if (component) drawObject(component->getGameObject(),
 						*m_sphereVertexBuffer, *m_sphereIndexBuffer);
 				}
+			}
+
+			{
+				auto components = world.getComponents<CylinderComponent>(numComponents);
+				for (auto i : std::views::iota(0u, numComponents))
+					if (auto* component = components[i]) drawObject(component->getGameObject(),
+						*m_cylinderVertexBuffer, *m_cylinderIndexBuffer);
+			}
+
+			{
+				auto components = world.getComponents<CapsuleComponent>(numComponents);
+				for (auto i : std::views::iota(0u, numComponents))
+					if (auto* component = components[i]) drawObject(component->getGameObject(),
+						*m_capsuleVertexBuffer, *m_capsuleIndexBuffer);
 			}
 
 			{

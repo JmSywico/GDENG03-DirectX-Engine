@@ -106,8 +106,8 @@ target_compile_definitions(enignE PRIVATE
     UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(enignE PRIVATE /W4 /permissive- /bigobj /Zc:preprocessor)
 target_link_libraries(enignE PRIVATE
-    EnTT::EnTT Jolt
-    d3d11 d3dcompiler dxgi user32 gdi32 shell32 comdlg32 winmm)
+	EnTT::EnTT Jolt
+	d3d11 d3dcompiler dxgi user32 gdi32 shell32 comdlg32 winmm windowscodecs ole32)
 
 add_library(enignE_dx11_backend STATIC
     "${CMAKE_SOURCE_DIR}/engine/Source/enignE/Graphics/DX11/DX11Context.cpp"

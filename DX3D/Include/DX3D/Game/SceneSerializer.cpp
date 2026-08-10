@@ -6,6 +6,8 @@
 #include <DX3D/Component/CameraComponent.h>
 #include <DX3D/Component/CubeComponent.h>
 #include <DX3D/Component/SphereComponent.h>
+#include <DX3D/Component/CylinderComponent.h>
+#include <DX3D/Component/CapsuleComponent.h>
 #include <DX3D/Component/PlaneComponent.h>
 #include <DX3D/Component/CombinedMeshComponent.h>
 #include <DX3D/Component/DirectionalLightComponent.h>
@@ -14,6 +16,7 @@
 #include <DX3D/Component/ColliderComponent.h>
 #include <DX3D/Component/RotatorComponent.h>
 #include <DX3D/Component/FlyControllerComponent.h>
+#include <DX3D/Component/TextureComponent.h>
 #include <DX3D/Component/TransformComponent.h>
 
 #include <DX3D/Graphics/MeshData.h>
@@ -45,7 +48,7 @@ namespace
 		'E'
 	};
 
-	constexpr dx3d::ui32 sceneVersion = 8;
+	constexpr dx3d::ui32 sceneVersion = 10;
 	constexpr dx3d::ui32 oldestSupportedSceneVersion = 1;
 	constexpr dx3d::ui32 maximumObjectCount = 100000;
 	constexpr dx3d::ui32 maximumStringLength = 1024 * 1024;
@@ -59,7 +62,9 @@ namespace
 		Plane = 2,
 		CombinedMesh = 3,
 		DirectionalLight = 4,
-		Sphere = 5
+		Sphere = 5,
+		Cylinder = 6,
+		Capsule = 7
 	};
 
 	struct SerializedSceneObject
@@ -100,6 +105,9 @@ namespace
 		dx3d::Vec4 materialAlbedo{ 1.0f, 1.0f, 1.0f, 1.0f };
 		dx3d::Vec3 materialEmissive{};
 		dx3d::f32 materialEmissionStrength{};
+		bool hasTexture{};
+		std::string textureAssetPath{};
+		bool textureEnabled{ true };
 		bool hasRigidBody{};
 		dx3d::RigidBodyType rigidBodyType{ dx3d::RigidBodyType::Static };
 		dx3d::f32 rigidBodyFriction{ 0.5f };
@@ -496,6 +504,18 @@ namespace
 			return true;
 		}
 
+		if (object->getComponent<dx3d::CylinderComponent>())
+		{
+			type = SceneObjectType::Cylinder;
+			return true;
+		}
+
+		if (object->getComponent<dx3d::CapsuleComponent>())
+		{
+			type = SceneObjectType::Capsule;
+			return true;
+		}
+
 		if (
 			object->getComponent<
 			dx3d::PlaneComponent
@@ -565,6 +585,16 @@ namespace
 			{
 				return false;
 			}
+		}
+
+		auto* texture = object->getComponent<dx3d::TextureComponent>();
+		const dx3d::ui32 hasTexture = texture ? 1u : 0u;
+		if (!writeValue(stream, hasTexture)) return false;
+		if (texture)
+		{
+			const dx3d::ui32 enabled = texture->isEnabled() ? 1u : 0u;
+			if (!writeString(stream, texture->getAssetPath()) ||
+				!writeValue(stream, enabled)) return false;
 		}
 
 		auto* rigidBody = object->getComponent<dx3d::RigidBodyComponent>();
@@ -675,6 +705,8 @@ namespace
 		case SceneObjectType::Empty:
 		case SceneObjectType::Cube:
 		case SceneObjectType::Sphere:
+		case SceneObjectType::Cylinder:
+		case SceneObjectType::Capsule:
 		case SceneObjectType::Plane:
 			return true;
 
@@ -778,6 +810,20 @@ namespace
 					return false;
 				}
 				object.materialMode = static_cast<dx3d::MaterialMode>(mode);
+			}
+		}
+
+		if (storedVersion >= 10)
+		{
+			dx3d::ui32 hasTexture = 0;
+			if (!readValue(stream, hasTexture) || hasTexture > 1u) return false;
+			object.hasTexture = hasTexture != 0;
+			if (object.hasTexture)
+			{
+				dx3d::ui32 enabled = 0;
+				if (!readString(stream, object.textureAssetPath) ||
+					!readValue(stream, enabled) || enabled > 1u) return false;
+				object.textureEnabled = enabled != 0;
 			}
 		}
 
@@ -903,6 +949,8 @@ namespace
 		case SceneObjectType::Empty:
 		case SceneObjectType::Cube:
 		case SceneObjectType::Sphere:
+		case SceneObjectType::Cylinder:
+		case SceneObjectType::Capsule:
 		case SceneObjectType::Plane:
 		case SceneObjectType::CombinedMesh:
 		case SceneObjectType::DirectionalLight:
@@ -945,6 +993,8 @@ namespace
 		case SceneObjectType::Empty:
 		case SceneObjectType::Cube:
 		case SceneObjectType::Sphere:
+		case SceneObjectType::Cylinder:
+		case SceneObjectType::Capsule:
 		case SceneObjectType::Plane:
 			return true;
 
@@ -1029,6 +1079,14 @@ namespace
 			object->createOrGetComponent<dx3d::SphereComponent>();
 			break;
 
+		case SceneObjectType::Cylinder:
+			object->createOrGetComponent<dx3d::CylinderComponent>();
+			break;
+
+		case SceneObjectType::Capsule:
+			object->createOrGetComponent<dx3d::CapsuleComponent>();
+			break;
+
 		case SceneObjectType::Plane:
 			object->createOrGetComponent<
 				dx3d::PlaneComponent
@@ -1106,6 +1164,12 @@ namespace
 			material->setAlbedo(data.materialAlbedo);
 			material->setEmissive(data.materialEmissive);
 			material->setEmissionStrength(data.materialEmissionStrength);
+		}
+		if (data.hasTexture)
+		{
+			auto* texture = object->createOrGetComponent<dx3d::TextureComponent>();
+			texture->setAssetPath(data.textureAssetPath);
+			texture->setEnabled(data.textureEnabled);
 		}
 
 		if (data.hasRigidBody)
