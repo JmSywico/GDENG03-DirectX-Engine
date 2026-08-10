@@ -6,7 +6,6 @@
 #include <functional>
 #include <memory>
 
-class Engine;
 class Model;
 struct MeshData;
 
@@ -44,11 +43,6 @@ namespace enignE::Scene
 	};
 
 	entt::entity CreateCamera(Scene& scene, const CameraDesc& desc = {});
-
-	entt::entity CreatePrimitive(
-		Engine& engine,
-		Scene& scene,
-		const PrimitiveDesc& desc = {});
 
 	using PrimitiveModelFactory = std::function<std::shared_ptr<Model>(const MeshData&)>;
 

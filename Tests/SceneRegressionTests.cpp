@@ -1109,7 +1109,7 @@ namespace
 		auto preparedModel = ModelLoader::Prepare(modelPath.string(), &jobs);
 		context.Expect(preparedModel && preparedModel->Meshes.size() == 1
 			&& preparedModel->Meshes.front().Data.vertices.size() == 3,
-			"model import CPU preparation does not require bgfx finalization");
+			"model import CPU preparation does not require GPU resource finalization");
 		std::filesystem::remove(modelPath);
 	}
 

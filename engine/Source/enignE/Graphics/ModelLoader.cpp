@@ -31,7 +31,7 @@ namespace
 		aiProcess_ValidateDataStructure |
 		aiProcess_ConvertToLeftHanded;
 
-	bool FitsBgfxBuffer(size_t elementCount, size_t elementSize)
+	bool FitsGpuBuffer(size_t elementCount, size_t elementSize)
 	{
 		return elementCount <= std::numeric_limits<uint32_t>::max() / elementSize;
 	}
@@ -82,8 +82,8 @@ namespace
 		}
 
 		return !result.indices.empty()
-			&& FitsBgfxBuffer(result.vertices.size(), sizeof(SimpleVertex))
-			&& FitsBgfxBuffer(result.indices.size(), sizeof(uint32_t));
+			&& FitsGpuBuffer(result.vertices.size(), sizeof(SimpleVertex))
+			&& FitsGpuBuffer(result.indices.size(), sizeof(uint32_t));
 	}
 
 	std::string ReadTexturePath(

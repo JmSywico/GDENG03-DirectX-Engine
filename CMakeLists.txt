@@ -127,9 +127,9 @@ target_compile_definitions(enignE_dx11_backend PRIVATE
 target_compile_options(enignE_dx11_backend PRIVATE /W4 /permissive- /Zc:preprocessor)
 target_link_libraries(enignE_dx11_backend PUBLIC d3d11 dxgi windowscodecs ole32 fmt::fmt)
 
-# Build the canonical editor workbench independently while Engine.cpp is being
-# translated from bgfx to DX11. This keeps panel, command, viewport-SRV, and
-# profiler code continuously compile-checked during the backend migration.
+# Build the canonical editor workbench independently from the proven DX11
+# executable. This keeps panel, command, viewport-SRV, and profiler code
+# continuously compile-checked during the engine migration.
 add_library(enignE_editor_ui STATIC
     engine/Source/enignE/Layer/Layer.cpp
     engine/Source/enignE/Layer/LayerStack.cpp
