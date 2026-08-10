@@ -131,6 +131,23 @@ vec3 fresnelSchlick(float cosine, vec3 f0)
 		* pow(clamp(1.0 - cosine, 0.0, 1.0), 5.0);
 }
 
+vec3 srgbToLinear(vec3 value)
+{
+	vec3 positive = max(value, vec3(0.0, 0.0, 0.0));
+	vec3 low = positive * (1.0 / 12.92);
+	vec3 high = pow((positive + vec3(0.055, 0.055, 0.055)) * (1.0 / 1.055), vec3(2.4, 2.4, 2.4));
+	return mix(low, high, step(vec3(0.04045, 0.04045, 0.04045), positive));
+}
+
+vec3 linearToSrgb(vec3 value)
+{
+	vec3 positive = max(value, vec3(0.0, 0.0, 0.0));
+	vec3 low = positive * 12.92;
+	vec3 high = vec3(1.055, 1.055, 1.055) * pow(positive, vec3(1.0 / 2.4, 1.0 / 2.4, 1.0 / 2.4))
+		- vec3(0.055, 0.055, 0.055);
+	return mix(low, high, step(vec3(0.0031308, 0.0031308, 0.0031308), positive));
+}
+
 void main()
 {
 	if (u_debugView.x > 0.5)
@@ -195,12 +212,11 @@ void main()
 	}
 	float nDotL = max(dot(shadingNormal, lightDirection), 0.0);
 	float visibility = shadowVisibility(v_worldPosition, normalize(v_normal), nDotL, v_viewDepth);
-	vec4 sampledAlbedo = texture2D(s_albedo, v_texcoord0);
+	vec4 sampledTexture = texture2D(s_albedo, v_texcoord0);
 	if (u_materialEmissive.w > 0.5)
-		sampledAlbedo.rgb = pow(
-			max(sampledAlbedo.rgb, vec3(0.0, 0.0, 0.0)),
-			vec3(2.2, 2.2, 2.2));
-	sampledAlbedo *= u_albedo;
+		sampledTexture.rgb = srgbToLinear(sampledTexture.rgb);
+	vec3 albedo = sampledTexture.rgb * srgbToLinear(u_albedo.rgb);
+	float alpha = sampledTexture.a * u_albedo.a;
 	vec2 metallicRoughness = u_materialSurface.xy;
 	if (u_materialSurface.z > 0.5)
 	{
@@ -214,21 +230,18 @@ void main()
 	vec3 halfway = normalize(viewDirection + lightDirection);
 	float nDotV = max(dot(shadingNormal, viewDirection), 0.0001);
 	float hDotV = max(dot(halfway, viewDirection), 0.0);
-	vec3 f0 = mix(vec3(0.04, 0.04, 0.04), sampledAlbedo.rgb, metallic);
+	vec3 f0 = mix(vec3(0.04, 0.04, 0.04), albedo, metallic);
 	vec3 fresnel = fresnelSchlick(hDotV, f0);
 	float distribution = distributionGGX(shadingNormal, halfway, roughness);
 	float geometry = geometrySchlickGGX(nDotV, roughness)
 		* geometrySchlickGGX(nDotL, roughness);
 	vec3 specular = distribution * geometry * fresnel / max(4.0 * nDotV * nDotL, 0.0001);
 	vec3 diffuse = (vec3(1.0, 1.0, 1.0) - fresnel) * (1.0 - metallic)
-		* sampledAlbedo.rgb * (1.0 / 3.14159265);
-	vec3 radiance = u_lightColorMaterial.rgb * u_lightDirIntensity.w * attenuation;
-	vec3 ambient = sampledAlbedo.rgb * (1.0 - metallic) * 0.03;
+		* albedo * (1.0 / 3.14159265);
+	vec3 radiance = srgbToLinear(u_lightColorMaterial.rgb) * u_lightDirIntensity.w * attenuation;
+	vec3 ambient = albedo * (1.0 - metallic) * 0.03;
 	vec3 color = ambient + (diffuse + specular) * radiance * nDotL * visibility
-		+ u_materialEmissive.rgb;
-	color = color / (color + vec3(1.0, 1.0, 1.0));
-	color = pow(
-		max(color, vec3(0.0, 0.0, 0.0)),
-		vec3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
-	gl_FragColor = vec4(color, sampledAlbedo.a);
+		+ srgbToLinear(u_materialEmissive.rgb);
+	color = linearToSrgb(color);
+	gl_FragColor = vec4(color, alpha);
 }

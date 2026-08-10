@@ -1161,6 +1161,8 @@ void dx3d::Game::createNewScene()
 	m_sceneStatusMessage =
 		"New scene created";
 	m_sceneDirty = true;
+	m_focusSceneViewRequested = true;
+	m_focusGameViewRequested = false;
 	ensureEditorCamera();
 	ensureGameCamera();
 }
@@ -1317,6 +1319,8 @@ void dx3d::Game::loadScene(const std::string& filePath)
 	m_sceneStatusMessage =
 		"Loaded: " + m_sceneFilePath;
 	m_sceneDirty = false;
+	m_focusSceneViewRequested = true;
+	m_focusGameViewRequested = false;
 
 	DX3DLogInfo(
 		"Scene loaded."
@@ -1426,14 +1430,28 @@ void dx3d::Game::startPlayMode()
 	clearSelection();
 	m_fixedStepAccumulator = 0.0f;
 	m_editorMode = EditorMode::Playing;
+	m_focusSceneViewRequested = false;
 	m_focusGameViewRequested = true;
+	setGameInputCaptured(true);
 	m_sceneStatusMessage = "Play Mode";
+}
+
+void dx3d::Game::setGameInputCaptured(bool captured)
+{
+	const bool allowed = captured && m_editorMode == EditorMode::Playing;
+	if (m_gameInputCaptured == allowed)
+		return;
+
+	m_gameInputCaptured = allowed;
+	m_inputSystem->setCursorLocked(allowed);
+	m_inputSystem->setCursorVisible(!allowed);
 }
 
 void dx3d::Game::stopPlayMode()
 {
 	if (m_editorMode == EditorMode::Editing)
 		return;
+	setGameInputCaptured(false);
 
 	if (!m_editorSceneSnapshot.empty())
 	{
@@ -1451,6 +1469,7 @@ void dx3d::Game::stopPlayMode()
 	m_singleStepRequested = false;
 	m_editorMode = EditorMode::Editing;
 	m_focusSceneViewRequested = true;
+	m_focusGameViewRequested = false;
 	m_sceneStatusMessage = "Edit Mode";
 }
 
@@ -1521,14 +1540,21 @@ void dx3d::Game::onInternalUpdate()
 		return;
 	}
 
-	m_inputSystem->setCursorLockArea(
-		m_display->getClientAreaInScreenSpace()
-	);
+	const Rect cursorLockArea = m_gameInputCaptured &&
+		m_gameViewportScreenArea.width > 0 && m_gameViewportScreenArea.height > 0
+		? m_gameViewportScreenArea
+		: m_display->getClientAreaInScreenSpace();
+	m_inputSystem->setCursorLockArea(cursorLockArea);
 
 	// Begin the ImGui frame.
 	ImGui_ImplDX11_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
+	if (m_gameInputCaptured &&
+		m_inputSystem->isKeyPressed(KeyCode::Escape))
+	{
+		setGameInputCaptured(false);
+	}
 
 	m_frameTimes[m_frameTimeCursor] = deltaTime * 1000.0f;
 	m_frameTimeCursor =
@@ -2144,8 +2170,9 @@ void dx3d::Game::onInternalUpdate()
 			const ImGuiID assets = ImGui::DockBuilderSplitNode(
 				elements, ImGuiDir_Right, 0.62f, nullptr, &elements);
 
-			ImGui::DockBuilderDockWindow("Scene", center);
 			ImGui::DockBuilderDockWindow("Game", center);
+			// Dock Scene last so a fresh workbench selects it by default.
+			ImGui::DockBuilderDockWindow("Scene", center);
 			ImGui::DockBuilderDockWindow("Elements##Workbench", elements);
 			ImGui::DockBuilderDockWindow("Asset Lens##Workbench", assets);
 			ImGui::DockBuilderDockWindow("Stats##Workbench", signal);
@@ -2167,17 +2194,16 @@ void dx3d::Game::onInternalUpdate()
 	bool sceneViewportVisible = false;
 	m_sceneViewportHovered = false;
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.0f, 0.0f });
-	if (m_focusSceneViewRequested)
-	{
-		ImGui::SetNextWindowFocus();
-		m_focusSceneViewRequested = false;
-	}
 	sceneViewportVisible = ImGui::Begin("Scene", nullptr,
 		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
 		ImGuiWindowFlags_NoBackground);
 	if (sceneViewportVisible)
 	{
-		m_sceneViewportFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+		// Dock siblings share a root window. Exact focus is required so the
+		// active Game tab can never authorize Scene-camera navigation.
+		m_sceneViewportFocused = ImGui::IsWindowFocused();
+		if (m_focusSceneViewRequested && m_sceneViewportFocused)
+			m_focusSceneViewRequested = false;
 		sceneViewportOrigin = ImGui::GetCursorScreenPos();
 		sceneViewportSize = ImGui::GetContentRegionAvail();
 		if (ID3D11ShaderResourceView* sceneView =
@@ -2192,36 +2218,67 @@ void dx3d::Game::onInternalUpdate()
 		m_sceneViewportFocused = false;
 	}
 	ImGui::End();
-	if (m_focusGameViewRequested)
-	{
-		ImGui::SetNextWindowFocus();
-		m_focusGameViewRequested = false;
-	}
-	if (ImGui::Begin("Game", nullptr,
+	ImVec2 gameViewportOrigin = workPosition;
+	ImVec2 gameViewportSize = workSize;
+	bool gameViewportVisible = false;
+	gameViewportVisible = ImGui::Begin("Game", nullptr,
 		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-		ImGuiWindowFlags_NoBackground))
+		ImGuiWindowFlags_NoBackground);
+	if (gameViewportVisible)
 	{
-		const ImVec2 available = ImGui::GetContentRegionAvail();
+		if (m_focusGameViewRequested && ImGui::IsWindowFocused())
+			m_focusGameViewRequested = false;
+		gameViewportOrigin = ImGui::GetCursorScreenPos();
+		gameViewportSize = ImGui::GetContentRegionAvail();
+		m_gameViewportScreenArea = {
+			static_cast<i32>(gameViewportOrigin.x),
+			static_cast<i32>(gameViewportOrigin.y),
+			(std::max)(1, static_cast<i32>(gameViewportSize.x)),
+			(std::max)(1, static_cast<i32>(gameViewportSize.y))
+		};
 		if (ID3D11ShaderResourceView* gameView =
 			m_display->getSwapChain().getGameFrameView())
-			ImGui::Image(gameView, available);
+			ImGui::Image(gameView, gameViewportSize);
 		else
-			ImGui::Dummy(available);
+			ImGui::Dummy(gameViewportSize);
+		if (ImGui::IsItemHovered() &&
+			m_editorMode == EditorMode::Playing &&
+			m_inputSystem->isKeyPressed(KeyCode::MouseLeft))
+		{
+			m_inputSystem->setCursorLockArea(m_gameViewportScreenArea);
+			setGameInputCaptured(true);
+		}
+
+		// Game owns this dock surface for the frame. Clear the previous Scene
+		// input state before MainGame consumes it on the next update.
+		m_sceneViewportHovered = false;
+		m_sceneViewportFocused = false;
 	}
 	ImGui::End();
+	// Select dock tabs only after both windows have been submitted. This wins
+	// over persisted ImGui tab state and DockBuilder's last-docked selection.
+	if (m_focusSceneViewRequested)
+	{
+		ImGui::SetWindowFocus("Scene");
+	}
+	else if (m_focusGameViewRequested)
+	{
+		ImGui::SetWindowFocus("Game");
+	}
 	ImGui::PopStyleVar();
 
-	// Match the reference floating viewport tool cluster. It belongs only to
-	// the Scene tab; the Game tab remains a clean runtime surface.
-	if (sceneViewportVisible)
+	// Scene and Game expose the same compact workbench controls. The toolbar
+	// is shared chrome only; manipulation and navigation remain Scene-owned.
+	const auto drawViewportTools = [this](
+		const char* windowId, const ImVec2& origin)
 	{
 	ImGui::SetNextWindowPos(
-		{ sceneViewportOrigin.x + 12.0f * m_uiScale, sceneViewportOrigin.y + 12.0f * m_uiScale },
+		{ origin.x + 12.0f * m_uiScale, origin.y + 12.0f * m_uiScale },
 		ImGuiCond_Always);
 	ImGui::SetNextWindowBgAlpha(0.78f);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 5.0f * m_uiScale, 5.0f * m_uiScale });
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 4.0f * m_uiScale, 0.0f });
-	ImGui::Begin("##ViewportTools", nullptr,
+	ImGui::Begin(windowId, nullptr,
 		ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
 		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
 		ImGuiWindowFlags_NoDocking);
@@ -2293,7 +2350,11 @@ void dx3d::Game::onInternalUpdate()
 	}
 	ImGui::End();
 	ImGui::PopStyleVar(2);
-	}
+	};
+	if (sceneViewportVisible)
+		drawViewportTools("##SceneViewportTools", sceneViewportOrigin);
+	if (gameViewportVisible)
+		drawViewportTools("##GameViewportTools", gameViewportOrigin);
 
 	const float panelWidth = std::clamp(
 		workSize.x * 0.245f,
@@ -2336,7 +2397,7 @@ void dx3d::Game::onInternalUpdate()
 		std::max(1.0f, sceneViewportSize.y)
 	};
 
-	if (m_editorMode == EditorMode::Editing &&
+	if (sceneViewportVisible && m_editorMode == EditorMode::Editing &&
 		m_selectedObject &&
 		m_inputSystem->isKeyPressed(KeyCode::MouseLeft) &&
 		m_transformGizmo.getHoveredAxis() != TransformGizmo::Axis::None)
@@ -2344,15 +2405,24 @@ void dx3d::Game::onInternalUpdate()
 		pushUndoSnapshot();
 	}
 
-	m_transformGizmo.draw(
-		m_selectedObject,
-		editorCameraComponent,
-		gizmoViewport
-	);
+	if (sceneViewportVisible)
+	{
+		m_transformGizmo.draw(
+			m_selectedObject,
+			editorCameraComponent,
+			gizmoViewport
+		);
+	}
+	else
+	{
+		// An inactive Scene tab must not retain a drag or paint editor tooling
+		// over the clean Game-camera output.
+		m_transformGizmo.draw(nullptr, nullptr, gizmoViewport);
+	}
 
 	// Authored cameras are scene objects. Draw the same compact camera marker
 	// and selected-camera frustum used by enignE's Scene viewport.
-	if (editorCameraComponent)
+	if (sceneViewportVisible && editorCameraComponent)
 	{
 		const Mat4x4 viewProjection = editorCameraComponent->getViewMatrix() *
 			editorCameraComponent->getProjectionMatrix();
@@ -3290,10 +3360,13 @@ void dx3d::Game::onInternalUpdate()
 		ImGui::End();
 	}
 
-	handleViewportPicking(
-		editorCameraComponent,
-		gizmoViewport
-	);
+	if (sceneViewportVisible)
+	{
+		handleViewportPicking(
+			editorCameraComponent,
+			gizmoViewport
+		);
+	}
 
 // --------------------------------------------------
 // Transform gizmo mode shortcuts
@@ -3317,6 +3390,8 @@ void dx3d::Game::onInternalUpdate()
 		);
 
 	const bool allowGizmoShortcuts =
+		sceneViewportVisible &&
+		m_sceneViewportFocused &&
 		!m_transformGizmo.isUsing() &&
 		!rightMouseDown &&
 		!editingImGuiValue &&
@@ -3357,6 +3432,7 @@ void dx3d::Game::onInternalUpdate()
 		ImGui::GetIO().KeyCtrl;
 
 	const bool allowClipboardShortcuts =
+		!m_gameInputCaptured &&
 		controlHeld &&
 		!m_transformGizmo.isUsing() &&
 		!rightMouseDown &&
@@ -3409,7 +3485,7 @@ void dx3d::Game::onInternalUpdate()
 	const bool typingText =
 		ImGui::GetIO().WantTextInput;
 
-	if (deletePressed &&
+	if (!m_gameInputCaptured && deletePressed &&
 		!m_transformGizmo.isUsing() &&
 		!editingInspectorValue &&
 		!typingText &&

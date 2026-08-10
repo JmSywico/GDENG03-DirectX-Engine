@@ -34,11 +34,13 @@ void dx3d::TransformComponent::setRotation(const Vec3& rotation)
 	const f32 cp = std::cos(halfPitch), sp = std::sin(halfPitch);
 	const f32 cy = std::cos(halfYaw), sy = std::sin(halfYaw);
 	const f32 cr = std::cos(halfRoll), sr = std::sin(halfRoll);
+	// Match the row-vector rotation convention used by Mat4x4. In particular,
+	// combined pitch and yaw must keep the camera's right axis horizontal.
 	m_rotationQuaternion = {
 		sp * cy * cr + cp * sy * sr,
 		cp * sy * cr - sp * cy * sr,
-		cp * cy * sr + sp * sy * cr,
-		cp * cy * cr - sp * sy * sr
+		cp * cy * sr - sp * sy * cr,
+		cp * cy * cr + sp * sy * sr
 	};
 	markAsDirty();
 }

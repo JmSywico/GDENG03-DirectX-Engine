@@ -2,6 +2,7 @@
 
 #include <DX3D/Graphics/MeshData.h>
 #include <DX3D/Math/Vec3.h>
+#include <DX3D/Math/Rect.h>
 #include <DX3D/Core/Base.h>
 #include <DX3D/Core/Core.h>
 #include <DX3D/Editor/TransformGizmo.h>
@@ -159,6 +160,7 @@ namespace dx3d
 		void redo();
 		void startPlayMode();
 		void stopPlayMode();
+		void setGameInputCaptured(bool captured);
 		void refreshAssetLens();
 
 	private:
@@ -208,6 +210,8 @@ namespace dx3d
 		bool m_focusGameViewRequested{};
 		bool m_sceneViewportHovered{};
 		bool m_sceneViewportFocused{};
+		bool m_gameInputCaptured{};
+		Rect m_gameViewportScreenArea{};
 		f32 m_uiScale{ 1.0f };
 		char m_assetFilter[128]{};
 		char m_registryFilter[128]{};

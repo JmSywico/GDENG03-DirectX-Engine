@@ -239,12 +239,6 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 	auto& input = getInputSystem();
 	m_sceneInputActions.update(input);
 
-	if (input.isKeyPressed(dx3d::KeyCode::Escape))
-	{
-		requestExit();
-		return;
-	}
-
 /*	// Continuously rotate every cube around X, Y, and Z.
 	dx3d::ui32 currentCubeCount = 0;
 
@@ -462,14 +456,11 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 	if (!editorCamera)
 		return;
 
-	bool imguiWantsKeyboard = false;
+	bool imguiWantsTextInput = false;
 	if (ImGui::GetCurrentContext() != nullptr)
 	{
 		const ImGuiIO& io = ImGui::GetIO();
-
-		imguiWantsKeyboard =
-			io.WantCaptureKeyboard ||
-			io.WantTextInput;
+		imguiWantsTextInput = io.WantTextInput;
 	}
 
 	const bool rightMousePressed =
@@ -491,6 +482,15 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 
 	const bool sceneViewportHovered = isSceneViewportHovered();
 	const bool sceneViewportFocused = isSceneViewportFocused();
+	if (!sceneViewportFocused &&
+		(m_isCameraControlActive || m_isOrbitActive || m_isDollyActive))
+	{
+		m_isCameraControlActive = false;
+		m_isOrbitActive = false;
+		m_isDollyActive = false;
+		input.setCursorLocked(false);
+		input.setCursorVisible(true);
+	}
 	if (rightMousePressed && sceneViewportHovered &&
 		!m_isCameraControlActive && !m_isDollyActive)
 	{
@@ -596,7 +596,7 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		sceneViewportHovered && input.isKeyDown(dx3d::KeyCode::MouseMiddle);
 	const float wheelDelta = sceneViewportHovered && ImGui::GetCurrentContext()
 		? ImGui::GetIO().MouseWheel : 0.0f;
-	if (sceneViewportFocused && !imguiWantsKeyboard &&
+	if (sceneViewportFocused && !imguiWantsTextInput &&
 		input.isKeyPressed(dx3d::KeyCode::F))
 	{
 		if (auto* selected = getPrimarySelectedObject())
@@ -616,13 +616,13 @@ void MainGame::onUpdate(dx3d::f32 deltaTime)
 		}
 	}
 
-	const bool arrowNavigation = sceneViewportFocused && !imguiWantsKeyboard &&
+	const bool arrowNavigation = sceneViewportFocused && !imguiWantsTextInput &&
 		(input.isKeyDown(dx3d::KeyCode::Up) || input.isKeyDown(dx3d::KeyCode::Down) ||
 		 input.isKeyDown(dx3d::KeyCode::Left) || input.isKeyDown(dx3d::KeyCode::Right));
 	if (!m_isCameraControlActive && !m_isOrbitActive && !m_isDollyActive &&
 		!middleMouseDown && wheelDelta == 0.0f && !arrowNavigation)
 		return;
-	if (imguiWantsKeyboard && m_isCameraControlActive)
+	if (imguiWantsTextInput && m_isCameraControlActive)
 		return;
 
 	const dx3d::f32 currentSpeed =
