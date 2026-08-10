@@ -48,7 +48,7 @@ namespace
 		'E'
 	};
 
-	constexpr dx3d::ui32 sceneVersion = 10;
+	constexpr dx3d::ui32 sceneVersion = 11;
 	constexpr dx3d::ui32 oldestSupportedSceneVersion = 1;
 	constexpr dx3d::ui32 maximumObjectCount = 100000;
 	constexpr dx3d::ui32 maximumStringLength = 1024 * 1024;
@@ -880,7 +880,8 @@ namespace
 			if (object.hasCollider)
 			{
 				dx3d::ui32 shape = 0;
-				if (!readValue(stream, shape) || shape > 1u ||
+				const dx3d::ui32 maximumShape = storedVersion >= 11 ? 3u : 1u;
+				if (!readValue(stream, shape) || shape > maximumShape ||
 					!readVec3(stream, object.colliderHalfExtents) ||
 					!readValue(stream, object.colliderRadius)) return false;
 				object.colliderShape = static_cast<dx3d::ColliderShape>(shape);

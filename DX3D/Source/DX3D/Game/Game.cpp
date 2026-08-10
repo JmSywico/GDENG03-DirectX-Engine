@@ -2799,8 +2799,11 @@ void dx3d::Game::onInternalUpdate()
 		std::max(1.0f, sceneViewportSize.x),
 		std::max(1.0f, sceneViewportSize.y)
 	};
+	const bool viewportOverlaysAllowed =
+		!ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId);
 
-	if (sceneViewportVisible && m_editorMode == EditorMode::Editing &&
+	if (sceneViewportVisible && viewportOverlaysAllowed &&
+		m_editorMode == EditorMode::Editing &&
 		m_selectedObject &&
 		m_inputSystem->isKeyPressed(KeyCode::MouseLeft) &&
 		m_transformGizmo.getHoveredAxis() != TransformGizmo::Axis::None)
@@ -2808,7 +2811,7 @@ void dx3d::Game::onInternalUpdate()
 		pushUndoSnapshot();
 	}
 
-	if (sceneViewportVisible)
+	if (sceneViewportVisible && viewportOverlaysAllowed)
 	{
 		m_transformGizmo.draw(
 			m_selectedObject,
@@ -2825,7 +2828,7 @@ void dx3d::Game::onInternalUpdate()
 
 	// Authored cameras are scene objects. Draw the same compact camera marker
 	// and selected-camera frustum used by enignE's Scene viewport.
-	if (sceneViewportVisible && editorCameraComponent)
+	if (sceneViewportVisible && viewportOverlaysAllowed && editorCameraComponent)
 	{
 		const Mat4x4 viewProjection = editorCameraComponent->getViewMatrix() *
 			editorCameraComponent->getProjectionMatrix();
@@ -3439,22 +3442,43 @@ void dx3d::Game::onInternalUpdate()
 			}
 			if (collider)
 			{
-				const char* shapeNames[]{ "Box", "Sphere" };
+				const char* shapeNames[]{ "Box", "Sphere", "Cylinder", "Capsule" };
 				int shape = static_cast<int>(collider->getShape());
-				if (ImGui::Combo("Shape", &shape, shapeNames, IM_ARRAYSIZE(shapeNames)))
+				const bool shapeChanged = ImGui::Combo(
+					"Shape", &shape, shapeNames, IM_ARRAYSIZE(shapeNames));
+				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+				if (shapeChanged)
 					collider->setShape(static_cast<ColliderShape>(shape));
 				if (collider->getShape() == ColliderShape::Box)
 				{
 					Vec3 extent = collider->getHalfExtents();
 					float values[3]{ extent.x, extent.y, extent.z };
-					if (ImGui::DragFloat3("Half Extents", values, 0.02f, 0.001f, 1000.0f))
+					const bool extentChanged = ImGui::DragFloat3(
+						"Half Extents", values, 0.02f, 0.001f, 1000.0f);
+					if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+					if (extentChanged)
 						collider->setHalfExtents({ values[0], values[1], values[2] });
 				}
 				else
 				{
 					float radius = collider->getRadius();
-					if (ImGui::DragFloat("Radius", &radius, 0.02f, 0.001f, 1000.0f))
+					const bool radiusChanged = ImGui::DragFloat(
+						"Radius", &radius, 0.02f, 0.001f, 1000.0f);
+					if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+					if (radiusChanged)
 						collider->setRadius(radius);
+
+					if (collider->getShape() == ColliderShape::Cylinder ||
+						collider->getShape() == ColliderShape::Capsule)
+					{
+						Vec3 extent = collider->getHalfExtents();
+						float halfHeight = extent.y;
+						const bool heightChanged = ImGui::DragFloat(
+							"Half Height", &halfHeight, 0.02f, 0.001f, 1000.0f);
+						if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+						if (heightChanged)
+							collider->setHalfExtents({ extent.x, halfHeight, extent.z });
+					}
 				}
 			}
 
@@ -3876,7 +3900,7 @@ void dx3d::Game::onInternalUpdate()
 		}
 	}
 
-	if (sceneViewportVisible)
+	if (sceneViewportVisible && viewportOverlaysAllowed)
 	{
 		handleViewportPicking(
 			editorCameraComponent,

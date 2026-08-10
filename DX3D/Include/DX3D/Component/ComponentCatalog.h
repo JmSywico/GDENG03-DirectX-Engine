@@ -6,6 +6,9 @@
 #include <DX3D/Component/RigidBodyComponent.h>
 #include <DX3D/Component/ColliderComponent.h>
 #include <DX3D/Component/TextureComponent.h>
+#include <DX3D/Component/SphereComponent.h>
+#include <DX3D/Component/CylinderComponent.h>
+#include <DX3D/Component/CapsuleComponent.h>
 
 #include <array>
 
@@ -58,7 +61,15 @@ namespace dx3d
 			case ComponentKind::Rotator: return object.createOrGetComponent<RotatorComponent>() != nullptr;
 			case ComponentKind::FlyController: return object.createOrGetComponent<FlyControllerComponent>() != nullptr;
 			case ComponentKind::RigidBody: return object.createOrGetComponent<RigidBodyComponent>() != nullptr;
-			case ComponentKind::Collider: return object.createOrGetComponent<ColliderComponent>() != nullptr;
+			case ComponentKind::Collider:
+			{
+				auto* collider = object.createOrGetComponent<ColliderComponent>();
+				if (!collider) return false;
+				if (object.getComponent<SphereComponent>()) collider->setShape(ColliderShape::Sphere);
+				else if (object.getComponent<CylinderComponent>()) collider->setShape(ColliderShape::Cylinder);
+				else if (object.getComponent<CapsuleComponent>()) collider->setShape(ColliderShape::Capsule);
+				return true;
+			}
 			case ComponentKind::Texture: return object.createOrGetComponent<TextureComponent>() != nullptr;
 			}
 			return false;

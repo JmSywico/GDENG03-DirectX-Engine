@@ -20,6 +20,8 @@
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/Shape/CylinderShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
@@ -157,7 +159,9 @@ namespace
 	bool isValid(dx3d::ColliderShape value)
 	{
 		return value == dx3d::ColliderShape::Box
-			|| value == dx3d::ColliderShape::Sphere;
+			|| value == dx3d::ColliderShape::Sphere
+			|| value == dx3d::ColliderShape::Cylinder
+			|| value == dx3d::ColliderShape::Capsule;
 	}
 }
 
@@ -361,6 +365,23 @@ void dx3d::PhysicsWorld::reset(World& world)
 				continue;
 			}
 			shape = new JPH::SphereShape(radius);
+		}
+		else if (colliderShape == ColliderShape::Cylinder ||
+			colliderShape == ColliderShape::Capsule)
+		{
+			const f32 radius = collider->getRadius();
+			const f32 halfHeight = collider->getHalfExtents().y;
+			if (!std::isfinite(radius) || !std::isfinite(halfHeight) ||
+				radius <= 0.0f || halfHeight <= 0.0f)
+			{
+				DX3DLog(body->getLogger(), Logger::LogLevel::Warning,
+					"Physics skipped entity {} ('{}'): collider radius and half-height must be finite and positive.",
+					object.getEntityId(), object.getName());
+				continue;
+			}
+			shape = colliderShape == ColliderShape::Cylinder
+				? JPH::ShapeRefC(new JPH::CylinderShape(halfHeight, radius))
+				: JPH::ShapeRefC(new JPH::CapsuleShape(halfHeight, radius));
 		}
 		else
 		{

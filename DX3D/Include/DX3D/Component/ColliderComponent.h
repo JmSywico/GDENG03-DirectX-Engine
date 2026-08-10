@@ -5,7 +5,7 @@
 
 namespace dx3d
 {
-	enum class ColliderShape : ui32 { Box = 0, Sphere };
+	enum class ColliderShape : ui32 { Box = 0, Sphere, Cylinder, Capsule };
 
 	class ColliderComponent final : public Component
 	{
