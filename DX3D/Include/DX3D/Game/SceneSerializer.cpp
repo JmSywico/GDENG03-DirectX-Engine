@@ -46,7 +46,7 @@ namespace
 		'E'
 	};
 
-	constexpr dx3d::ui32 sceneVersion = 4;
+	constexpr dx3d::ui32 sceneVersion = 5;
 	constexpr dx3d::ui32 minimumSupportedSceneVersion = 1;
 	constexpr dx3d::ui32 maximumObjectCount = 100000;
 	constexpr dx3d::ui32 maximumLevelObjectCount = 10000;
@@ -106,6 +106,13 @@ namespace
 			1.0f
 		};
 		dx3d::Vec2 materialUvOffset{};
+		dx3d::Vec4 materialColor
+		{
+			1.0f,
+			1.0f,
+			1.0f,
+			1.0f
+		};
 
 		dx3d::Vec3 lightColor
 		{
@@ -1182,6 +1189,54 @@ namespace
 		return true;
 	}
 
+	bool readVec4Array(
+		const JsonValue& value,
+		dx3d::Vec4& output
+	)
+	{
+		if (value.type !=
+			JsonValue::Type::Array ||
+			value.arrayValues.size() < 4)
+		{
+			return false;
+		}
+
+		for (size_t index = 0;
+			index < 4;
+			++index)
+		{
+			if (
+				value.arrayValues[index].type !=
+				JsonValue::Type::Number
+				)
+			{
+				return false;
+			}
+		}
+
+		output =
+		{
+			static_cast<dx3d::f32>(
+				value.arrayValues[0].
+				numberValue
+			),
+			static_cast<dx3d::f32>(
+				value.arrayValues[1].
+				numberValue
+			),
+			static_cast<dx3d::f32>(
+				value.arrayValues[2].
+				numberValue
+			),
+			static_cast<dx3d::f32>(
+				value.arrayValues[3].
+				numberValue
+			)
+		};
+
+		return true;
+	}
+
 	void readVec3Member(
 		const JsonValue& object,
 		const char* name,
@@ -1218,6 +1273,27 @@ namespace
 		if (member)
 		{
 			readVec2Array(
+				*member,
+				output
+			);
+		}
+	}
+
+	void readVec4Member(
+		const JsonValue& object,
+		const char* name,
+		dx3d::Vec4& output
+	)
+	{
+		const auto* member =
+			findMember(
+				object,
+				name
+			);
+
+		if (member)
+		{
+			readVec4Array(
 				*member,
 				output
 			);
@@ -1290,6 +1366,23 @@ namespace
 			<< value.x
 			<< ", "
 			<< value.y
+			<< "]";
+	}
+
+	void writeLevelVec4(
+		std::ofstream& stream,
+		const dx3d::Vec4& value
+	)
+	{
+		stream
+			<< "["
+			<< value.x
+			<< ", "
+			<< value.y
+			<< ", "
+			<< value.z
+			<< ", "
+			<< value.w
 			<< "]";
 	}
 
@@ -1526,6 +1619,10 @@ namespace
 				!writeVec2(
 					stream,
 					material->getUvOffset()
+				) ||
+				!writeVec4(
+					stream,
+					material->getColor()
 				)
 				)
 			{
@@ -1771,6 +1868,18 @@ namespace
 				{
 					return false;
 				}
+
+				if (storedVersion >= 5)
+				{
+					if (!readVec4(
+						stream,
+						object.
+						materialColor
+					))
+					{
+						return false;
+					}
+				}
 			}
 		}
 
@@ -2001,6 +2110,10 @@ namespace
 			material->setUvOffset(
 				data.materialUvOffset
 			);
+
+			material->setColor(
+				data.materialColor
+			);
 		}
 
 		auto& transform =
@@ -2106,28 +2219,50 @@ namespace
 			stream << "      },\n";
 		}
 
-		if (auto* material =
-			object->getComponent<
-			dx3d::MaterialComponent
-			>())
+		if (type !=
+			SceneObjectType::DirectionalLight)
 		{
+			auto* material =
+				object->getComponent<
+				dx3d::MaterialComponent
+				>();
+
 			stream << "      \"material\": {\n";
 			stream << "        \"texture\": ";
 			writeJsonString(
 				stream,
-				material->getTexturePath()
+				material
+				? material->getTexturePath()
+				: std::string{}
 			);
 			stream << ",\n";
 			stream << "        \"uvTiling\": ";
 			writeLevelVec2(
 				stream,
-				material->getUvTiling()
+				material
+				? material->getUvTiling()
+				: dx3d::Vec2{ 1.0f, 1.0f }
 			);
 			stream << ",\n";
 			stream << "        \"uvOffset\": ";
 			writeLevelVec2(
 				stream,
-				material->getUvOffset()
+				material
+				? material->getUvOffset()
+				: dx3d::Vec2{}
+			);
+			stream << ",\n";
+			stream << "        \"color\": ";
+			writeLevelVec4(
+				stream,
+				material
+				? material->getColor()
+				: dx3d::Vec4{
+					1.0f,
+					1.0f,
+					1.0f,
+					1.0f
+				}
 			);
 			stream << "\n";
 			stream << "      },\n";
@@ -2347,6 +2482,12 @@ namespace
 				*material,
 				"uvOffset",
 				object.materialUvOffset
+			);
+
+			readVec4Member(
+				*material,
+				"color",
+				object.materialColor
 			);
 		}
 

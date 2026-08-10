@@ -37,9 +37,12 @@
 #include <filesystem>
 #include <cctype>
 #include <cstdio>
+#include <Windows.h>
+#include <commdlg.h>
 #include <wincodec.h>
 
 #pragma comment(lib, "windowscodecs.lib")
+#pragma comment(lib, "comdlg32.lib")
 
 #include <imgui.h>
 #include <imgui_impl_win32.h>
@@ -52,12 +55,35 @@ namespace
 	constexpr dx3d::f32 DebugPlaneHalfThickness = 0.05f;
 	constexpr dx3d::f32 SnapshotFloatEpsilon = 0.0001f;
 	constexpr size_t MaximumUndoHistory = 64;
+	constexpr dx3d::f32 EditorSplitterThickness = 6.0f;
+	constexpr dx3d::f32 MinimumRightPanelWidth = 220.0f;
+	constexpr dx3d::f32 MinimumViewportWidth = 320.0f;
+	constexpr dx3d::f32 MinimumOutlinerHeight = 120.0f;
+	constexpr dx3d::f32 MinimumInspectorHeight = 180.0f;
+	constexpr dx3d::f32 MinimumProjectPanelHeight = 140.0f;
+	constexpr dx3d::f32 MinimumViewportHeight = 220.0f;
 
 	struct DebugScreenPoint
 	{
 		dx3d::f32 x{};
 		dx3d::f32 y{};
 	};
+
+	bool isPointInsideViewport(
+		const dx3d::Vec2& point,
+		const dx3d::TransformGizmo::ViewportArea& viewportArea
+	) noexcept
+	{
+		return
+			viewportArea.width > 0.0f &&
+			viewportArea.height > 0.0f &&
+			point.x >= viewportArea.x &&
+			point.x <= viewportArea.x +
+			viewportArea.width &&
+			point.y >= viewportArea.y &&
+			point.y <= viewportArea.y +
+			viewportArea.height;
+	}
 
 	bool projectDebugPoint(
 		const dx3d::Vec3& worldPosition,
@@ -453,6 +479,90 @@ namespace
 		}
 
 		return buffer;
+	}
+
+	std::string wideToUtf8(
+		const std::wstring& text
+	)
+	{
+		if (text.empty())
+			return {};
+
+		const int length =
+			WideCharToMultiByte(
+				CP_UTF8,
+				0,
+				text.c_str(),
+				static_cast<int>(text.size()),
+				nullptr,
+				0,
+				nullptr,
+				nullptr
+			);
+
+		if (length <= 0)
+			return {};
+
+		std::string result(
+			static_cast<size_t>(length),
+			'\0'
+		);
+
+		WideCharToMultiByte(
+			CP_UTF8,
+			0,
+			text.c_str(),
+			static_cast<int>(text.size()),
+			result.data(),
+			length,
+			nullptr,
+			nullptr
+		);
+
+		return result;
+	}
+
+	std::string openLevelFileDialog(
+		HWND ownerWindow
+	)
+	{
+		std::array<wchar_t, 4096> filePath{};
+
+		OPENFILENAMEW openFileName{};
+		openFileName.lStructSize =
+			sizeof(openFileName);
+		openFileName.hwndOwner =
+			ownerWindow;
+		openFileName.lpstrFilter =
+			L"DX3D Level Files (*.level)\0*.level\0"
+			L"JSON Files (*.json)\0*.json\0"
+			L"All Files (*.*)\0*.*\0";
+		openFileName.lpstrFile =
+			filePath.data();
+		openFileName.nMaxFile =
+			static_cast<DWORD>(
+				filePath.size()
+			);
+		openFileName.lpstrTitle =
+			L"Import DX3D .level";
+		openFileName.lpstrDefExt =
+			L"level";
+		openFileName.Flags =
+			OFN_FILEMUSTEXIST |
+			OFN_PATHMUSTEXIST |
+			OFN_NOCHANGEDIR |
+			OFN_EXPLORER;
+
+		if (!GetOpenFileNameW(
+			&openFileName
+		))
+		{
+			return {};
+		}
+
+		return wideToUtf8(
+			filePath.data()
+		);
 	}
 }
 
@@ -973,6 +1083,399 @@ void dx3d::Game::assignTextureToObject(
 	);
 }
 
+void dx3d::Game::processDroppedAssetFiles()
+{
+	if (!m_display)
+		return;
+
+	const auto droppedFiles =
+		m_display->consumeDroppedFiles();
+
+	if (droppedFiles.empty())
+		return;
+
+	importAssetFiles(
+		droppedFiles
+	);
+}
+
+void dx3d::Game::importAssetFiles(
+	const std::vector<std::string>& filePaths
+)
+{
+	namespace fs = std::filesystem;
+
+	if (filePaths.empty())
+		return;
+
+	std::error_code error{};
+
+	fs::create_directories(
+		m_projectRootPath,
+		error
+	);
+
+	error.clear();
+
+	const auto rootPath =
+		fs::weakly_canonical(
+			m_projectRootPath,
+			error
+		);
+
+	const std::string rootText =
+		error
+		? toLowerAscii(
+			fs::absolute(
+				m_projectRootPath
+			).generic_string()
+		)
+		: toLowerAscii(
+			rootPath.generic_string()
+		);
+
+	auto isAlreadyInProject =
+		[&](
+			const fs::path& path
+			)
+		{
+			std::error_code pathError{};
+
+			const auto canonicalPath =
+				fs::weakly_canonical(
+					path,
+					pathError
+				);
+
+			if (pathError)
+				return false;
+
+			std::string fileText =
+				toLowerAscii(
+					canonicalPath.generic_string()
+				);
+
+			std::string normalizedRoot =
+				rootText;
+
+			if (!normalizedRoot.empty() &&
+				normalizedRoot.back() != '/')
+			{
+				normalizedRoot.push_back('/');
+			}
+
+			return fileText.starts_with(
+				normalizedRoot
+			);
+		};
+
+	auto getImportDirectory =
+		[&](
+			ProjectAssetKind kind
+			)
+		{
+			const char* folderName = "Imported";
+
+			switch (kind)
+			{
+			case ProjectAssetKind::Image:
+				folderName = "Textures";
+				break;
+
+			case ProjectAssetKind::Model:
+				folderName = "Models";
+				break;
+
+			case ProjectAssetKind::Shader:
+				folderName = "Shaders";
+				break;
+
+			case ProjectAssetKind::Scene:
+			case ProjectAssetKind::Level:
+				folderName = "Scenes";
+				break;
+
+			case ProjectAssetKind::Prefab:
+				folderName = "Prefabs";
+				break;
+
+			case ProjectAssetKind::Script:
+				folderName = "Scripts";
+				break;
+
+			case ProjectAssetKind::Folder:
+			case ProjectAssetKind::Other:
+				folderName = "Imported";
+				break;
+			}
+
+			return fs::path(
+				m_projectRootPath
+			) / folderName;
+		};
+
+	auto makeUniqueDestination =
+		[](
+			const fs::path& directory,
+			const fs::path& filename
+			)
+		{
+			fs::path candidate =
+				directory / filename;
+
+			if (!fs::exists(candidate))
+				return candidate;
+
+			const std::string stem =
+				filename.stem().string();
+
+			const std::string extension =
+				filename.extension().string();
+
+			for (ui32 suffix = 1;
+				suffix < 10000;
+				++suffix)
+			{
+				candidate =
+					directory /
+					(
+						stem +
+						" (" +
+						std::to_string(suffix) +
+						")" +
+						extension
+						);
+
+				if (!fs::exists(candidate))
+					return candidate;
+			}
+
+			return directory / filename;
+		};
+
+	ui32 importedCount = 0;
+	ui32 refreshedCount = 0;
+	ui32 skippedCount = 0;
+	std::string lastImportDirectory{};
+
+	auto importFile =
+		[&](
+			const fs::path& sourcePath
+			)
+		{
+			std::error_code fileError{};
+
+			if (!fs::is_regular_file(
+				sourcePath,
+				fileError
+			))
+			{
+				++skippedCount;
+				return;
+			}
+
+			const ProjectAssetKind kind =
+				getProjectAssetKind(
+					sourcePath.generic_string(),
+					false
+				);
+
+			if (isAlreadyInProject(
+				sourcePath
+			))
+			{
+				++refreshedCount;
+				lastImportDirectory =
+					sourcePath.parent_path().
+					generic_string();
+				return;
+			}
+
+			const fs::path destinationDirectory =
+				getImportDirectory(
+					kind
+				);
+
+			fs::create_directories(
+				destinationDirectory,
+				fileError
+			);
+
+			if (fileError)
+			{
+				++skippedCount;
+				return;
+			}
+
+			const fs::path destinationPath =
+				makeUniqueDestination(
+					destinationDirectory,
+					sourcePath.filename()
+				);
+
+			fs::copy_file(
+				sourcePath,
+				destinationPath,
+				fs::copy_options::none,
+				fileError
+			);
+
+			if (fileError)
+			{
+				++skippedCount;
+				return;
+			}
+
+			++importedCount;
+			lastImportDirectory =
+				destinationDirectory.
+				generic_string();
+		};
+
+	for (const auto& filePath :
+		filePaths)
+	{
+		const fs::path sourcePath{
+			filePath
+		};
+
+		std::error_code fileError{};
+
+		if (fs::is_directory(
+			sourcePath,
+			fileError
+		))
+		{
+			for (const auto& entry :
+				fs::recursive_directory_iterator(
+					sourcePath,
+					fileError
+				))
+			{
+				if (fileError)
+					break;
+
+				importFile(
+					entry.path()
+				);
+			}
+
+			continue;
+		}
+
+		importFile(
+			sourcePath
+		);
+	}
+
+	if (!lastImportDirectory.empty())
+	{
+		m_projectCurrentPath =
+			lastImportDirectory;
+	}
+
+	m_projectAssetsDirty = true;
+	m_projectThumbnailCache.clear();
+
+	if (importedCount > 0)
+	{
+		m_sceneStatusMessage =
+			"Imported " +
+			std::to_string(importedCount) +
+			" asset(s).";
+	}
+	else if (refreshedCount > 0)
+	{
+		m_sceneStatusMessage =
+			"Refreshed " +
+			std::to_string(refreshedCount) +
+			" project asset(s).";
+	}
+	else
+	{
+		m_sceneStatusMessage =
+			"No supported assets were imported.";
+	}
+}
+
+void dx3d::Game::createModelObjectFromAsset(
+	const std::string& modelPath
+)
+{
+	const std::string extension =
+		toLowerAscii(
+			std::filesystem::path(
+				modelPath
+			).extension().string()
+		);
+
+	if (extension != ".obj")
+	{
+		m_sceneStatusMessage =
+			"Only .obj model assets can be instantiated.";
+		return;
+	}
+
+	MeshData modelMesh{};
+
+	if (!loadObjMesh(
+		modelPath,
+		modelMesh
+	))
+	{
+		m_sceneStatusMessage =
+			"Failed to load model asset.";
+		return;
+	}
+
+	pushUndoSnapshot(
+		captureEditorSnapshot()
+	);
+
+	auto* modelObject =
+		m_world->createGameObject<GameObject>();
+
+	modelObject->setName(
+		std::filesystem::path(
+			modelPath
+		).stem().string()
+	);
+
+	auto* modelComponent =
+		modelObject->createOrGetComponent<
+		ModelComponent>();
+
+	modelComponent->setMeshData(
+		modelMesh
+	);
+
+	modelComponent->setModelPath(
+		modelPath
+	);
+
+	auto& transform =
+		modelObject->getTransform();
+
+	transform.setPosition(
+		{ 0.0f, 0.0f, 0.0f }
+	);
+
+	transform.setRotation(
+		{ 0.0f, 0.0f, 0.0f }
+	);
+
+	transform.setScale(
+		{ 1.0f, 1.0f, 1.0f }
+	);
+
+	selectOnly(
+		modelObject
+	);
+
+	m_sceneStatusMessage =
+		"Created model object from asset.";
+}
+
 void dx3d::Game::copySelectedObject()
 {
 	if (!canCopySelectedObject())
@@ -1081,6 +1584,8 @@ void dx3d::Game::copySelectedObject()
 			material->getUvTiling();
 		copiedData.material.uvOffset =
 			material->getUvOffset();
+		copiedData.material.color =
+			material->getColor();
 	}
 
 	// A new copy operation restarts the pasted-object count.
@@ -1222,6 +1727,11 @@ void dx3d::Game::pasteCopiedObject()
 		material->setUvOffset(
 			m_objectClipboard.
 			material.uvOffset
+		);
+
+		material->setColor(
+			m_objectClipboard.
+			material.color
 		);
 	}
 
@@ -1634,6 +2144,8 @@ dx3d::Game::captureEditorSnapshot() const
 				material->getUvTiling();
 			objectSnapshot.material.uvOffset =
 				material->getUvOffset();
+			objectSnapshot.material.color =
+				material->getColor();
 		}
 
 		if (auto* rigidBody =
@@ -1925,6 +2437,11 @@ void dx3d::Game::restoreEditorSnapshot(
 				objectSnapshot.
 				material.uvOffset
 			);
+
+			material->setColor(
+				objectSnapshot.
+				material.color
+			);
 		}
 
 		auto& transform =
@@ -2047,6 +2564,10 @@ bool dx3d::Game::areEditorSnapshotsEqual(
 			!areVec2Equal(
 				lhsObject.material.uvOffset,
 				rhsObject.material.uvOffset
+			) ||
+			!areVec4Equal(
+				lhsObject.material.color,
+				rhsObject.material.color
 			) ||
 			!areMeshDataEqual(
 				lhsObject.meshData,
@@ -2286,23 +2807,24 @@ void dx3d::Game::redoEditorOperation()
 
 void dx3d::Game::handleViewportPicking(
 	CameraComponent* camera,
-	const TransformGizmo::ViewportArea& viewportArea
+	const TransformGizmo::ViewportArea& renderViewportArea,
+	const TransformGizmo::ViewportArea& interactionViewportArea
 )
 {
 	if (!camera)
 		return;
 
 	const bool leftMousePressed =
-		m_inputSystem->isKeyPressed(
-			KeyCode::MouseLeft
+		ImGui::IsMouseClicked(
+			ImGuiMouseButton_Left
 		);
 
 	if (!leftMousePressed)
 		return;
 
 	const bool rightMouseDown =
-		m_inputSystem->isKeyDown(
-			KeyCode::MouseRight
+		ImGui::IsMouseDown(
+			ImGuiMouseButton_Right
 		);
 
 	if (rightMouseDown)
@@ -2316,9 +2838,22 @@ void dx3d::Game::handleViewportPicking(
 		return;
 	}
 
-	// Do not pick through editor windows or menus.
-	if (ImGui::GetIO().WantCaptureMouse)
+	const ImVec2 imguiMousePosition =
+		ImGui::GetMousePos();
+
+	const Vec2 mousePosition
+	{
+		imguiMousePosition.x,
+		imguiMousePosition.y
+	};
+
+	if (!isPointInsideViewport(
+		mousePosition,
+		interactionViewportArea
+	))
+	{
 		return;
+	}
 
 	if (ImGui::IsPopupOpen(
 		nullptr,
@@ -2328,15 +2863,15 @@ void dx3d::Game::handleViewportPicking(
 		return;
 	}
 
-	const Vec2 mousePosition =
-		m_inputSystem->getMousePosition();
+	if (ImGui::GetDragDropPayload())
+		return;
 
 	const PickingViewportArea pickingViewport
 	{
-		viewportArea.x,
-		viewportArea.y,
-		viewportArea.width,
-		viewportArea.height
+		renderViewportArea.x,
+		renderViewportArea.y,
+		renderViewportArea.width,
+		renderViewportArea.height
 	};
 
 	// Finds the closest hit from one ray.
@@ -3344,13 +3879,11 @@ void dx3d::Game::drawProjectWindow(
 	f32 rightPanelWidth
 )
 {
-	constexpr f32 projectPanelHeight = 230.0f;
-
 	ImGui::SetNextWindowPos(
 		{
 			workX,
 			workY + workHeight -
-			projectPanelHeight
+			m_projectPanelHeight
 		},
 		ImGuiCond_Always
 	);
@@ -3361,7 +3894,7 @@ void dx3d::Game::drawProjectWindow(
 				220.0f,
 				workWidth - rightPanelWidth
 			),
-			projectPanelHeight
+			m_projectPanelHeight
 		},
 		ImGuiCond_Always
 	);
@@ -3652,16 +4185,25 @@ void dx3d::Game::drawProjectWindow(
 			}
 
 			if (assetHovered &&
-				asset.isDirectory &&
 				ImGui::IsMouseDoubleClicked(
 					ImGuiMouseButton_Left
 				))
 			{
-				m_projectCurrentPath =
-					asset.path;
+				if (asset.isDirectory)
+				{
+					m_projectCurrentPath =
+						asset.path;
 
-				m_projectAssetsDirty = true;
-				m_projectSearchBuffer[0] = '\0';
+					m_projectAssetsDirty = true;
+					m_projectSearchBuffer[0] = '\0';
+				}
+				else if (asset.kind ==
+					ProjectAssetKind::Model)
+				{
+					createModelObjectFromAsset(
+						asset.path
+					);
+				}
 			}
 
 			if (ImGui::BeginPopupContextItem(
@@ -3688,6 +4230,18 @@ void dx3d::Game::drawProjectWindow(
 
 					m_projectAssetsDirty = true;
 					m_projectSearchBuffer[0] = '\0';
+				}
+
+				if (!asset.isDirectory &&
+					asset.kind ==
+					ProjectAssetKind::Model &&
+					ImGui::MenuItem(
+						"Create Model Object"
+					))
+				{
+					createModelObjectFromAsset(
+						asset.path
+					);
 				}
 
 				ImGui::EndPopup();
@@ -3926,6 +4480,23 @@ void dx3d::Game::saveLevel()
 
 void dx3d::Game::loadLevel()
 {
+	const std::string levelFilePath =
+		openLevelFileDialog(
+			m_display
+			? static_cast<HWND>(
+				m_display->getNativeHandle()
+			)
+			: nullptr
+		);
+
+	if (levelFilePath.empty())
+	{
+		m_sceneStatusMessage =
+			"Level import canceled";
+
+		return;
+	}
+
 	const EditorSnapshot undoSnapshot =
 		captureEditorSnapshot();
 
@@ -3934,13 +4505,16 @@ void dx3d::Game::loadLevel()
 	const SceneLoadResult result =
 		SceneSerializer::loadLevel(
 			*m_world,
-			"Scene.level"
+			levelFilePath
 		);
 
 	if (!result.success)
 	{
 		m_sceneStatusMessage =
-			"Level import failed or file not found";
+			"Level import failed: " +
+			std::filesystem::path(
+				levelFilePath
+			).filename().string();
 
 		DX3DLogError(
 			"Level import failed."
@@ -3969,7 +4543,10 @@ void dx3d::Game::loadLevel()
 		result.capsuleCount;
 
 	m_sceneStatusMessage =
-		"Imported: Scene.level";
+		"Imported: " +
+		std::filesystem::path(
+			levelFilePath
+		).filename().string();
 
 	DX3DLogInfo(
 		"Level imported."
@@ -4003,6 +4580,8 @@ void dx3d::Game::onInternalUpdate()
 	{
 		return;
 	}
+
+	processDroppedAssetFiles();
 
 	m_inputSystem->setCursorLockArea(
 		m_display->getClientAreaInScreenSpace()
@@ -5123,8 +5702,35 @@ void dx3d::Game::onInternalUpdate()
 	const ImVec2 workSize =
 		viewport->WorkSize;
 
-	constexpr float panelWidth = 280.0f;
-	constexpr float outlinerHeight = 220.0f;
+	m_rightPanelWidth =
+		std::clamp(
+			m_rightPanelWidth,
+			MinimumRightPanelWidth,
+			std::max(
+				MinimumRightPanelWidth,
+				workSize.x - MinimumViewportWidth
+			)
+		);
+
+	m_outlinerPanelHeight =
+		std::clamp(
+			m_outlinerPanelHeight,
+			MinimumOutlinerHeight,
+			std::max(
+				MinimumOutlinerHeight,
+				workSize.y - MinimumInspectorHeight
+			)
+		);
+
+	m_projectPanelHeight =
+		std::clamp(
+			m_projectPanelHeight,
+			MinimumProjectPanelHeight,
+			std::max(
+				MinimumProjectPanelHeight,
+				workSize.y - MinimumViewportHeight
+			)
+		);
 
 	CameraComponent* editorCameraComponent = nullptr;
 
@@ -5156,6 +5762,31 @@ void dx3d::Game::onInternalUpdate()
 		viewport->Size.y
 	};
 
+	const f32 sceneViewportWidth =
+		std::max(
+			0.0f,
+			workSize.x - m_rightPanelWidth -
+			EditorSplitterThickness * 0.5f
+		);
+
+	const f32 sceneViewportHeight =
+		std::max(
+			0.0f,
+			workSize.y -
+			(m_showProjectWindow
+				? m_projectPanelHeight +
+				EditorSplitterThickness * 0.5f
+				: 0.0f)
+		);
+
+	const TransformGizmo::ViewportArea sceneInteractionViewport
+	{
+		workPosition.x,
+		workPosition.y,
+		sceneViewportWidth,
+		sceneViewportHeight
+	};
+
 	drawPhysicsDebugOverlay(
 		editorCameraComponent,
 		gizmoViewport
@@ -5164,7 +5795,8 @@ void dx3d::Game::onInternalUpdate()
 	m_transformGizmo.draw(
 		m_selectedObject,
 		editorCameraComponent,
-		gizmoViewport
+		gizmoViewport,
+		sceneInteractionViewport
 	);
 
 	if (m_showProjectWindow)
@@ -5174,14 +5806,15 @@ void dx3d::Game::onInternalUpdate()
 			workPosition.y,
 			workSize.x,
 			workSize.y,
-			panelWidth
+			m_rightPanelWidth
 		);
 	}
 
 	// Scene Outliner begins here.
 	ImGui::SetNextWindowPos(
 		{
-			workPosition.x + workSize.x - panelWidth,
+			workPosition.x + workSize.x -
+			m_rightPanelWidth,
 			workPosition.y
 		},
 		ImGuiCond_Always
@@ -5189,8 +5822,8 @@ void dx3d::Game::onInternalUpdate()
 
 	ImGui::SetNextWindowSize(
 		{
-			panelWidth,
-			outlinerHeight
+			m_rightPanelWidth,
+			m_outlinerPanelHeight
 		},
 		ImGuiCond_Always
 	);
@@ -5268,16 +5901,19 @@ void dx3d::Game::onInternalUpdate()
 
 	ImGui::SetNextWindowPos(
 		{
-			workPosition.x + workSize.x - panelWidth,
-			workPosition.y + outlinerHeight
+			workPosition.x + workSize.x -
+			m_rightPanelWidth,
+			workPosition.y +
+			m_outlinerPanelHeight
 		},
 		ImGuiCond_Always
 	);
 
 	ImGui::SetNextWindowSize(
 		{
-			panelWidth,
-			workSize.y - outlinerHeight
+			m_rightPanelWidth,
+			workSize.y -
+			m_outlinerPanelHeight
 		},
 		ImGuiCond_Always
 	);
@@ -5413,6 +6049,44 @@ void dx3d::Game::onInternalUpdate()
 			auto* modelComponent =
 				m_selectedObject->getComponent<
 				ModelComponent>();
+
+			Vec4 materialColor =
+				material
+				? material->getColor()
+				: Vec4{
+					1.0f,
+					1.0f,
+					1.0f,
+					1.0f
+				};
+
+			float materialColorValues[4]
+			{
+				materialColor.x,
+				materialColor.y,
+				materialColor.z,
+				materialColor.w
+			};
+
+			if (ImGui::ColorEdit4(
+				"Color",
+				materialColorValues
+			))
+			{
+				material =
+					m_selectedObject->
+					createOrGetComponent<
+					MaterialComponent>();
+
+				material->setColor(
+					{
+						materialColorValues[0],
+						materialColorValues[1],
+						materialColorValues[2],
+						materialColorValues[3]
+					}
+				);
+			}
 
 			const std::string* texturePath =
 				nullptr;
@@ -5941,9 +6615,155 @@ void dx3d::Game::onInternalUpdate()
 
 	ImGui::End();
 
+	const ImGuiWindowFlags splitterWindowFlags =
+		ImGuiWindowFlags_NoTitleBar |
+		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoMove |
+		ImGuiWindowFlags_NoScrollbar |
+		ImGuiWindowFlags_NoSavedSettings |
+		ImGuiWindowFlags_NoBackground |
+		ImGuiWindowFlags_NoFocusOnAppearing |
+		ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+	auto drawSplitter =
+		[&](
+			const char* windowName,
+			const ImVec2& position,
+			const ImVec2& size,
+			ImGuiMouseCursor cursor
+			)
+		{
+			ImGui::SetNextWindowPos(
+				position,
+				ImGuiCond_Always
+			);
+
+			ImGui::SetNextWindowSize(
+				size,
+				ImGuiCond_Always
+			);
+
+			ImGui::PushStyleVar(
+				ImGuiStyleVar_WindowPadding,
+				{ 0.0f, 0.0f }
+			);
+
+			ImGui::Begin(
+				windowName,
+				nullptr,
+				splitterWindowFlags
+			);
+
+			ImGui::InvisibleButton(
+				"##SplitterDrag",
+				size
+			);
+
+			const bool hovered =
+				ImGui::IsItemHovered();
+
+			const bool active =
+				ImGui::IsItemActive();
+
+			if (hovered || active)
+			{
+				ImGui::SetMouseCursor(
+					cursor
+				);
+			}
+
+			const ImU32 color =
+				ImGui::GetColorU32(
+					active
+					? ImGuiCol_ButtonActive
+					: hovered
+					? ImGuiCol_ButtonHovered
+					: ImGuiCol_Separator
+				);
+
+			ImGui::GetWindowDrawList()->
+				AddRectFilled(
+					ImGui::GetItemRectMin(),
+					ImGui::GetItemRectMax(),
+					color
+				);
+
+			ImGui::End();
+			ImGui::PopStyleVar();
+
+			return active;
+		};
+
+	if (drawSplitter(
+		"##RightPanelSplitter",
+		{
+			workPosition.x + workSize.x -
+			m_rightPanelWidth -
+			EditorSplitterThickness * 0.5f,
+			workPosition.y
+		},
+		{
+			EditorSplitterThickness,
+			workSize.y
+		},
+		ImGuiMouseCursor_ResizeEW
+	))
+	{
+		m_rightPanelWidth -=
+			ImGui::GetIO().MouseDelta.x;
+	}
+
+	if (drawSplitter(
+		"##OutlinerInspectorSplitter",
+		{
+			workPosition.x + workSize.x -
+			m_rightPanelWidth,
+			workPosition.y +
+			m_outlinerPanelHeight -
+			EditorSplitterThickness * 0.5f
+		},
+		{
+			m_rightPanelWidth,
+			EditorSplitterThickness
+		},
+		ImGuiMouseCursor_ResizeNS
+	))
+	{
+		m_outlinerPanelHeight +=
+			ImGui::GetIO().MouseDelta.y;
+	}
+
+	if (m_showProjectWindow)
+	{
+		if (drawSplitter(
+			"##ProjectPanelSplitter",
+			{
+				workPosition.x,
+				workPosition.y +
+				workSize.y -
+				m_projectPanelHeight -
+				EditorSplitterThickness * 0.5f
+			},
+			{
+				std::max(
+					220.0f,
+					workSize.x -
+					m_rightPanelWidth
+				),
+				EditorSplitterThickness
+			},
+			ImGuiMouseCursor_ResizeNS
+		))
+		{
+			m_projectPanelHeight -=
+				ImGui::GetIO().MouseDelta.y;
+		}
+	}
+
 	handleViewportPicking(
 		editorCameraComponent,
-		gizmoViewport
+		gizmoViewport,
+		sceneInteractionViewport
 	);
 
 	// --------------------------------------------------

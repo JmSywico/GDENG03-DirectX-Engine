@@ -1,0 +1,137 @@
+{
+  "format": "DX3D_LEVEL",
+  "version": 1,
+  "objects": [
+    {
+      "name": "DirectionalLight",
+      "type": "directionalLight",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          -0.2842366221916517,
+          1.9610636761023403,
+          0.7632664141330822
+        ],
+        "scale": [
+          2.5,
+          2.5,
+          2.5
+        ]
+      },
+      "light": {
+        "color": [
+          255.0,
+          255.0,
+          255.0
+        ],
+        "intensity": 0.6,
+        "ambientStrength": 0.2,
+        "shadowArea": 30.0,
+        "castShadows": true
+      },
+      "rigidBody": {
+        "enabled": false
+      }
+    },
+    {
+      "name": "SM_SkySphere",
+      "type": "sphere",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          400.0,
+          400.0,
+          400.0
+        ]
+      },
+      "rigidBody": {
+        "enabled": false
+      }
+    },
+    {
+      "name": "Plane",
+      "type": "plane",
+      "transform": {
+        "position": [
+          0.0,
+          0.3,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          4.0,
+          1.0,
+          4.0
+        ]
+      },
+      "rigidBody": {
+        "enabled": false
+      }
+    },
+    {
+      "name": "Cube",
+      "type": "cube",
+      "transform": {
+        "position": [
+          -1.17,
+          0.8,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "rigidBody": {
+        "enabled": false
+      }
+    },
+    {
+      "name": "Sphere",
+      "type": "sphere",
+      "transform": {
+        "position": [
+          0.0,
+          0.7048331600000001,
+          -0.0381865054
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "rigidBody": {
+        "enabled": false
+      }
+    }
+  ]
+}

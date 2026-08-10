@@ -57,3 +57,17 @@ dx3d::MaterialComponent::getUvOffset() const noexcept
 {
 	return m_uvOffset;
 }
+
+void dx3d::MaterialComponent::setColor(
+	const Vec4& color
+) noexcept
+{
+	m_color =
+		color;
+}
+
+const dx3d::Vec4&
+dx3d::MaterialComponent::getColor() const noexcept
+{
+	return m_color;
+}

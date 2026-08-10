@@ -3,6 +3,7 @@
 #include <DX3D/Core/Core.h>
 #include <DX3D/Game/Component.h>
 #include <DX3D/Math/Vec2.h>
+#include <DX3D/Math/Vec4.h>
 
 #include <string>
 
@@ -40,9 +41,21 @@ namespace dx3d
 
 		const Vec2& getUvOffset() const noexcept;
 
+		void setColor(
+			const Vec4& color
+		) noexcept;
+
+		const Vec4& getColor() const noexcept;
+
 	private:
 		std::string m_texturePath{};
 		Vec2 m_uvTiling{ 1.0f, 1.0f };
 		Vec2 m_uvOffset{};
+		Vec4 m_color{
+			1.0f,
+			1.0f,
+			1.0f,
+			1.0f
+		};
 	};
 }

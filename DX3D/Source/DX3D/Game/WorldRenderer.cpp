@@ -31,6 +31,7 @@
 #include <ranges>
 #include <vector>
 #include <cmath>
+#include <filesystem>
 #include <unordered_set>
 #include <string>
 
@@ -319,9 +320,29 @@ dx3d::WorldRenderer::getCachedTexture(
 			texturePath
 		);
 
-	if (iterator != m_textureCache.end())
+	std::error_code timeError{};
+
+	const auto lastWriteTime =
+		std::filesystem::last_write_time(
+			texturePath,
+			timeError
+		);
+
+	const bool hasLastWriteTime =
+		!timeError;
+
+	if (
+		iterator != m_textureCache.end() &&
+		iterator->second.texture &&
+		(
+			!hasLastWriteTime ||
+			!iterator->second.hasLastWriteTime ||
+			iterator->second.lastWriteTime ==
+			lastWriteTime
+			)
+		)
 	{
-		return iterator->second.get();
+		return iterator->second.texture.get();
 	}
 
 	const std::wstring wideTexturePath(
@@ -329,20 +350,40 @@ dx3d::WorldRenderer::getCachedTexture(
 		texturePath.end()
 	);
 
-	auto texture =
-		m_graphicsDevice.createTexture2D(
-			{
-				wideTexturePath.c_str()
-			}
-		);
+	RefPtr<Texture2D> texture{};
+
+	try
+	{
+		texture =
+			m_graphicsDevice.createTexture2D(
+				{
+					wideTexturePath.c_str()
+				}
+			);
+	}
+	catch (...)
+	{
+		if (iterator != m_textureCache.end())
+		{
+			return iterator->second.
+				texture.get();
+		}
+
+		return nullptr;
+	}
 
 	auto* texturePointer =
 		texture.get();
 
-	m_textureCache.emplace(
-		texturePath,
-		texture
-	);
+	TextureCacheEntry cacheEntry{};
+	cacheEntry.texture = texture;
+	cacheEntry.lastWriteTime =
+		lastWriteTime;
+	cacheEntry.hasLastWriteTime =
+		hasLastWriteTime;
+
+	m_textureCache[texturePath] =
+		cacheEntry;
 
 	return texturePointer;
 }
@@ -781,6 +822,13 @@ void dx3d::WorldRenderer::render(
 		Texture2D* texture{};
 		Vec2 uvTiling{ 1.0f, 1.0f };
 		Vec2 uvOffset{};
+		Vec4 color{
+			1.0f,
+			1.0f,
+			1.0f,
+			1.0f
+		};
+		bool hasMaterial{ true };
 	};
 
 	auto getRenderMaterial =
@@ -802,6 +850,11 @@ void dx3d::WorldRenderer::render(
 
 				material.uvOffset =
 					materialComponent->getUvOffset();
+
+				material.color =
+					materialComponent->getColor();
+
+				material.hasMaterial = true;
 
 				if (materialComponent->hasTexture())
 				{
@@ -850,7 +903,9 @@ void dx3d::WorldRenderer::render(
 					1.0f,
 					material.uvTiling.x,
 					material.uvTiling.y,
-					0.0f
+					material.hasMaterial
+					? 1.0f
+					: 0.0f
 				};
 
 				data.textureSettings =
@@ -872,7 +927,9 @@ void dx3d::WorldRenderer::render(
 					0.0f,
 					1.0f,
 					1.0f,
-					0.0f
+					material.hasMaterial
+					? 1.0f
+					: 0.0f
 				};
 
 				data.textureSettings =
@@ -885,6 +942,9 @@ void dx3d::WorldRenderer::render(
 
 				context.clearTexture2D();
 			}
+
+			data.materialColor =
+				material.color;
 
 			auto& constantBuffer =
 				*m_cb;

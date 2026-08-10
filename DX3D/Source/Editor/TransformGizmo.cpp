@@ -240,7 +240,8 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 	const Vec3& gizmoOrigin,
 	f32 ringRadius,
 	const Mat4x4& viewProjectionMatrix,
-	const ViewportArea& viewportArea
+	const ViewportArea& renderViewportArea,
+	const ViewportArea& interactionViewportArea
 )
 {
 	if (!selectedObject)
@@ -251,14 +252,14 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 
 	const ImVec2 clipMinimum
 	{
-		viewportArea.x,
-		viewportArea.y
+		renderViewportArea.x,
+		renderViewportArea.y
 	};
 
 	const ImVec2 clipMaximum
 	{
-		viewportArea.x + viewportArea.width,
-		viewportArea.y + viewportArea.height
+		renderViewportArea.x + renderViewportArea.width,
+		renderViewportArea.y + renderViewportArea.height
 	};
 
 	const ImVec2 mousePositionImGui =
@@ -271,15 +272,14 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 	};
 
 	const bool mouseInsideViewport =
-		mousePosition.x >= viewportArea.x &&
+		mousePosition.x >= interactionViewportArea.x &&
 		mousePosition.x <=
-		viewportArea.x + viewportArea.width &&
-		mousePosition.y >= viewportArea.y &&
+		interactionViewportArea.x +
+		interactionViewportArea.width &&
+		mousePosition.y >= interactionViewportArea.y &&
 		mousePosition.y <=
-		viewportArea.y + viewportArea.height;
-
-	const bool imguiWantsMouse =
-		ImGui::GetIO().WantCaptureMouse;
+		interactionViewportArea.y +
+		interactionViewportArea.height;
 
 	const bool rightMouseDown =
 		ImGui::IsMouseDown(
@@ -288,7 +288,6 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 
 	const bool canHoverGizmo =
 		mouseInsideViewport &&
-		!imguiWantsMouse &&
 		!rightMouseDown;
 
 	constexpr ui32 segmentCount = 64;
@@ -384,7 +383,7 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 					projectWorldToScreen(
 						worldPoint,
 						viewProjectionMatrix,
-						viewportArea,
+						renderViewportArea,
 						currentPoint
 					);
 
@@ -435,7 +434,7 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 		projectWorldToScreen(
 			gizmoOrigin,
 			viewProjectionMatrix,
-			viewportArea,
+			renderViewportArea,
 			centerScreen
 		);
 
@@ -692,7 +691,7 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 					projectWorldToScreen(
 						worldPoint,
 						viewProjectionMatrix,
-						viewportArea,
+						renderViewportArea,
 						currentPoint
 					);
 
@@ -751,7 +750,8 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 void dx3d::TransformGizmo::draw(
 	GameObject* selectedObject,
 	CameraComponent* camera,
-	const ViewportArea& viewportArea
+	const ViewportArea& renderViewportArea,
+	const ViewportArea& interactionViewportArea
 )
 {
 	m_hoveredAxis = Axis::None;
@@ -763,8 +763,10 @@ void dx3d::TransformGizmo::draw(
 		return;
 	}
 
-	if (viewportArea.width <= 0.0f ||
-		viewportArea.height <= 0.0f)
+	if (renderViewportArea.width <= 0.0f ||
+		renderViewportArea.height <= 0.0f ||
+		interactionViewportArea.width <= 0.0f ||
+		interactionViewportArea.height <= 0.0f)
 	{
 		m_activeAxis = Axis::None;
 		m_isUsing = false;
@@ -842,7 +844,8 @@ void dx3d::TransformGizmo::draw(
 			gizmoOrigin,
 			ringRadius,
 			viewProjectionMatrix,
-			viewportArea
+			renderViewportArea,
+			interactionViewportArea
 		);
 
 		return;
@@ -869,7 +872,7 @@ void dx3d::TransformGizmo::draw(
 		projectWorldToScreen(
 			gizmoOrigin,
 			viewProjectionMatrix,
-			viewportArea,
+			renderViewportArea,
 			originScreen
 		);
 
@@ -877,7 +880,7 @@ void dx3d::TransformGizmo::draw(
 		projectWorldToScreen(
 			xAxisEnd,
 			viewProjectionMatrix,
-			viewportArea,
+			renderViewportArea,
 			xAxisScreen
 		);
 
@@ -885,7 +888,7 @@ void dx3d::TransformGizmo::draw(
 		projectWorldToScreen(
 			yAxisEnd,
 			viewProjectionMatrix,
-			viewportArea,
+			renderViewportArea,
 			yAxisScreen
 		);
 
@@ -893,7 +896,7 @@ void dx3d::TransformGizmo::draw(
 		projectWorldToScreen(
 			zAxisEnd,
 			viewProjectionMatrix,
-			viewportArea,
+			renderViewportArea,
 			zAxisScreen
 		);
 
@@ -907,15 +910,14 @@ void dx3d::TransformGizmo::draw(
 	};
 
 	const bool mouseInsideViewport =
-		mousePosition.x >= viewportArea.x &&
+		mousePosition.x >= interactionViewportArea.x &&
 		mousePosition.x <=
-		viewportArea.x + viewportArea.width &&
-		mousePosition.y >= viewportArea.y &&
+		interactionViewportArea.x +
+		interactionViewportArea.width &&
+		mousePosition.y >= interactionViewportArea.y &&
 		mousePosition.y <=
-		viewportArea.y + viewportArea.height;
-
-	const bool imguiWantsMouse =
-		ImGui::GetIO().WantCaptureMouse;
+		interactionViewportArea.y +
+		interactionViewportArea.height;
 
 	const bool rightMouseDown =
 		ImGui::IsMouseDown(
@@ -924,7 +926,6 @@ void dx3d::TransformGizmo::draw(
 
 	const bool canHoverGizmo =
 		mouseInsideViewport &&
-		!imguiWantsMouse &&
 		!rightMouseDown;
 
 	if (originVisible &&
@@ -1202,14 +1203,14 @@ void dx3d::TransformGizmo::draw(
 
 	const ImVec2 clipMinimum
 	{
-		viewportArea.x,
-		viewportArea.y
+		renderViewportArea.x,
+		renderViewportArea.y
 	};
 
 	const ImVec2 clipMaximum
 	{
-		viewportArea.x + viewportArea.width,
-		viewportArea.y + viewportArea.height
+		renderViewportArea.x + renderViewportArea.width,
+		renderViewportArea.y + renderViewportArea.height
 	};
 
 	drawList->PushClipRect(

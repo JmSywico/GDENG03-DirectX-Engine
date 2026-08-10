@@ -1,9 +1,61 @@
 #include <DX3D/Window/Window.h>
 
 #include <Windows.h>
+#include <Shellapi.h>
+
+#include <mutex>
+#include <string>
+#include <vector>
 
 #include <imgui.h>
 #include <imgui_impl_win32.h>
+
+namespace
+{
+	std::mutex g_droppedFilesMutex{};
+	std::vector<std::string> g_droppedFiles{};
+
+	std::string toUtf8(
+		const std::wstring& text
+	)
+	{
+		if (text.empty())
+			return {};
+
+		const int length =
+			WideCharToMultiByte(
+				CP_UTF8,
+				0,
+				text.c_str(),
+				static_cast<int>(text.size()),
+				nullptr,
+				0,
+				nullptr,
+				nullptr
+			);
+
+		if (length <= 0)
+			return {};
+
+		std::string result(
+			static_cast<size_t>(length),
+			'\0'
+		);
+
+		WideCharToMultiByte(
+			CP_UTF8,
+			0,
+			text.c_str(),
+			static_cast<int>(text.size()),
+			result.data(),
+			length,
+			nullptr,
+			nullptr
+		);
+
+		return result;
+	}
+}
 
 extern IMGUI_IMPL_API LRESULT
 ImGui_ImplWin32_WndProcHandler(
@@ -35,6 +87,81 @@ static LRESULT CALLBACK WindowProcedure(
 
 	switch (msg)
 	{
+	case WM_DROPFILES:
+	{
+		const auto dropHandle =
+			reinterpret_cast<HDROP>(wparam);
+
+		const UINT fileCount =
+			DragQueryFileW(
+				dropHandle,
+				0xFFFFFFFF,
+				nullptr,
+				0
+			);
+
+		std::vector<std::string> droppedFiles{};
+
+		droppedFiles.reserve(
+			fileCount
+		);
+
+		for (UINT index = 0;
+			index < fileCount;
+			++index)
+		{
+			const UINT pathLength =
+				DragQueryFileW(
+					dropHandle,
+					index,
+					nullptr,
+					0
+				);
+
+			if (pathLength == 0)
+				continue;
+
+			std::wstring path(
+				static_cast<size_t>(pathLength) + 1u,
+				L'\0'
+			);
+
+			DragQueryFileW(
+				dropHandle,
+				index,
+				path.data(),
+				pathLength + 1
+			);
+
+			path.resize(
+				pathLength
+			);
+
+			droppedFiles.push_back(
+				toUtf8(path)
+			);
+		}
+
+		DragFinish(
+			dropHandle
+		);
+
+		if (!droppedFiles.empty())
+		{
+			std::lock_guard lock(
+				g_droppedFilesMutex
+			);
+
+			g_droppedFiles.insert(
+				g_droppedFiles.end(),
+				droppedFiles.begin(),
+				droppedFiles.end()
+			);
+		}
+
+		return 0;
+	}
+
 	case WM_CLOSE:
 		PostQuitMessage(0);
 		return 0;
@@ -135,6 +262,11 @@ dx3d::Window::Window(
 		);
 	}
 
+	DragAcceptFiles(
+		static_cast<HWND>(m_handle),
+		TRUE
+	);
+
 	ShowWindow(
 		static_cast<HWND>(m_handle),
 		SW_SHOW
@@ -220,8 +352,28 @@ dx3d::Window::getClientAreaInScreenSpace()
 	};
 }
 
+std::vector<std::string>
+dx3d::Window::consumeDroppedFiles()
+{
+	std::lock_guard lock(
+		g_droppedFilesMutex
+	);
+
+	auto droppedFiles =
+		std::move(g_droppedFiles);
+
+	g_droppedFiles.clear();
+
+	return droppedFiles;
+}
+
 dx3d::Window::~Window()
 {
+	DragAcceptFiles(
+		static_cast<HWND>(m_handle),
+		FALSE
+	);
+
 	DestroyWindow(
 		static_cast<HWND>(m_handle)
 	);

@@ -25,6 +25,7 @@ cbuffer ConstantData : register(b0)
     float4 lightColorAndAmbient;
     float4 materialSettings;
     float4 textureSettings;
+    float4 materialColor;
 
     row_major float4x4 inverseWorld;
 
@@ -262,7 +263,9 @@ float4 PSMain(
         directLighting;
 
     float4 surfaceColor =
-        input.color;
+        materialSettings.w > 0.5f
+        ? materialColor
+        : input.color;
 
     if (materialSettings.x > 0.5f)
     {

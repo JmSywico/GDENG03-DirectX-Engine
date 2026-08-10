@@ -3,6 +3,7 @@
 #include <DX3D/Graphics/MeshData.h>
 #include <DX3D/Math/Vec2.h>
 #include <DX3D/Math/Vec3.h>
+#include <DX3D/Math/Vec4.h>
 #include <DX3D/Core/Base.h>
 #include <DX3D/Core/Core.h>
 #include <DX3D/Editor/TransformGizmo.h>
@@ -91,6 +92,12 @@ namespace dx3d
 				1.0f
 			};
 			Vec2 uvOffset{};
+			Vec4 color{
+				1.0f,
+				1.0f,
+				1.0f,
+				1.0f
+			};
 		};
 
 		struct ObjectSnapshot
@@ -238,7 +245,8 @@ namespace dx3d
 
 		void handleViewportPicking(
 			CameraComponent* camera,
-			const TransformGizmo::ViewportArea& viewportArea
+			const TransformGizmo::ViewportArea& renderViewportArea,
+			const TransformGizmo::ViewportArea& interactionViewportArea
 		);
 
 		const MeshData* getObjectMeshData(
@@ -262,6 +270,16 @@ namespace dx3d
 		void assignTextureToObject(
 			GameObject* object,
 			const std::string& texturePath
+		);
+
+		void processDroppedAssetFiles();
+
+		void importAssetFiles(
+			const std::vector<std::string>& filePaths
+		);
+
+		void createModelObjectFromAsset(
+			const std::string& modelPath
 		);
 
 		void drawPhysicsDebugOverlay(
@@ -369,6 +387,10 @@ namespace dx3d
 		bool m_showPhysicsDebugOverlay = false;
 		bool m_showOnlySelectedPhysicsDebug = true;
 		bool m_showProjectWindow = true;
+
+		f32 m_rightPanelWidth{ 280.0f };
+		f32 m_outlinerPanelHeight{ 220.0f };
+		f32 m_projectPanelHeight{ 230.0f };
 
 		Microsoft::WRL::ComPtr<
 			ID3D11ShaderResourceView

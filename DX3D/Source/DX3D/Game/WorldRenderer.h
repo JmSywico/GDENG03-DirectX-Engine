@@ -9,6 +9,7 @@
 #include <DX3D/Graphics/MeshData.h>
 
 #include <unordered_map>
+#include <filesystem>
 #include <string>
 
 namespace dx3d
@@ -45,6 +46,7 @@ namespace dx3d
 			Vec4 lightColorAndAmbient{};
 			Vec4 materialSettings{};
 			Vec4 textureSettings{};
+			Vec4 materialColor{};
 
 			Mat4x4 inverseWorld{};
 
@@ -63,6 +65,14 @@ namespace dx3d
 		{
 			RefPtr<VertexBuffer> vertexBuffer{};
 			RefPtr<IndexBuffer> indexBuffer{};
+		};
+
+		struct TextureCacheEntry
+		{
+			RefPtr<Texture2D> texture{};
+			std::filesystem::file_time_type
+				lastWriteTime{};
+			bool hasLastWriteTime{ false };
 		};
 
 	private:
@@ -99,7 +109,7 @@ namespace dx3d
 
 		std::unordered_map<
 			std::string,
-			RefPtr<Texture2D>
+			TextureCacheEntry
 		> m_textureCache{};
 
 		RefPtr<ConstantBuffer> m_cb{};

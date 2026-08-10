@@ -52,7 +52,8 @@ namespace dx3d
 		void draw(
 			GameObject* selectedObject,
 			CameraComponent* camera,
-			const ViewportArea& viewportArea
+			const ViewportArea& renderViewportArea,
+			const ViewportArea& interactionViewportArea
 		);
 
 	private:
@@ -87,7 +88,8 @@ namespace dx3d
 			const Vec3& gizmoOrigin,
 			f32 ringRadius,
 			const Mat4x4& viewProjectionMatrix,
-			const ViewportArea& viewportArea
+			const ViewportArea& renderViewportArea,
+			const ViewportArea& interactionViewportArea
 		);
 
 	private:

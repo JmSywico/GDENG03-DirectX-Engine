@@ -3,6 +3,9 @@
 #include <DX3D/Core/Base.h>
 #include <DX3D/Core/Common.h>
 
+#include <string>
+#include <vector>
+
 namespace dx3d
 {
 	class Window : public Base
@@ -19,6 +22,9 @@ namespace dx3d
 		Rect getClientSize() const noexcept;
 
 		Rect getClientAreaInScreenSpace();
+
+		std::vector<std::string>
+			consumeDroppedFiles();
 
 	protected:
 		void* m_handle{};
