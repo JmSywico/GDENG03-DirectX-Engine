@@ -1018,6 +1018,32 @@ void dx3d::Game::handleViewportPicking(
 		return;
 	}
 
+	GameObject* closestLight = nullptr;
+	f32 closestLightDistanceSquared = std::numeric_limits<f32>::max();
+	for (auto* object : m_world->getGameObjects())
+	{
+		if (!object || !object->isActiveInHierarchy() ||
+			!object->getComponent<DirectionalLightComponent>()) continue;
+		ImVec2 iconPosition{};
+		if (!projectWorldPoint(object->getTransform().getPosition(), viewProjection,
+			viewportArea, iconPosition)) continue;
+		const f32 deltaX = mousePosition.x - iconPosition.x;
+		const f32 deltaY = mousePosition.y - iconPosition.y;
+		const f32 distanceSquared = deltaX * deltaX + deltaY * deltaY;
+		if (distanceSquared < closestLightDistanceSquared)
+		{
+			closestLightDistanceSquared = distanceSquared;
+			closestLight = object;
+		}
+	}
+	const f32 lightPickRadius = 16.0f * m_uiScale;
+	if (closestLight && closestLightDistanceSquared <= lightPickRadius * lightPickRadius)
+	{
+		if (ImGui::GetIO().KeyCtrl) toggleObjectSelection(closestLight);
+		else selectOnly(closestLight);
+		return;
+	}
+
 	const PickingViewportArea pickingViewport
 	{
 		viewportArea.x,
@@ -1380,11 +1406,11 @@ void dx3d::Game::drawObjectCreationMenu(const Vec3& position)
 		selectOnly(object);
 		m_sceneDirty = true;
 	}
-	if (ImGui::MenuItem("Directional light"))
+	if (ImGui::MenuItem("Light"))
 	{
 		pushUndoSnapshot();
 		auto* object = m_world->createGameObject<GameObject>();
-		object->setName("Directional Light");
+		object->setName("Light");
 		object->createOrGetComponent<DirectionalLightComponent>();
 		object->getTransform().setPosition(position);
 		selectOnly(object);
@@ -2127,22 +2153,11 @@ void dx3d::Game::onInternalUpdate()
 				selectOnly(plane);
 			}
 
-			ui32 directionalLightCount = 0;
-
-			m_world->getComponents<
-				DirectionalLightComponent
-			>(
-				directionalLightCount
-			);
-
-			const bool canCreateDirectionalLight =
-				directionalLightCount == 0;
-
 			if (ImGui::MenuItem(
-				"Create Directional Light",
+				"Create Light",
 				nullptr,
 				false,
-				canCreateDirectionalLight
+				true
 			))
 			{
 				pushUndoSnapshot();
@@ -2150,7 +2165,7 @@ void dx3d::Game::onInternalUpdate()
 					m_world->createGameObject<GameObject>();
 
 				lightObject->setName(
-					"Directional Light"
+					"Light"
 				);
 
 				auto* lightComponent =
@@ -2908,6 +2923,130 @@ void dx3d::Game::onInternalUpdate()
 						color, 1.5f * scale);
 			}
 		}
+
+		// Lights use a compact bulb marker so non-mesh light entities remain
+		// visible and directly selectable in the Scene viewport.
+		for (auto* object : sceneObjects)
+		{
+			if (!object || !object->isActiveInHierarchy()) continue;
+			auto* light = object->getComponent<DirectionalLightComponent>();
+			if (!light) continue;
+			ImVec2 icon{};
+			if (!projectWorldPoint(object->getTransform().getPosition(),
+				viewProjection, gizmoViewport, icon)) continue;
+
+			const bool selected = isObjectSelected(object);
+			const ImU32 color = selected
+				? IM_COL32(255, 194, 72, 255)
+				: IM_COL32(255, 222, 92, 245);
+			const float scale = m_uiScale;
+			const float thickness = (selected ? 2.5f : 2.0f) * scale;
+			const ImVec2 bulbCenter{ icon.x, icon.y - 2.0f * scale };
+			overlay->AddCircle(bulbCenter, 6.0f * scale, color, 20, thickness);
+			overlay->AddLine(
+				{ icon.x - 4.0f * scale, icon.y + 3.0f * scale },
+				{ icon.x - 3.0f * scale, icon.y + 7.0f * scale }, color, thickness);
+			overlay->AddLine(
+				{ icon.x + 4.0f * scale, icon.y + 3.0f * scale },
+				{ icon.x + 3.0f * scale, icon.y + 7.0f * scale }, color, thickness);
+			overlay->AddLine(
+				{ icon.x - 3.0f * scale, icon.y + 7.0f * scale },
+				{ icon.x + 3.0f * scale, icon.y + 7.0f * scale }, color, thickness);
+			overlay->AddLine(
+				{ icon.x - 2.0f * scale, icon.y + 10.0f * scale },
+				{ icon.x + 2.0f * scale, icon.y + 10.0f * scale }, color, thickness);
+			for (int ray = 0; ray < 5; ++ray)
+			{
+				const float angle = -3.14159265f + ray * (3.14159265f / 4.0f);
+				const ImVec2 direction{ std::cos(angle), std::sin(angle) };
+				overlay->AddLine(
+					{ bulbCenter.x + direction.x * 9.0f * scale,
+					  bulbCenter.y + direction.y * 9.0f * scale },
+					{ bulbCenter.x + direction.x * 12.0f * scale,
+					  bulbCenter.y + direction.y * 12.0f * scale }, color, thickness);
+			}
+
+			if (!selected) continue;
+			const auto drawWorldLine = [&](const Vec3& start, const Vec3& end)
+			{
+				ImVec2 screenStart{};
+				ImVec2 screenEnd{};
+				if (projectWorldPoint(start, viewProjection, gizmoViewport, screenStart) &&
+					projectWorldPoint(end, viewProjection, gizmoViewport, screenEnd))
+				{
+					overlay->AddLine(screenStart, screenEnd, color, 1.5f * scale);
+				}
+			};
+			const Vec3 origin = object->getTransform().getPosition();
+			const Vec3 forward = object->getTransform().forward();
+			const Vec3 right = object->getTransform().right();
+			const Vec3 up = object->getTransform().up();
+			constexpr int helperSegments = 48;
+
+			if (light->getLightType() == LightType::Point)
+			{
+				const float range = light->getRange();
+				for (int plane = 0; plane < 3; ++plane)
+				{
+					Vec3 previous{};
+					for (int segment = 0; segment <= helperSegments; ++segment)
+					{
+						const float angle = 6.2831853f * segment / helperSegments;
+						const float first = std::cos(angle) * range;
+						const float second = std::sin(angle) * range;
+						const Vec3 current = plane == 0
+							? Vec3{ origin.x + first, origin.y + second, origin.z }
+							: plane == 1
+								? Vec3{ origin.x + first, origin.y, origin.z + second }
+								: Vec3{ origin.x, origin.y + first, origin.z + second };
+						if (segment > 0) drawWorldLine(previous, current);
+						previous = current;
+					}
+				}
+			}
+			else if (light->getLightType() == LightType::Spot)
+			{
+				const float range = light->getRange();
+				const float radius = std::tan(
+					light->getSpotAngle() * 0.5f * 3.14159265f / 180.0f) * range;
+				const Vec3 coneCenter{
+					origin.x + forward.x * range,
+					origin.y + forward.y * range,
+					origin.z + forward.z * range };
+				std::array<Vec3, 4> cardinal{};
+				Vec3 previous{};
+				for (int segment = 0; segment <= helperSegments; ++segment)
+				{
+					const float angle = 6.2831853f * segment / helperSegments;
+					const float horizontal = std::cos(angle) * radius;
+					const float vertical = std::sin(angle) * radius;
+					const Vec3 current{
+						coneCenter.x + right.x * horizontal + up.x * vertical,
+						coneCenter.y + right.y * horizontal + up.y * vertical,
+						coneCenter.z + right.z * horizontal + up.z * vertical };
+					if (segment > 0) drawWorldLine(previous, current);
+					if (segment < helperSegments && segment % (helperSegments / 4) == 0)
+						cardinal[segment / (helperSegments / 4)] = current;
+					previous = current;
+				}
+				for (const Vec3& edge : cardinal) drawWorldLine(origin, edge);
+			}
+			else
+			{
+				for (int offset = -1; offset <= 1; ++offset)
+				{
+					const Vec3 start{
+						origin.x + right.x * offset * 0.45f,
+						origin.y + right.y * offset * 0.45f,
+						origin.z + right.z * offset * 0.45f };
+					const Vec3 end{
+						start.x + forward.x * 2.5f,
+						start.y + forward.y * 2.5f,
+						start.z + forward.z * 2.5f };
+					drawWorldLine(start, end);
+				}
+			}
+		}
 		overlay->PopClipRect();
 	}
 
@@ -3541,8 +3680,15 @@ void dx3d::Game::onInternalUpdate()
 		{
 			ImGui::Spacing();
 			ImGui::Separator();
-			ImGui::Text("Directional Light");
+			ImGui::Text("Light");
 			ImGui::Spacing();
+			int lightType = static_cast<int>(directionalLight->getLightType());
+			const char* lightTypes[] = { "Directional", "Point", "Spot" };
+			if (ImGui::Combo("Mode", &lightType, lightTypes, 3))
+			{
+				pushUndoSnapshot(inspectorSnapshot);
+				directionalLight->setLightType(static_cast<LightType>(lightType));
+			}
 
 			Vec3 lightColor =
 				directionalLight->getColor();
@@ -3590,6 +3736,25 @@ void dx3d::Game::onInternalUpdate()
 				);
 			}
 
+			if (directionalLight->getLightType() != LightType::Directional)
+			{
+				float range = directionalLight->getRange();
+				if (ImGui::DragFloat("Range", &range, 0.1f, 0.1f, 10000.0f))
+				{
+					if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+					directionalLight->setRange(range);
+				}
+				if (directionalLight->getLightType() == LightType::Spot)
+				{
+					float angle = directionalLight->getSpotAngle();
+					if (ImGui::SliderFloat("Spot Angle", &angle, 1.0f, 179.0f, "%.1f deg"))
+					{
+						if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+						directionalLight->setSpotAngle(angle);
+					}
+				}
+			}
+
 			float ambientStrength =
 				directionalLight->
 				getAmbientStrength();
@@ -3610,6 +3775,8 @@ void dx3d::Game::onInternalUpdate()
 					);
 			}
 
+			if (directionalLight->getLightType() == LightType::Directional)
+			{
 			float shadowArea =
 				directionalLight->
 				getShadowArea();
@@ -3646,7 +3813,12 @@ void dx3d::Game::onInternalUpdate()
 				directionalLight->
 					setCastShadows(
 						castShadows
-					);
+				);
+			}
+			}
+			else
+			{
+				ImGui::TextDisabled("Point and spot shadows are not available");
 			}
 		}
 

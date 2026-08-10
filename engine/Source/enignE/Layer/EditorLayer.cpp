@@ -24,6 +24,7 @@
 
 namespace
 {
+	constexpr std::size_t MaxGpuLights = 16;
 	using namespace DirectX;
 	using namespace enignE::Scene;
 
@@ -621,6 +622,7 @@ void EditorLayer::OnImGuiRender()
 	m_sceneHierarchyPanel.Draw(m_context);
 	m_inspectorPanel.Draw(m_context);
 	m_assetBrowserPanel.Draw(m_context);
+	DrawLightWorkbench();
 	DrawCameraGizmos();
 	DrawLightGizmos();
 	DrawGizmo();
@@ -763,6 +765,7 @@ void EditorLayer::BuildDefaultDockLayout(ImGuiID dockspaceID, const ImVec2& dock
 	ImGui::DockBuilderDockWindow("Asset Lens", assets);
 	ImGui::DockBuilderDockWindow("Stats", signal);
 	ImGui::DockBuilderDockWindow("Inspector", signal);
+	ImGui::DockBuilderDockWindow("Light Workbench", signal);
 	ImGui::DockBuilderFinish(dockspaceID);
 }
 
@@ -1188,49 +1191,17 @@ void EditorLayer::DrawSceneContextPopup()
 				0,
 				id));
 	}
-	if (ImGui::BeginMenu("Light"))
+	if (ImGui::MenuItem("Light"))
 	{
-		if (ImGui::MenuItem("Directional Light"))
-		{
-			const std::uint64_t id = createEntity(std::make_unique<enignE::Editor::CreateEntityCommand>(
+		const std::uint64_t id = createEntity(std::make_unique<enignE::Editor::CreateEntityCommand>(
+			scene,
+			"Light",
+			enignE::Scene::LightComponent{}));
+		if (scene.GetSettings().ActiveLightEntityID == 0)
+			m_commandStack.Execute(std::make_unique<enignE::Editor::SetActiveLightCommand>(
 				scene,
-				"Directional Light",
-				enignE::Scene::LightComponent{}));
-			if (scene.GetSettings().ActiveLightEntityID == 0)
-				m_commandStack.Execute(std::make_unique<enignE::Editor::SetActiveLightCommand>(
-					scene,
-					0,
-					id));
-		}
-		if (ImGui::MenuItem("Point Light"))
-		{
-			enignE::Scene::LightComponent light;
-			light.LightType = enignE::Scene::LightComponent::Type::Point;
-			const std::uint64_t id = createEntity(std::make_unique<enignE::Editor::CreateEntityCommand>(
-				scene,
-				"Point Light",
-				light));
-			if (scene.GetSettings().ActiveLightEntityID == 0)
-				m_commandStack.Execute(std::make_unique<enignE::Editor::SetActiveLightCommand>(
-					scene,
-					0,
-					id));
-		}
-		if (ImGui::MenuItem("Spot Light"))
-		{
-			enignE::Scene::LightComponent light;
-			light.LightType = enignE::Scene::LightComponent::Type::Spot;
-			const std::uint64_t id = createEntity(std::make_unique<enignE::Editor::CreateEntityCommand>(
-				scene,
-				"Spot Light",
-				light));
-			if (scene.GetSettings().ActiveLightEntityID == 0)
-				m_commandStack.Execute(std::make_unique<enignE::Editor::SetActiveLightCommand>(
-					scene,
-					0,
-					id));
-		}
-		ImGui::EndMenu();
+				0,
+				id));
 	}
 	if (ImGui::BeginMenu("3D Object", m_context.CreatePrimitiveModel != nullptr))
 	{
@@ -1260,6 +1231,133 @@ void EditorLayer::DrawSceneContextPopup()
 	}
 
 	ImGui::EndPopup();
+}
+
+void EditorLayer::DrawLightWorkbench()
+{
+	using namespace enignE::Editor;
+	using namespace enignE::Scene;
+
+	if (!m_context.ActiveScene || !m_context.Commands)
+		return;
+	if (!ImGui::Begin("Light Workbench", nullptr, ImGuiWindowFlags_NoFocusOnAppearing))
+	{
+		ImGui::End();
+		return;
+	}
+
+	auto& scene = *m_context.ActiveScene;
+	auto lights = scene.View<LightComponent, TransformComponent>();
+	std::size_t total = 0;
+	std::size_t enabled = 0;
+	for (const entt::entity entity : lights)
+	{
+		if (scene.IsEntityPendingDestroy(entity))
+			continue;
+		++total;
+		if (lights.get<LightComponent>(entity).bEnabled)
+			++enabled;
+	}
+	ImGui::Text("Scene lights  %zu  |  GPU active  %zu / %u",
+		total,
+		std::min<std::size_t>(enabled, MaxGpuLights),
+		static_cast<unsigned>(MaxGpuLights));
+	ImGui::TextDisabled("All enabled lights illuminate; one directional or spot light supplies shadows.");
+	if (enabled > MaxGpuLights)
+	{
+		ImGui::TextColored(
+			ImVec4(1.0f, 0.48f, 0.25f, 1.0f),
+			"%zu enabled lights exceed the frame budget and are not submitted.",
+			enabled - MaxGpuLights);
+	}
+
+	const auto createLight = [this, &scene](LightComponent::Type type, const char* name)
+	{
+		LightComponent light;
+		light.LightType = type;
+		auto command = std::make_unique<CreateEntityCommand>(scene, name, light);
+		auto* created = command.get();
+		m_context.Commands->Execute(std::move(command));
+		const std::uint64_t id = created->GetEntityID();
+		const entt::entity entity = scene.FindEntityByID(id);
+		if (entity != entt::null)
+			m_context.SelectEntity(entity);
+		if (scene.GetSettings().ActiveLightEntityID == 0
+			&& type != LightComponent::Type::Point)
+		{
+			m_context.Commands->Execute(std::make_unique<SetActiveLightCommand>(scene, 0, id));
+		}
+	};
+	if (ImGui::Button("+ Light"))
+		createLight(LightComponent::Type::Directional, "Light");
+
+	const ImGuiTableFlags flags = ImGuiTableFlags_BordersInnerV
+		| ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY;
+	if (ImGui::BeginTable("##LightRows", 5, flags, enignE::Editor::UI::Scale(0.0f, 220.0f)))
+	{
+		ImGui::TableSetupScrollFreeze(0, 1);
+		ImGui::TableSetupColumn("On", ImGuiTableColumnFlags_WidthFixed, enignE::Editor::UI::Scale(34.0f));
+		ImGui::TableSetupColumn("Element", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, enignE::Editor::UI::Scale(72.0f));
+		ImGui::TableSetupColumn("Energy", ImGuiTableColumnFlags_WidthFixed, enignE::Editor::UI::Scale(62.0f));
+		ImGui::TableSetupColumn("Shadow", ImGuiTableColumnFlags_WidthFixed, enignE::Editor::UI::Scale(62.0f));
+		ImGui::TableHeadersRow();
+
+		for (const entt::entity entity : lights)
+		{
+			if (scene.IsEntityPendingDestroy(entity))
+				continue;
+			const auto* light = scene.GetComponent<LightComponent>(entity);
+			if (!light)
+				continue;
+			const std::uint64_t id = scene.GetEntityID(entity);
+			const auto* tag = scene.GetComponent<TagComponent>(entity);
+			const char* typeName = light->LightType == LightComponent::Type::Directional
+				? "Directional"
+				: light->LightType == LightComponent::Type::Point ? "Point" : "Spot";
+			ImGui::PushID(static_cast<int>(id));
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			bool lightEnabled = light->bEnabled;
+			if (ImGui::Checkbox("##Enabled", &lightEnabled))
+			{
+				LightComponent after = *light;
+				after.bEnabled = lightEnabled;
+				m_context.Commands->Execute(std::make_unique<SetLightCommand>(
+					scene, id, *light, after));
+				light = scene.GetComponent<LightComponent>(entity);
+			}
+			ImGui::TableSetColumnIndex(1);
+			if (ImGui::Selectable(
+				tag ? tag->Tag : "Light",
+				m_context.IsEntitySelected(entity),
+				ImGuiSelectableFlags_AllowOverlap))
+			{
+				m_context.SelectEntity(entity);
+			}
+			ImGui::TableSetColumnIndex(2);
+			ImGui::TextUnformatted(typeName);
+			ImGui::TableSetColumnIndex(3);
+			ImGui::Text("%.2f", light->Intensity);
+			ImGui::TableSetColumnIndex(4);
+			if (light->LightType == LightComponent::Type::Point)
+			{
+				ImGui::TextDisabled("N/A");
+			}
+			else if (scene.GetSettings().ActiveLightEntityID == id)
+			{
+				ImGui::TextColored(ImVec4(0.96f, 0.70f, 0.30f, 1.0f), "SOURCE");
+			}
+			else if (ImGui::SmallButton("Set"))
+			{
+				m_context.Commands->Execute(std::make_unique<SetActiveLightCommand>(
+					scene, scene.GetSettings().ActiveLightEntityID, id));
+			}
+			ImGui::PopID();
+		}
+		ImGui::EndTable();
+	}
+	ImGui::End();
 }
 
 void EditorLayer::DrawCameraGizmos()
@@ -1438,7 +1536,9 @@ void EditorLayer::DrawLightGizmos()
 		const bool selected = m_context.IsEntitySelected(entity);
 		const bool active = m_context.ActiveScene->GetEntityID(entity)
 			== m_context.ActiveScene->GetSettings().ActiveLightEntityID;
-		const ImU32 color = selected
+		const ImU32 color = !light.bEnabled
+			? IM_COL32(118, 116, 108, selected ? 230 : 150)
+			: selected
 			? IM_COL32(255, 194, 72, 255)
 			: active ? IM_COL32(255, 238, 112, 255) : IM_COL32(255, 221, 92, 230);
 

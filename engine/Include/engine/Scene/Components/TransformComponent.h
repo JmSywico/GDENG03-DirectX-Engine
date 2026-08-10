@@ -217,6 +217,7 @@ namespace enignE::Scene
 		};
 
 		Type LightType = Type::Directional;
+		bool bEnabled = true;
 		DirectX::XMFLOAT3 Color = {1.0f, 1.0f, 1.0f};
 		float Intensity = 1.0f;
 

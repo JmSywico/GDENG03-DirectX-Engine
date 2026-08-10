@@ -3,10 +3,12 @@ $input v_normal, v_texcoord0, v_tangent, v_bitangent, v_worldPosition, v_viewDep
 #include "bgfx_shader.sh"
 
 uniform vec4 u_albedo;
-uniform vec4 u_lightDirIntensity;
-uniform vec4 u_lightColorMaterial;
-uniform vec4 u_lightPositionRange;
-uniform vec4 u_lightTypeSpot;
+uniform vec4 u_lightDirections[16];
+uniform vec4 u_lightColors[16];
+uniform vec4 u_lightPositions[16];
+uniform vec4 u_lightParameters[16];
+uniform vec4 u_lightMeta;
+uniform vec4 u_materialMode;
 uniform vec4 u_materialSurface;
 uniform vec4 u_materialEmissive;
 uniform vec4 u_cameraPosition;
@@ -166,7 +168,7 @@ void main()
 			+ v_normal * tangentNormal.z);
 	}
 
-	float materialMode = u_lightColorMaterial.w;
+	float materialMode = u_materialMode.x;
 	if (materialMode > 0.5 && materialMode < 1.5)
 	{
 		gl_FragColor = vec4(rainbow(v_texcoord0), 1.0);
@@ -188,30 +190,6 @@ void main()
 		return;
 	}
 
-	float lightType = u_lightTypeSpot.x;
-	vec3 lightDirection = normalize(-u_lightDirIntensity.xyz);
-	float attenuation = 1.0;
-	if (lightType > 0.5)
-	{
-		vec3 toLight = u_lightPositionRange.xyz - v_worldPosition;
-		float distanceToLight = length(toLight);
-		lightDirection = distanceToLight > 0.0001
-			? toLight / distanceToLight
-			: vec3(0.0, 0.0, 1.0);
-		float normalizedDistance = distanceToLight / max(u_lightPositionRange.w, 0.0001);
-		float rangeFalloff = max(1.0 - normalizedDistance * normalizedDistance, 0.0);
-		attenuation = rangeFalloff * rangeFalloff;
-		if (lightType > 1.5)
-		{
-			vec3 lightToSurface = -lightDirection;
-			float coneCosine = dot(normalize(u_lightDirIntensity.xyz), lightToSurface);
-			float outerCosine = u_lightTypeSpot.y;
-			float innerCosine = mix(outerCosine, 1.0, 0.2);
-			attenuation *= smoothstep(outerCosine, innerCosine, coneCosine);
-		}
-	}
-	float nDotL = max(dot(shadingNormal, lightDirection), 0.0);
-	float visibility = shadowVisibility(v_worldPosition, normalize(v_normal), nDotL, v_viewDepth);
 	vec4 sampledTexture = texture2D(s_albedo, v_texcoord0);
 	if (u_materialEmissive.w > 0.5)
 		sampledTexture.rgb = srgbToLinear(sampledTexture.rgb);
@@ -227,21 +205,64 @@ void main()
 	float metallic = clamp(metallicRoughness.x, 0.0, 1.0);
 	float roughness = clamp(metallicRoughness.y, 0.04, 1.0);
 	vec3 viewDirection = normalize(u_cameraPosition.xyz - v_worldPosition);
-	vec3 halfway = normalize(viewDirection + lightDirection);
 	float nDotV = max(dot(shadingNormal, viewDirection), 0.0001);
-	float hDotV = max(dot(halfway, viewDirection), 0.0);
 	vec3 f0 = mix(vec3(0.04, 0.04, 0.04), albedo, metallic);
-	vec3 fresnel = fresnelSchlick(hDotV, f0);
-	float distribution = distributionGGX(shadingNormal, halfway, roughness);
-	float geometry = geometrySchlickGGX(nDotV, roughness)
-		* geometrySchlickGGX(nDotL, roughness);
-	vec3 specular = distribution * geometry * fresnel / max(4.0 * nDotV * nDotL, 0.0001);
-	vec3 diffuse = (vec3(1.0, 1.0, 1.0) - fresnel) * (1.0 - metallic)
-		* albedo * (1.0 / 3.14159265);
-	vec3 radiance = srgbToLinear(u_lightColorMaterial.rgb) * u_lightDirIntensity.w * attenuation;
 	vec3 ambient = albedo * (1.0 - metallic) * 0.03;
-	vec3 color = ambient + (diffuse + specular) * radiance * nDotL * visibility
-		+ srgbToLinear(u_materialEmissive.rgb);
+	vec3 directLighting = vec3(0.0, 0.0, 0.0);
+	int lightCount = int(u_lightMeta.x + 0.5);
+	int shadowLightIndex = int(u_lightMeta.y);
+	for (int lightIndex = 0; lightIndex < 16; ++lightIndex)
+	{
+		if (lightIndex >= lightCount)
+			break;
+
+		vec4 directionIntensity = u_lightDirections[lightIndex];
+		vec4 positionRange = u_lightPositions[lightIndex];
+		vec4 parameters = u_lightParameters[lightIndex];
+		float lightType = parameters.x;
+		vec3 lightDirection = normalize(-directionIntensity.xyz);
+		float attenuation = 1.0;
+		if (lightType > 0.5)
+		{
+			vec3 toLight = positionRange.xyz - v_worldPosition;
+			float distanceToLight = length(toLight);
+			lightDirection = distanceToLight > 0.0001
+				? toLight / distanceToLight
+				: vec3(0.0, 0.0, 1.0);
+			float normalizedDistance = distanceToLight / max(positionRange.w, 0.0001);
+			float rangeFalloff = max(1.0 - normalizedDistance * normalizedDistance, 0.0);
+			attenuation = rangeFalloff * rangeFalloff;
+			if (lightType > 1.5)
+			{
+				vec3 lightToSurface = -lightDirection;
+				float coneCosine = dot(normalize(directionIntensity.xyz), lightToSurface);
+				float outerCosine = parameters.y;
+				float innerCosine = mix(outerCosine, 1.0, 0.2);
+				attenuation *= smoothstep(outerCosine, innerCosine, coneCosine);
+			}
+		}
+
+		float nDotL = max(dot(shadingNormal, lightDirection), 0.0);
+		if (nDotL <= 0.0 || attenuation <= 0.0)
+			continue;
+		vec3 halfway = normalize(viewDirection + lightDirection);
+		float hDotV = max(dot(halfway, viewDirection), 0.0);
+		vec3 fresnel = fresnelSchlick(hDotV, f0);
+		float distribution = distributionGGX(shadingNormal, halfway, roughness);
+		float geometry = geometrySchlickGGX(nDotV, roughness)
+			* geometrySchlickGGX(nDotL, roughness);
+		vec3 specular = distribution * geometry * fresnel
+			/ max(4.0 * nDotV * nDotL, 0.0001);
+		vec3 diffuse = (vec3(1.0, 1.0, 1.0) - fresnel) * (1.0 - metallic)
+			* albedo * (1.0 / 3.14159265);
+		vec3 radiance = srgbToLinear(u_lightColors[lightIndex].rgb)
+			* directionIntensity.w * attenuation;
+		float visibility = lightIndex == shadowLightIndex
+			? shadowVisibility(v_worldPosition, normalize(v_normal), nDotL, v_viewDepth)
+			: 1.0;
+		directLighting += (diffuse + specular) * radiance * nDotL * visibility;
+	}
+	vec3 color = ambient + directLighting + srgbToLinear(u_materialEmissive.rgb);
 	color = linearToSrgb(color);
 	gl_FragColor = vec4(color, alpha);
 }

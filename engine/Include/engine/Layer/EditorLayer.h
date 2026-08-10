@@ -88,6 +88,7 @@ private:
 	void DrawViewportWindows();
 	void UpdateSceneContextPopup();
 	void DrawSceneContextPopup();
+	void DrawLightWorkbench();
 	void DrawCameraGizmos();
 	void DrawLightGizmos();
 	void DrawGizmo();

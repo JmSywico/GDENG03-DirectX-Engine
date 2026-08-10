@@ -96,18 +96,17 @@ namespace enignE::Graphics
 			bgfx::UniformHandle albedoSampler,
 			bgfx::UniformHandle metallicRoughnessSampler,
 			bgfx::UniformHandle normalSampler,
-			bgfx::UniformHandle lightDirIntensityUniform,
-			bgfx::UniformHandle lightColorMaterialUniform,
-			bgfx::UniformHandle lightPositionRangeUniform,
-			bgfx::UniformHandle lightTypeSpotUniform,
+			bgfx::UniformHandle lightDirectionsUniform,
+			bgfx::UniformHandle lightColorsUniform,
+			bgfx::UniformHandle lightPositionsUniform,
+			bgfx::UniformHandle lightParametersUniform,
+			bgfx::UniformHandle lightMetaUniform,
+			bgfx::UniformHandle materialModeUniform,
 			bgfx::UniformHandle materialSurfaceUniform,
 			bgfx::UniformHandle materialEmissiveUniform,
 			const ShadowSamplingBindings& shadowBindings,
 			bgfx::TextureHandle defaultAlbedoTexture,
-			const float* lightDirIntensity,
-			const float* lightPositionRange,
-			const float* lightTypeSpot,
-			const DirectX::XMFLOAT3& lightColor,
+			const SceneLightData& lights,
 			const std::vector<InstanceBatch>& batches,
 			InstanceRendererProfile& profile)
 		{
@@ -146,11 +145,8 @@ namespace enignE::Graphics
 					albedoValue.z,
 					albedoValue.w
 				};
-				const float lightColorMaterial[4] = {
-					lightColor.x,
-					lightColor.y,
-					lightColor.z,
-					static_cast<float>(materialMode)
+				const float materialModeValue[4] = {
+					static_cast<float>(materialMode), 0.0f, 0.0f, 0.0f
 				};
 				const float materialSurface[4] = {
 					material ? std::clamp(material->Metallic, 0.0f, 1.0f) : 0.0f,
@@ -218,10 +214,22 @@ namespace enignE::Graphics
 				bgfx::setTexture(0, albedoSampler, albedoTexture);
 				bgfx::setTexture(1, metallicRoughnessSampler, metallicRoughnessTexture);
 				bgfx::setTexture(2, normalSampler, normalTexture);
-				bgfx::setUniform(lightDirIntensityUniform, lightDirIntensity);
-				bgfx::setUniform(lightColorMaterialUniform, lightColorMaterial);
-				bgfx::setUniform(lightPositionRangeUniform, lightPositionRange);
-				bgfx::setUniform(lightTypeSpotUniform, lightTypeSpot);
+				const float lightMeta[4] = {
+					static_cast<float>(lights.Count),
+					static_cast<float>(lights.ShadowLightIndex),
+					0.0f,
+					0.0f
+				};
+				bgfx::setUniform(
+					lightDirectionsUniform, lights.Directions.data(), SceneLightData::MaxLights);
+				bgfx::setUniform(
+					lightColorsUniform, lights.Colors.data(), SceneLightData::MaxLights);
+				bgfx::setUniform(
+					lightPositionsUniform, lights.Positions.data(), SceneLightData::MaxLights);
+				bgfx::setUniform(
+					lightParametersUniform, lights.Parameters.data(), SceneLightData::MaxLights);
+				bgfx::setUniform(lightMetaUniform, lightMeta);
+				bgfx::setUniform(materialModeUniform, materialModeValue);
 				bgfx::setUniform(materialSurfaceUniform, materialSurface);
 				bgfx::setUniform(materialEmissiveUniform, materialEmissive);
 				const bool shadowsEnabled = shadowBindings.Enabled
@@ -469,18 +477,17 @@ namespace enignE::Graphics
 		bgfx::UniformHandle albedoSampler,
 		bgfx::UniformHandle metallicRoughnessSampler,
 		bgfx::UniformHandle normalSampler,
-		bgfx::UniformHandle lightDirIntensityUniform,
-		bgfx::UniformHandle lightColorMaterialUniform,
-		bgfx::UniformHandle lightPositionRangeUniform,
-		bgfx::UniformHandle lightTypeSpotUniform,
+		bgfx::UniformHandle lightDirectionsUniform,
+		bgfx::UniformHandle lightColorsUniform,
+		bgfx::UniformHandle lightPositionsUniform,
+		bgfx::UniformHandle lightParametersUniform,
+		bgfx::UniformHandle lightMetaUniform,
+		bgfx::UniformHandle materialModeUniform,
 		bgfx::UniformHandle materialSurfaceUniform,
 		bgfx::UniformHandle materialEmissiveUniform,
 		const ShadowSamplingBindings& shadowBindings,
 		bgfx::TextureHandle defaultAlbedoTexture,
-		const float* lightDirIntensity,
-		const float* lightPositionRange,
-		const float* lightTypeSpot,
-		const DirectX::XMFLOAT3& lightColor)
+		const SceneLightData& lights)
 	{
 		const auto profileStart = std::chrono::steady_clock::now();
 		m_profile.DrawSubmitCpuMs = 0.0;
@@ -500,18 +507,17 @@ namespace enignE::Graphics
 				albedoSampler,
 				metallicRoughnessSampler,
 				normalSampler,
-				lightDirIntensityUniform,
-				lightColorMaterialUniform,
-				lightPositionRangeUniform,
-				lightTypeSpotUniform,
+				lightDirectionsUniform,
+				lightColorsUniform,
+				lightPositionsUniform,
+				lightParametersUniform,
+				lightMetaUniform,
+				materialModeUniform,
 				materialSurfaceUniform,
 				materialEmissiveUniform,
 				shadowBindings,
 				defaultAlbedoTexture,
-				lightDirIntensity,
-				lightPositionRange,
-				lightTypeSpot,
-				lightColor,
+				lights,
 				chunkData->Batches,
 				m_profile);
 		}

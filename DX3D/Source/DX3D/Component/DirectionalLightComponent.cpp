@@ -97,3 +97,43 @@ getCastShadows() const noexcept
 {
 	return m_castShadows;
 }
+
+void dx3d::DirectionalLightComponent::setLightType(
+	LightType type
+) noexcept
+{
+	if (type < LightType::Directional || type > LightType::Spot)
+		return;
+	m_lightType = type;
+}
+
+dx3d::LightType dx3d::DirectionalLightComponent::getLightType() const noexcept
+{
+	return m_lightType;
+}
+
+void dx3d::DirectionalLightComponent::setRange(
+	f32 range
+) noexcept
+{
+	if (range > 0.0f)
+		m_range = range;
+}
+
+dx3d::f32 dx3d::DirectionalLightComponent::getRange() const noexcept
+{
+	return m_range;
+}
+
+void dx3d::DirectionalLightComponent::setSpotAngle(
+	f32 degrees
+) noexcept
+{
+	if (degrees > 0.0f && degrees < 180.0f)
+		m_spotAngle = degrees;
+}
+
+dx3d::f32 dx3d::DirectionalLightComponent::getSpotAngle() const noexcept
+{
+	return m_spotAngle;
+}

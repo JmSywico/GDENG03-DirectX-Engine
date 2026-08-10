@@ -12,6 +12,7 @@ struct VSOutput
     float3 worldNormal : NORMAL0;
     float4 lightPosition : TEXCOORD0;
     float3 objectPosition : TEXCOORD1;
+    float3 worldPosition : TEXCOORD2;
 };
 
 cbuffer ConstantData : register(b0)
@@ -20,8 +21,11 @@ cbuffer ConstantData : register(b0)
     row_major float4x4 view;
     row_major float4x4 proj;
 
-    float4 lightDirection;
-    float4 lightColorAndAmbient;
+    float4 lightDirections[16];
+    float4 lightColors[16];
+    float4 lightPositions[16];
+    float4 lightParameters[16];
+    float4 lightMeta;
     float4 materialAlbedo;
     float4 materialEmissiveAndStrength;
     float4 materialParameters;
@@ -95,6 +99,7 @@ VSOutput VSMain(
         );
 
     output.objectPosition = input.position;
+    output.worldPosition = worldPosition.xyz;
 
     return output;
 }
@@ -215,47 +220,57 @@ float4 PSMain(
             input.worldNormal
         );
 
-    const float3 directionToLight =
-        normalize(
-            lightDirection.xyz
-        );
-
-    const float diffuseAmount =
-        saturate(
-            dot(
-                normal,
-                directionToLight
-            )
-        );
-
     const float ambientStrength =
         saturate(
-            lightColorAndAmbient.a
+            lightMeta.y
         );
 
-    float shadowAmount = 1.0f;
-
-    if (lightDirection.w > 0.5f)
+    float3 directLighting = 0.0f;
+    const int lightCount = min((int)(lightMeta.x + 0.5f), 16);
+    const int shadowLightIndex = (int)lightMeta.z;
+    [loop]
+    for (int lightIndex = 0; lightIndex < lightCount; ++lightIndex)
     {
-        shadowAmount =
-            calculateShadow(
+        const float4 directionIntensity = lightDirections[lightIndex];
+        const float4 positionRange = lightPositions[lightIndex];
+        const float4 parameters = lightParameters[lightIndex];
+        const int lightType = (int)(parameters.x + 0.5f);
+        float3 directionToLight = normalize(-directionIntensity.xyz);
+        float attenuation = 1.0f;
+
+        if (lightType != 0)
+        {
+            const float3 toLight = positionRange.xyz - input.worldPosition;
+            const float distanceToLight = length(toLight);
+            directionToLight = distanceToLight > 0.0001f
+                ? toLight / distanceToLight
+                : float3(0.0f, 0.0f, 1.0f);
+            const float normalizedDistance = distanceToLight / max(positionRange.w, 0.0001f);
+            const float rangeFalloff = saturate(1.0f - normalizedDistance * normalizedDistance);
+            attenuation = rangeFalloff * rangeFalloff;
+
+            if (lightType == 2)
+            {
+                const float coneCosine = dot(normalize(directionIntensity.xyz), -directionToLight);
+                const float outerCosine = parameters.y;
+                const float innerCosine = lerp(outerCosine, 1.0f, 0.2f);
+                attenuation *= smoothstep(outerCosine, innerCosine, coneCosine);
+            }
+        }
+
+        const float diffuseAmount = saturate(dot(normal, directionToLight));
+        float shadowAmount = 1.0f;
+        if (lightMeta.w > 0.5f && lightIndex == shadowLightIndex)
+        {
+            shadowAmount = calculateShadow(
                 input.lightPosition,
                 normal,
                 directionToLight
             );
+        }
+        directLighting += lightColors[lightIndex].rgb * directionIntensity.w
+            * diffuseAmount * attenuation * shadowAmount;
     }
-
-    const float directLighting =
-        (
-            1.0f -
-            ambientStrength
-        ) *
-        diffuseAmount *
-        shadowAmount;
-
-    const float lightingStrength =
-        ambientStrength +
-        directLighting;
 
     float3 surfaceColor = input.color.rgb * materialAlbedo.rgb;
     if (materialParameters.y > 0.5f)
@@ -266,7 +281,7 @@ float4 PSMain(
             : (blend.x >= blend.z ? input.objectPosition.zy + 0.5f : input.objectPosition.xy + 0.5f);
         surfaceColor *= albedoMap.Sample(albedoSampler, uv).rgb;
     }
-    float appliedLighting = lightingStrength;
+    float3 appliedLighting = ambientStrength.xxx + directLighting;
 
     const int materialMode = (int)(materialParameters.x + 0.5f);
     if (materialMode == 1)
@@ -291,7 +306,7 @@ float4 PSMain(
     }
 
     const float3 finalColor =
-        surfaceColor * lightColorAndAmbient.rgb * appliedLighting +
+        surfaceColor * appliedLighting +
         materialEmissiveAndStrength.rgb * materialEmissiveAndStrength.a;
 
     return float4(

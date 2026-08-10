@@ -226,6 +226,7 @@ namespace enignE::Scene
 				{
 					components["LightComponent"] = {
 						{"type", static_cast<int>(light->LightType)},
+						{"enabled", light->bEnabled},
 						{"color", Vec3(light->Color)},
 						{"intensity", light->Intensity},
 						{"range", light->Range},
@@ -529,6 +530,7 @@ namespace enignE::Scene
 				{
 					LightComponent light;
 					light.LightType = static_cast<LightComponent::Type>(it->value("type", 0));
+					light.bEnabled = it->value("enabled", true);
 					if (static_cast<int>(light.LightType) < 0 || static_cast<int>(light.LightType) > 2)
 						throw std::runtime_error("invalid light type");
 					light.Color = ReadVec3(it->value("color", json::array()), {1, 1, 1});

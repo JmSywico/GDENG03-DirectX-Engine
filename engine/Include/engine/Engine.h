@@ -216,10 +216,12 @@ private:
 	bgfx::UniformHandle m_albedoSampler = BGFX_INVALID_HANDLE;
 	bgfx::UniformHandle m_metallicRoughnessSampler = BGFX_INVALID_HANDLE;
 	bgfx::UniformHandle m_normalSampler = BGFX_INVALID_HANDLE;
-	bgfx::UniformHandle m_lightDirIntensityUniform = BGFX_INVALID_HANDLE;
-	bgfx::UniformHandle m_lightColorMaterialUniform = BGFX_INVALID_HANDLE;
-	bgfx::UniformHandle m_lightPositionRangeUniform = BGFX_INVALID_HANDLE;
-	bgfx::UniformHandle m_lightTypeSpotUniform = BGFX_INVALID_HANDLE;
+	bgfx::UniformHandle m_lightDirectionsUniform = BGFX_INVALID_HANDLE;
+	bgfx::UniformHandle m_lightColorsUniform = BGFX_INVALID_HANDLE;
+	bgfx::UniformHandle m_lightPositionsUniform = BGFX_INVALID_HANDLE;
+	bgfx::UniformHandle m_lightParametersUniform = BGFX_INVALID_HANDLE;
+	bgfx::UniformHandle m_lightMetaUniform = BGFX_INVALID_HANDLE;
+	bgfx::UniformHandle m_materialModeUniform = BGFX_INVALID_HANDLE;
 	bgfx::UniformHandle m_materialSurfaceUniform = BGFX_INVALID_HANDLE;
 	bgfx::UniformHandle m_materialEmissiveUniform = BGFX_INVALID_HANDLE;
 	bgfx::UniformHandle m_cameraPositionUniform = BGFX_INVALID_HANDLE;
@@ -278,6 +280,7 @@ private:
 	DirectX::XMFLOAT3 m_fallbackLightDir = {0.577f, 0.577f, -0.577f};
 	DirectX::XMFLOAT3 m_fallbackLightColor = {1.0f, 1.0f, 1.0f};
 	float m_fallbackLightIntensity = 0.8f;
+	enignE::Graphics::SceneLightData m_sceneLights;
 
 	enignE::Core::JobSystem m_jobs;
 	LayerStack m_layerStack;

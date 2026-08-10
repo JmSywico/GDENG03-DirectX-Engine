@@ -369,18 +369,11 @@ void dx3d::WorldRenderer::render(
 			}
 		);
 
-	Vec3 lightColor
-	{
-		1.0f,
-		1.0f,
-		1.0f
-	};
-
-	f32 lightIntensity = 1.0f;
-	f32 ambientStrength = 0.20f;
+	f32 ambientStrength = 0.03f;
 	f32 shadowArea = 30.0f;
-
-	bool castShadows = true;
+	bool castShadows = false;
+	int shadowLightIndex = -1;
+	ui32 lightCount = 0;
 
 	{
 		auto components =
@@ -405,6 +398,9 @@ void dx3d::WorldRenderer::render(
 				!lightComponent->getGameObject().isActiveInHierarchy())
 				continue;
 
+			if (lightCount >= MaxLights)
+				break;
+
 			auto& lightTransform =
 				lightComponent->
 				getGameObject().
@@ -413,52 +409,52 @@ void dx3d::WorldRenderer::render(
 			const Vec3 lightForward =
 				lightTransform.forward();
 
-			directionToLight =
-				Vec3::normalize(
-					{
-						-lightForward.x,
-						-lightForward.y,
-						-lightForward.z
-					}
-				);
+			const Vec3 lightColor = lightComponent->getColor();
+			const Vec3 lightPosition = lightTransform.getPosition();
+			const f32 spotCosine = std::cos(
+				lightComponent->getSpotAngle() * 0.5f * 3.1415926535f / 180.0f);
+			data.lightDirections[lightCount] = {
+				lightForward.x, lightForward.y, lightForward.z,
+				lightComponent->getIntensity() };
+			data.lightColors[lightCount] = {
+				lightColor.x, lightColor.y, lightColor.z, 0.0f };
+			data.lightPositions[lightCount] = {
+				lightPosition.x, lightPosition.y, lightPosition.z,
+				lightComponent->getRange() };
+			data.lightParameters[lightCount] = {
+				static_cast<f32>(lightComponent->getLightType()), spotCosine, 0.0f, 0.0f };
+			ambientStrength = std::max(
+				ambientStrength, lightComponent->getAmbientStrength());
 
-			lightColor =
-				lightComponent->getColor();
-
-			lightIntensity =
-				lightComponent->getIntensity();
-
-			ambientStrength =
-				lightComponent->
-				getAmbientStrength();
-
-			shadowArea =
-				lightComponent->
-				getShadowArea();
-
-			castShadows =
-				lightComponent->
-				getCastShadows();
-
-			break;
+			if (shadowLightIndex < 0 &&
+				lightComponent->getLightType() == LightType::Directional &&
+				lightComponent->getCastShadows())
+			{
+				directionToLight = Vec3::normalize({
+					-lightForward.x, -lightForward.y, -lightForward.z });
+				shadowArea = lightComponent->getShadowArea();
+				castShadows = true;
+				shadowLightIndex = static_cast<int>(lightCount);
+			}
+			++lightCount;
 		}
 	}
 
-	data.lightDirection =
+	if (lightCount == 0)
 	{
-		directionToLight.x,
-		directionToLight.y,
-		directionToLight.z,
-		castShadows ? 1.0f : 0.0f
-	};
-
-	data.lightColorAndAmbient =
-	{
-		lightColor.x * lightIntensity,
-		lightColor.y * lightIntensity,
-		lightColor.z * lightIntensity,
-		ambientStrength
-	};
+		data.lightDirections[0] = {
+			-directionToLight.x, -directionToLight.y, -directionToLight.z, 1.0f };
+		data.lightColors[0] = { 1.0f, 1.0f, 1.0f, 0.0f };
+		data.lightPositions[0] = { 0.0f, 0.0f, 0.0f, 100.0f };
+		data.lightParameters[0] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		lightCount = 1;
+		ambientStrength = 0.20f;
+		castShadows = true;
+		shadowLightIndex = 0;
+	}
+	data.lightMeta = {
+		static_cast<f32>(lightCount), ambientStrength,
+		static_cast<f32>(shadowLightIndex), castShadows ? 1.0f : 0.0f };
 
 	const Vec3 lightTarget
 	{

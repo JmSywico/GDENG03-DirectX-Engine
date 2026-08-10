@@ -586,6 +586,7 @@ namespace
 		source.AddComponent<Scene::HierarchyComponent>(lightEntity);
 		Scene::LightComponent sourceLight;
 		sourceLight.LightType = Scene::LightComponent::Type::Spot;
+		sourceLight.bEnabled = false;
 		sourceLight.Intensity = 3.0f;
 		sourceLight.Range = 20.0f;
 		sourceLight.SpotAngle = 35.0f;
@@ -671,6 +672,8 @@ namespace
 			loaded.GetSettings().ActiveLightEntityID == 40
 				&& loaded.GetComponent<Scene::LightComponent>(
 					loaded.FindEntityByID(40))->LightType == Scene::LightComponent::Type::Spot
+				&& !loaded.GetComponent<Scene::LightComponent>(
+					loaded.FindEntityByID(40))->bEnabled
 				&& NearlyEqual(loaded.GetComponent<Scene::LightComponent>(
 					loaded.FindEntityByID(40))->ShadowStrength, 0.7f)
 				&& NearlyEqual(loaded.GetComponent<Scene::LightComponent>(

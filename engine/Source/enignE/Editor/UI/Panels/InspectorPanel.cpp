@@ -976,6 +976,11 @@ namespace enignE::Editor
 		if (const auto* light = scene.GetComponent<Scene::LightComponent>(entity))
 		{
 			ImGui::SeparatorText("Light");
+			Scene::LightComponent edited = *light;
+			if (ImGui::Checkbox("Enabled##Light", &edited.bEnabled) && context.Commands)
+				context.Commands->Execute(std::make_unique<SetLightCommand>(
+					scene, id, *light, edited));
+			light = scene.GetComponent<Scene::LightComponent>(entity);
 			int lightType = static_cast<int>(light->LightType);
 			const char* lightTypes[] = {"Directional", "Point", "Spot"};
 			if (ImGui::Combo("Type", &lightType, lightTypes, static_cast<int>(std::size(lightTypes)))
@@ -986,7 +991,7 @@ namespace enignE::Editor
 				context.Commands->Execute(std::make_unique<SetLightCommand>(
 					scene, id, *light, after));
 			}
-			Scene::LightComponent edited = *light;
+			edited = *light;
 			if (ImGui::ColorEdit3("Color", &edited.Color.x) && context.Commands)
 				context.Commands->ExecuteCoalesced(std::make_unique<SetLightCommand>(
 					scene, id, *light, edited));
@@ -1051,8 +1056,8 @@ namespace enignE::Editor
 				}
 			}
 			if (scene.GetSettings().ActiveLightEntityID == id)
-				ImGui::TextDisabled("Active scene light");
-			else if (ImGui::Button("Set Active Light") && context.Commands)
+				ImGui::TextDisabled("Shadow source (all enabled lights illuminate)");
+			else if (ImGui::Button("Use As Shadow Source") && context.Commands)
 			{
 				context.Commands->Execute(std::make_unique<SetActiveLightCommand>(
 					scene, scene.GetSettings().ActiveLightEntityID, id));

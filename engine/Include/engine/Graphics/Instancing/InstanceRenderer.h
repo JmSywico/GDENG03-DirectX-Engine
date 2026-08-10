@@ -18,6 +18,19 @@ namespace enignE::Core { class JobSystem; }
 
 namespace enignE::Graphics
 {
+	/** GPU-ready, bounded light list shared by every scene draw in a frame. */
+	struct SceneLightData
+	{
+		static constexpr std::uint16_t MaxLights = 16;
+
+		std::array<DirectX::XMFLOAT4, MaxLights> Directions{};
+		std::array<DirectX::XMFLOAT4, MaxLights> Colors{};
+		std::array<DirectX::XMFLOAT4, MaxLights> Positions{};
+		std::array<DirectX::XMFLOAT4, MaxLights> Parameters{};
+		std::uint16_t Count = 0;
+		int ShadowLightIndex = -1;
+	};
+
 	struct ShadowSamplingBindings
 	{
 		std::array<bgfx::UniformHandle, ShadowFrameData::MaxCascades> Samplers{};
@@ -110,18 +123,17 @@ namespace enignE::Graphics
 			bgfx::UniformHandle albedoSampler,
 			bgfx::UniformHandle metallicRoughnessSampler,
 			bgfx::UniformHandle normalSampler,
-			bgfx::UniformHandle lightDirIntensityUniform,
-			bgfx::UniformHandle lightColorMaterialUniform,
-			bgfx::UniformHandle lightPositionRangeUniform,
-			bgfx::UniformHandle lightTypeSpotUniform,
+			bgfx::UniformHandle lightDirectionsUniform,
+			bgfx::UniformHandle lightColorsUniform,
+			bgfx::UniformHandle lightPositionsUniform,
+			bgfx::UniformHandle lightParametersUniform,
+			bgfx::UniformHandle lightMetaUniform,
+			bgfx::UniformHandle materialModeUniform,
 			bgfx::UniformHandle materialSurfaceUniform,
 			bgfx::UniformHandle materialEmissiveUniform,
 			const struct ShadowSamplingBindings& shadowBindings,
 			bgfx::TextureHandle defaultAlbedoTexture,
-			const float* lightDirIntensity,
-			const float* lightPositionRange,
-			const float* lightTypeSpot,
-			const DirectX::XMFLOAT3& lightColor);
+			const SceneLightData& lights);
 		void DrawShadow(
 			bgfx::ViewId viewId,
 			bgfx::ProgramHandle program,

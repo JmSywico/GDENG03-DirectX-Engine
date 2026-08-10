@@ -36,14 +36,19 @@ namespace dx3d
 		);
 
 	private:
+		static constexpr ui32 MaxLights = 16;
+
 		struct alignas(16) ConstantData
 		{
 			Mat4x4 world{};
 			Mat4x4 view{};
 			Mat4x4 proj{};
 
-			Vec4 lightDirection{};
-			Vec4 lightColorAndAmbient{};
+			Vec4 lightDirections[MaxLights]{};
+			Vec4 lightColors[MaxLights]{};
+			Vec4 lightPositions[MaxLights]{};
+			Vec4 lightParameters[MaxLights]{};
+			Vec4 lightMeta{};
 			Vec4 materialAlbedo{};
 			Vec4 materialEmissiveAndStrength{};
 			Vec4 materialParameters{};

@@ -6,6 +6,13 @@
 
 namespace dx3d
 {
+	enum class LightType : ui32
+	{
+		Directional = 0,
+		Point = 1,
+		Spot = 2
+	};
+
 	class DirectionalLightComponent final :
 		public Component
 	{
@@ -46,6 +53,15 @@ namespace dx3d
 
 		bool getCastShadows() const noexcept;
 
+		void setLightType(LightType type) noexcept;
+		LightType getLightType() const noexcept;
+
+		void setRange(f32 range) noexcept;
+		f32 getRange() const noexcept;
+
+		void setSpotAngle(f32 degrees) noexcept;
+		f32 getSpotAngle() const noexcept;
+
 	private:
 		Vec3 m_color
 		{
@@ -59,5 +75,8 @@ namespace dx3d
 		f32 m_shadowArea{ 30.0f };
 
 		bool m_castShadows{ true };
+		LightType m_lightType{ LightType::Directional };
+		f32 m_range{ 10.0f };
+		f32 m_spotAngle{ 45.0f };
 	};
 }

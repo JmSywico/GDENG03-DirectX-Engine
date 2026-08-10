@@ -383,15 +383,16 @@ bool Engine::CreateRendererResources()
 		LOG_ERROR("bgfx failed to create sampler 's_metallicRoughness'");
 	m_normalSampler = bgfx::createUniform("s_normal", bgfx::UniformType::Sampler);
 
-	m_lightDirIntensityUniform = bgfx::createUniform("u_lightDirIntensity", bgfx::UniformType::Vec4);
-	if (!bgfx::isValid(m_lightDirIntensityUniform))
-		LOG_ERROR("bgfx failed to create uniform 'u_lightDirIntensity'");
-
-	m_lightColorMaterialUniform = bgfx::createUniform("u_lightColorMaterial", bgfx::UniformType::Vec4);
-	if (!bgfx::isValid(m_lightColorMaterialUniform))
-		LOG_ERROR("bgfx failed to create uniform 'u_lightColorMaterial'");
-	m_lightPositionRangeUniform = bgfx::createUniform("u_lightPositionRange", bgfx::UniformType::Vec4);
-	m_lightTypeSpotUniform = bgfx::createUniform("u_lightTypeSpot", bgfx::UniformType::Vec4);
+	m_lightDirectionsUniform = bgfx::createUniform(
+		"u_lightDirections", bgfx::UniformType::Vec4, enignE::Graphics::SceneLightData::MaxLights);
+	m_lightColorsUniform = bgfx::createUniform(
+		"u_lightColors", bgfx::UniformType::Vec4, enignE::Graphics::SceneLightData::MaxLights);
+	m_lightPositionsUniform = bgfx::createUniform(
+		"u_lightPositions", bgfx::UniformType::Vec4, enignE::Graphics::SceneLightData::MaxLights);
+	m_lightParametersUniform = bgfx::createUniform(
+		"u_lightParameters", bgfx::UniformType::Vec4, enignE::Graphics::SceneLightData::MaxLights);
+	m_lightMetaUniform = bgfx::createUniform("u_lightMeta", bgfx::UniformType::Vec4);
+	m_materialModeUniform = bgfx::createUniform("u_materialMode", bgfx::UniformType::Vec4);
 	m_materialSurfaceUniform = bgfx::createUniform("u_materialSurface", bgfx::UniformType::Vec4);
 	m_materialEmissiveUniform = bgfx::createUniform("u_materialEmissive", bgfx::UniformType::Vec4);
 	m_cameraPositionUniform = bgfx::createUniform("u_cameraPosition", bgfx::UniformType::Vec4);
@@ -421,10 +422,12 @@ bool Engine::CreateRendererResources()
 		&& bgfx::isValid(m_albedoSampler)
 		&& bgfx::isValid(m_metallicRoughnessSampler)
 		&& bgfx::isValid(m_normalSampler)
-		&& bgfx::isValid(m_lightDirIntensityUniform)
-		&& bgfx::isValid(m_lightColorMaterialUniform)
-		&& bgfx::isValid(m_lightPositionRangeUniform)
-		&& bgfx::isValid(m_lightTypeSpotUniform)
+		&& bgfx::isValid(m_lightDirectionsUniform)
+		&& bgfx::isValid(m_lightColorsUniform)
+		&& bgfx::isValid(m_lightPositionsUniform)
+		&& bgfx::isValid(m_lightParametersUniform)
+		&& bgfx::isValid(m_lightMetaUniform)
+		&& bgfx::isValid(m_materialModeUniform)
 		&& bgfx::isValid(m_materialSurfaceUniform)
 		&& bgfx::isValid(m_materialEmissiveUniform)
 		&& bgfx::isValid(m_cameraPositionUniform)
@@ -464,13 +467,15 @@ void Engine::DestroyRendererResources()
 	if (bgfx::isValid(m_cascadeSplitsUniform)) bgfx::destroy(m_cascadeSplitsUniform);
 	if (bgfx::isValid(m_shadowMapInfoUniform)) bgfx::destroy(m_shadowMapInfoUniform);
 	if (bgfx::isValid(m_debugViewUniform)) bgfx::destroy(m_debugViewUniform);
-	if (bgfx::isValid(m_lightColorMaterialUniform)) bgfx::destroy(m_lightColorMaterialUniform);
-	if (bgfx::isValid(m_lightPositionRangeUniform)) bgfx::destroy(m_lightPositionRangeUniform);
-	if (bgfx::isValid(m_lightTypeSpotUniform)) bgfx::destroy(m_lightTypeSpotUniform);
+	if (bgfx::isValid(m_lightDirectionsUniform)) bgfx::destroy(m_lightDirectionsUniform);
+	if (bgfx::isValid(m_lightColorsUniform)) bgfx::destroy(m_lightColorsUniform);
+	if (bgfx::isValid(m_lightPositionsUniform)) bgfx::destroy(m_lightPositionsUniform);
+	if (bgfx::isValid(m_lightParametersUniform)) bgfx::destroy(m_lightParametersUniform);
+	if (bgfx::isValid(m_lightMetaUniform)) bgfx::destroy(m_lightMetaUniform);
+	if (bgfx::isValid(m_materialModeUniform)) bgfx::destroy(m_materialModeUniform);
 	if (bgfx::isValid(m_materialSurfaceUniform)) bgfx::destroy(m_materialSurfaceUniform);
 	if (bgfx::isValid(m_materialEmissiveUniform)) bgfx::destroy(m_materialEmissiveUniform);
 	if (bgfx::isValid(m_cameraPositionUniform)) bgfx::destroy(m_cameraPositionUniform);
-	if (bgfx::isValid(m_lightDirIntensityUniform)) bgfx::destroy(m_lightDirIntensityUniform);
 	if (bgfx::isValid(m_albedoSampler)) bgfx::destroy(m_albedoSampler);
 	if (bgfx::isValid(m_metallicRoughnessSampler)) bgfx::destroy(m_metallicRoughnessSampler);
 	if (bgfx::isValid(m_normalSampler)) bgfx::destroy(m_normalSampler);
@@ -480,13 +485,15 @@ void Engine::DestroyRendererResources()
 	m_shadowParametersUniform = BGFX_INVALID_HANDLE;
 	m_cascadeSplitsUniform = BGFX_INVALID_HANDLE;
 	m_shadowMapInfoUniform = BGFX_INVALID_HANDLE;
-	m_lightColorMaterialUniform = BGFX_INVALID_HANDLE;
-	m_lightPositionRangeUniform = BGFX_INVALID_HANDLE;
-	m_lightTypeSpotUniform = BGFX_INVALID_HANDLE;
+	m_lightDirectionsUniform = BGFX_INVALID_HANDLE;
+	m_lightColorsUniform = BGFX_INVALID_HANDLE;
+	m_lightPositionsUniform = BGFX_INVALID_HANDLE;
+	m_lightParametersUniform = BGFX_INVALID_HANDLE;
+	m_lightMetaUniform = BGFX_INVALID_HANDLE;
+	m_materialModeUniform = BGFX_INVALID_HANDLE;
 	m_materialSurfaceUniform = BGFX_INVALID_HANDLE;
 	m_materialEmissiveUniform = BGFX_INVALID_HANDLE;
 	m_cameraPositionUniform = BGFX_INVALID_HANDLE;
-	m_lightDirIntensityUniform = BGFX_INVALID_HANDLE;
 	m_albedoSampler = BGFX_INVALID_HANDLE;
 	m_metallicRoughnessSampler = BGFX_INVALID_HANDLE;
 	m_normalSampler = BGFX_INVALID_HANDLE;
@@ -633,41 +640,96 @@ void Engine::UpdateSceneCameraAndLight()
 	m_lightRange = 100.0f;
 	m_lightType = 0.0f;
 	m_lightSpotCosine = 0.0f;
-	m_lightCastsShadows = true;
+	m_lightCastsShadows = false;
 	m_shadowStrength = 1.0f;
 	m_shadowBias = 0.0012f;
 	m_shadowNormalBias = 0.02f;
 	m_shadowDistance = 100.0f;
-	if (const entt::entity lightEntity = scene.FindEntityByID(settings.ActiveLightEntityID);
-		lightEntity != entt::null)
+	m_sceneLights = {};
+
+	std::vector<entt::entity> lightEntities;
+	auto lightView = scene.View<
+		enignE::Scene::LightComponent,
+		enignE::Scene::TransformComponent>();
+	for (const entt::entity entity : lightView)
 	{
-		const auto* light = scene.GetComponent<enignE::Scene::LightComponent>(lightEntity);
-		const auto* transform = scene.GetComponent<enignE::Scene::TransformComponent>(lightEntity);
-		if (light && transform)
+		if (!scene.IsEntityPendingDestroy(entity))
+			lightEntities.push_back(entity);
+	}
+	std::stable_sort(
+		lightEntities.begin(),
+		lightEntities.end(),
+		[&scene, activeID = settings.ActiveLightEntityID](entt::entity lhs, entt::entity rhs)
 		{
-			const XMMATRIX world = transform->GetWorldMatrix();
-			XMVECTOR scale{};
-			XMVECTOR rotation = XMQuaternionIdentity();
-			XMVECTOR translation = world.r[3];
-			XMMatrixDecompose(&scale, &rotation, &translation, world);
-			XMStoreFloat3(
-				&m_lightDir,
-				XMVector3Normalize(XMVector3TransformNormal(
-					XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f),
-					XMMatrixRotationQuaternion(rotation))));
-			XMStoreFloat3(&m_lightPosition, translation);
-			m_lightColor = light->Color;
-			m_lightIntensity = light->Intensity;
-			m_lightRange = std::max(light->Range, 0.0001f);
-			m_lightType = static_cast<float>(light->LightType);
-			m_lightSpotCosine = std::cos(
-				XMConvertToRadians(std::clamp(light->SpotAngle, 1.0f, 179.0f) * 0.5f));
-			m_lightCastsShadows = light->bCastShadows;
-			m_shadowStrength = light->ShadowStrength;
-			m_shadowBias = light->ShadowBias;
-			m_shadowNormalBias = light->ShadowNormalBias;
-			m_shadowDistance = light->ShadowDistance;
+			const std::uint64_t lhsID = scene.GetEntityID(lhs);
+			const std::uint64_t rhsID = scene.GetEntityID(rhs);
+			if (lhsID == activeID && rhsID != activeID) return true;
+			if (rhsID == activeID && lhsID != activeID) return false;
+			return lhsID < rhsID;
+		});
+
+	for (const entt::entity lightEntity : lightEntities)
+	{
+		const auto& light = lightView.get<enignE::Scene::LightComponent>(lightEntity);
+		if (!light.bEnabled || m_sceneLights.Count >= enignE::Graphics::SceneLightData::MaxLights)
+			continue;
+		const auto& transform = lightView.get<enignE::Scene::TransformComponent>(lightEntity);
+		const XMMATRIX world = transform.GetWorldMatrix();
+		XMVECTOR scale{};
+		XMVECTOR rotation = XMQuaternionIdentity();
+		XMVECTOR translation = world.r[3];
+		XMMatrixDecompose(&scale, &rotation, &translation, world);
+		XMFLOAT3 direction{};
+		XMFLOAT3 position{};
+		XMStoreFloat3(
+			&direction,
+			XMVector3Normalize(XMVector3TransformNormal(
+				XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f),
+				XMMatrixRotationQuaternion(rotation))));
+		XMStoreFloat3(&position, translation);
+
+		const std::uint16_t index = m_sceneLights.Count++;
+		const float range = std::max(light.Range, 0.0001f);
+		const float spotCosine = std::cos(
+			XMConvertToRadians(std::clamp(light.SpotAngle, 1.0f, 179.0f) * 0.5f));
+		m_sceneLights.Directions[index] = {
+			direction.x, direction.y, direction.z, light.Intensity};
+		m_sceneLights.Colors[index] = {light.Color.x, light.Color.y, light.Color.z, 0.0f};
+		m_sceneLights.Positions[index] = {position.x, position.y, position.z, range};
+		m_sceneLights.Parameters[index] = {
+			static_cast<float>(light.LightType), spotCosine, 0.0f, 0.0f};
+
+		if (scene.GetEntityID(lightEntity) == settings.ActiveLightEntityID)
+		{
+			m_sceneLights.ShadowLightIndex = index;
+			m_lightDir = direction;
+			m_lightPosition = position;
+			m_lightColor = light.Color;
+			m_lightIntensity = light.Intensity;
+			m_lightRange = range;
+			m_lightType = static_cast<float>(light.LightType);
+			m_lightSpotCosine = spotCosine;
+			m_lightCastsShadows = light.bCastShadows;
+			m_shadowStrength = light.ShadowStrength;
+			m_shadowBias = light.ShadowBias;
+			m_shadowNormalBias = light.ShadowNormalBias;
+			m_shadowDistance = light.ShadowDistance;
 		}
+	}
+
+	// Keep the programmatic fallback for scenes that predate light entities.
+	if (lightEntities.empty())
+	{
+		m_lightCastsShadows = true;
+		m_sceneLights.Count = 1;
+		m_sceneLights.ShadowLightIndex = 0;
+		m_sceneLights.Directions[0] = {
+			m_fallbackLightDir.x, m_fallbackLightDir.y, m_fallbackLightDir.z,
+			m_fallbackLightIntensity};
+		m_sceneLights.Colors[0] = {
+			m_fallbackLightColor.x, m_fallbackLightColor.y, m_fallbackLightColor.z, 0.0f};
+		m_sceneLights.Positions[0] = {0.0f, 0.0f, 0.0f, 100.0f};
+		m_sceneLights.Parameters[0] = {0.0f, 0.0f, 0.0f, 0.0f};
 	}
 }
 
@@ -942,11 +1004,6 @@ void Engine::RenderWorld(
 	bgfx::setViewTransform(viewId, &view, &projection);
 	bgfx::touch(viewId);
 
-	const float lightDirIntensity[4] = {m_lightDir.x, m_lightDir.y, m_lightDir.z, m_lightIntensity};
-	const float lightPositionRange[4] = {
-		m_lightPosition.x, m_lightPosition.y, m_lightPosition.z, m_lightRange
-	};
-	const float lightTypeSpot[4] = {m_lightType, m_lightSpotCosine, 0.0f, 0.0f};
 	const float debugView[4] = {
 		drawDebug && m_rendererDebugSettings.ShowNormals ? 1.0f : 0.0f,
 		0.0f,
@@ -978,18 +1035,17 @@ void Engine::RenderWorld(
 		m_albedoSampler,
 		m_metallicRoughnessSampler,
 		m_normalSampler,
-		m_lightDirIntensityUniform,
-		m_lightColorMaterialUniform,
-		m_lightPositionRangeUniform,
-		m_lightTypeSpotUniform,
+		m_lightDirectionsUniform,
+		m_lightColorsUniform,
+		m_lightPositionsUniform,
+		m_lightParametersUniform,
+		m_lightMetaUniform,
+		m_materialModeUniform,
 		m_materialSurfaceUniform,
 		m_materialEmissiveUniform,
 		shadowBindings,
 		m_defaultAlbedoTexture->GetHandle(),
-		lightDirIntensity,
-		lightPositionRange,
-		lightTypeSpot,
-		m_lightColor);
+		m_sceneLights);
 	if (drawDebug)
 	{
 		m_instanceRenderer.DrawDebug(viewId, ActiveScene().GetRegistry(), m_rendererDebugSettings);

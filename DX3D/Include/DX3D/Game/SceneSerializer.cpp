@@ -48,7 +48,7 @@ namespace
 		'E'
 	};
 
-	constexpr dx3d::ui32 sceneVersion = 11;
+	constexpr dx3d::ui32 sceneVersion = 12;
 	constexpr dx3d::ui32 oldestSupportedSceneVersion = 1;
 	constexpr dx3d::ui32 maximumObjectCount = 100000;
 	constexpr dx3d::ui32 maximumStringLength = 1024 * 1024;
@@ -100,6 +100,9 @@ namespace
 		dx3d::f32 ambientStrength{ 0.20f };
 		dx3d::f32 shadowArea{ 30.0f };
 		bool castShadows{ true };
+		dx3d::LightType lightType{ dx3d::LightType::Directional };
+		dx3d::f32 lightRange{ 10.0f };
+		dx3d::f32 spotAngle{ 45.0f };
 		bool hasMaterial{};
 		dx3d::MaterialMode materialMode{ dx3d::MaterialMode::LitTint };
 		dx3d::Vec4 materialAlbedo{ 1.0f, 1.0f, 1.0f, 1.0f };
@@ -742,6 +745,7 @@ namespace
 				light->getCastShadows()
 				? 1u
 				: 0u;
+			const dx3d::ui32 lightType = static_cast<dx3d::ui32>(light->getLightType());
 
 			return
 				writeVec3(
@@ -764,7 +768,10 @@ namespace
 				writeValue(
 					stream,
 					castShadows
-				);
+				) &&
+				writeValue(stream, lightType) &&
+				writeValue(stream, light->getRange()) &&
+				writeValue(stream, light->getSpotAngle());
 		}
 		}
 
@@ -1037,6 +1044,17 @@ namespace
 
 			object.castShadows =
 				castShadows != 0;
+			if (storedVersion >= 12)
+			{
+				dx3d::ui32 lightType = 0;
+				if (!readValue(stream, lightType) || lightType > 2u ||
+					!readValue(stream, object.lightRange) ||
+					!readValue(stream, object.spotAngle))
+				{
+					return false;
+				}
+				object.lightType = static_cast<dx3d::LightType>(lightType);
+			}
 
 			return true;
 		}
@@ -1136,6 +1154,10 @@ namespace
 			light->setCastShadows(
 				data.castShadows
 			);
+
+			light->setLightType(data.lightType);
+			light->setRange(data.lightRange);
+			light->setSpotAngle(data.spotAngle);
 
 			break;
 		}

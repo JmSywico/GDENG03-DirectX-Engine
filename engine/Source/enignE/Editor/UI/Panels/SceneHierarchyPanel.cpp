@@ -119,52 +119,18 @@ namespace
 					0,
 					id));
 		}
-		if (ImGui::BeginMenu("Light"))
+		if (ImGui::MenuItem("Light"))
 		{
-			if (ImGui::MenuItem("Directional Light"))
-			{
-				const std::uint64_t id = createEntity(std::make_unique<enignE::Editor::CreateEntityCommand>(
+			const std::uint64_t id = createEntity(std::make_unique<enignE::Editor::CreateEntityCommand>(
+				scene,
+				"Light",
+				enignE::Scene::LightComponent{},
+				parentID));
+			if (scene.GetSettings().ActiveLightEntityID == 0)
+				context.Commands->Execute(std::make_unique<enignE::Editor::SetActiveLightCommand>(
 					scene,
-					"Directional Light",
-					enignE::Scene::LightComponent{},
-					parentID));
-				if (scene.GetSettings().ActiveLightEntityID == 0)
-					context.Commands->Execute(std::make_unique<enignE::Editor::SetActiveLightCommand>(
-						scene,
-						0,
-						id));
-			}
-			if (ImGui::MenuItem("Point Light"))
-			{
-				enignE::Scene::LightComponent light;
-				light.LightType = enignE::Scene::LightComponent::Type::Point;
-				const std::uint64_t id = createEntity(std::make_unique<enignE::Editor::CreateEntityCommand>(
-					scene,
-					"Point Light",
-					light,
-					parentID));
-				if (scene.GetSettings().ActiveLightEntityID == 0)
-					context.Commands->Execute(std::make_unique<enignE::Editor::SetActiveLightCommand>(
-						scene,
-						0,
-						id));
-			}
-			if (ImGui::MenuItem("Spot Light"))
-			{
-				enignE::Scene::LightComponent light;
-				light.LightType = enignE::Scene::LightComponent::Type::Spot;
-				const std::uint64_t id = createEntity(std::make_unique<enignE::Editor::CreateEntityCommand>(
-					scene,
-					"Spot Light",
-					light,
-					parentID));
-				if (scene.GetSettings().ActiveLightEntityID == 0)
-					context.Commands->Execute(std::make_unique<enignE::Editor::SetActiveLightCommand>(
-						scene,
-						0,
-						id));
-			}
-			ImGui::EndMenu();
+					0,
+					id));
 		}
 		if (ImGui::BeginMenu("3D Object", context.CreatePrimitiveModel != nullptr))
 		{
