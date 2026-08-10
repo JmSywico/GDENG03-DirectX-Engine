@@ -521,6 +521,9 @@ dx3d::Game::getObjectMeshData(
 
 bool dx3d::Game::canMergeSelectedObjects() const noexcept
 {
+	if (m_editorMode != EditorMode::Editing)
+		return false;
+
 	if (m_selectedObjects.size() < 2)
 		return false;
 
@@ -541,6 +544,9 @@ bool dx3d::Game::canMergeSelectedObjects() const noexcept
 
 void dx3d::Game::mergeSelectedObjects()
 {
+	if (m_editorMode != EditorMode::Editing)
+		return;
+
 	if (!canMergeSelectedObjects())
 		return;
 
@@ -800,7 +806,7 @@ void dx3d::Game::copySelectedObject()
 
 void dx3d::Game::pasteCopiedObject()
 {
-	if (!m_objectClipboard.isValid)
+	if (m_editorMode != EditorMode::Editing || !m_objectClipboard.isValid)
 		return;
 
 	pushUndoSnapshot();
@@ -935,6 +941,9 @@ void dx3d::Game::pasteCopiedObject()
 
 void dx3d::Game::duplicateSelectedObject()
 {
+	if (m_editorMode != EditorMode::Editing)
+		return;
+
 	if (!canCopySelectedObject())
 		return;
 
@@ -1294,6 +1303,9 @@ void dx3d::Game::handleViewportPicking(
 
 void dx3d::Game::createNewScene()
 {
+	if (m_editorMode != EditorMode::Editing)
+		return;
+
 	pushUndoSnapshot();
 
 	SceneSerializer::clear(
@@ -1377,6 +1389,9 @@ dx3d::GameObject* dx3d::Game::importObjAsset(const std::string& assetPath, const
 
 void dx3d::Game::drawObjectCreationMenu(const Vec3& position)
 {
+	if (m_editorMode != EditorMode::Editing)
+		return;
+
 	if (ImGui::MenuItem("Empty object"))
 	{
 		pushUndoSnapshot();
@@ -2239,6 +2254,7 @@ void dx3d::Game::onInternalUpdate()
 			}
 
 			const bool canDeleteSelected =
+				m_editorMode == EditorMode::Editing &&
 				m_selectedObject != nullptr &&
 				m_selectedObject->getComponent<
 				CameraComponent>() == nullptr;
@@ -2291,11 +2307,14 @@ void dx3d::Game::onInternalUpdate()
 			ImGui::Separator();
 			if (ImGui::MenuItem("Copy", "Ctrl+C", false, canCopySelectedObject()))
 				copySelectedObject();
-			if (ImGui::MenuItem("Paste", "Ctrl+V", false, m_objectClipboard.isValid))
+			if (ImGui::MenuItem("Paste", "Ctrl+V", false,
+				m_editorMode == EditorMode::Editing && m_objectClipboard.isValid))
 				pasteCopiedObject();
-			if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, canCopySelectedObject()))
+			if (ImGui::MenuItem("Duplicate", "Ctrl+D", false,
+				m_editorMode == EditorMode::Editing && canCopySelectedObject()))
 				duplicateSelectedObject();
-			const bool canDelete = m_selectedObject && !isEditorCamera(m_selectedObject);
+			const bool canDelete = m_editorMode == EditorMode::Editing &&
+				m_selectedObject && !isEditorCamera(m_selectedObject);
 			if (ImGui::MenuItem("Delete Selected", "Del", false, canDelete))
 			{
 				pushUndoSnapshot();
@@ -2826,7 +2845,8 @@ void dx3d::Game::onInternalUpdate()
 		pushUndoSnapshot();
 	}
 
-	if (sceneViewportVisible && viewportOverlaysAllowed)
+	if (sceneViewportVisible && viewportOverlaysAllowed &&
+		m_editorMode == EditorMode::Editing)
 	{
 		m_transformGizmo.draw(
 			m_selectedObject,
@@ -3380,13 +3400,29 @@ void dx3d::Game::onInternalUpdate()
 			float nearPlane = camera->getNearPlane();
 			float farPlane = camera->getFarPlane();
 			bool primary = camera->isPrimary();
-			if (m_selectedObject->getName() != "Editor Camera" && ImGui::Checkbox("Primary", &primary))
-				camera->setPrimary(primary);
-			if (ImGui::DragFloat("Field of View", &fieldOfView, 0.01f, 0.1f, 3.0f))
+			if (m_selectedObject->getName() != "Editor Camera")
+			{
+				const bool primaryChanged = ImGui::Checkbox("Primary", &primary);
+				if (primaryChanged)
+				{
+					pushUndoSnapshot(inspectorSnapshot);
+					camera->setPrimary(primary);
+				}
+			}
+			const bool fieldOfViewChanged = ImGui::DragFloat(
+				"Field of View", &fieldOfView, 0.01f, 0.1f, 3.0f);
+			if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+			if (fieldOfViewChanged)
 				camera->setFieldOfView(fieldOfView);
-			if (ImGui::DragFloat("Near Plane", &nearPlane, 0.01f, 0.001f, farPlane - 0.01f))
+			const bool nearPlaneChanged = ImGui::DragFloat(
+				"Near Plane", &nearPlane, 0.01f, 0.001f, farPlane - 0.01f);
+			if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+			if (nearPlaneChanged)
 				camera->setNearPlane(nearPlane);
-			if (ImGui::DragFloat("Far Plane", &farPlane, 0.5f, nearPlane + 0.01f, 10000.0f))
+			const bool farPlaneChanged = ImGui::DragFloat(
+				"Far Plane", &farPlane, 0.5f, nearPlane + 0.01f, 10000.0f);
+			if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+			if (farPlaneChanged)
 				camera->setFarPlane(farPlane);
 			const Rect cameraViewport = camera->getViewportSize();
 			ImGui::TextDisabled(
@@ -3556,17 +3592,27 @@ void dx3d::Game::onInternalUpdate()
 				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
 				if (restitutionChanged) rigidBody->setRestitution(restitution);
 				float linearDamping = rigidBody->getLinearDamping();
-				if (ImGui::DragFloat("Linear Damping", &linearDamping, 0.01f, 0.0f, 10.0f))
+				const bool linearDampingChanged = ImGui::DragFloat(
+					"Linear Damping", &linearDamping, 0.01f, 0.0f, 10.0f);
+				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+				if (linearDampingChanged)
 					rigidBody->setLinearDamping(linearDamping);
 				float angularDamping = rigidBody->getAngularDamping();
-				if (ImGui::DragFloat("Angular Damping", &angularDamping, 0.01f, 0.0f, 10.0f))
+				const bool angularDampingChanged = ImGui::DragFloat(
+					"Angular Damping", &angularDamping, 0.01f, 0.0f, 10.0f);
+				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+				if (angularDampingChanged)
 					rigidBody->setAngularDamping(angularDamping);
 				float gravityFactor = rigidBody->getGravityFactor();
 				const bool gravityChanged = ImGui::DragFloat("Gravity Factor", &gravityFactor, 0.01f, -10.0f, 10.0f);
 				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
 				if (gravityChanged) rigidBody->setGravityFactor(gravityFactor);
 				bool enabled = rigidBody->isEnabled();
-				if (ImGui::Checkbox("Enabled", &enabled)) rigidBody->setEnabled(enabled);
+				if (ImGui::Checkbox("Enabled", &enabled))
+				{
+					pushUndoSnapshot(inspectorSnapshot);
+					rigidBody->setEnabled(enabled);
+				}
 			}
 
 			if (collider)
@@ -3661,15 +3707,31 @@ void dx3d::Game::onInternalUpdate()
 			if (fly)
 			{
 				float moveSpeed = fly->getMoveSpeed();
-				if (ImGui::DragFloat("Move Speed", &moveSpeed, 0.1f, 0.0f, 1000.0f)) fly->setMoveSpeed(moveSpeed);
+				const bool moveSpeedChanged = ImGui::DragFloat(
+					"Move Speed", &moveSpeed, 0.1f, 0.0f, 1000.0f);
+				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+				if (moveSpeedChanged) fly->setMoveSpeed(moveSpeed);
 				float sensitivity = fly->getLookSensitivity();
-				if (ImGui::DragFloat("Look Sensitivity", &sensitivity, 0.0001f, 0.0f, 1.0f, "%.4f")) fly->setLookSensitivity(sensitivity);
+				const bool sensitivityChanged = ImGui::DragFloat(
+					"Look Sensitivity", &sensitivity, 0.0001f, 0.0f, 1.0f, "%.4f");
+				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+				if (sensitivityChanged) fly->setLookSensitivity(sensitivity);
 				float boost = fly->getBoostMultiplier();
-				if (ImGui::DragFloat("Boost Multiplier", &boost, 0.1f, 1.0f, 100.0f)) fly->setBoostMultiplier(boost);
+				const bool boostChanged = ImGui::DragFloat(
+					"Boost Multiplier", &boost, 0.1f, 1.0f, 100.0f);
+				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+				if (boostChanged) fly->setBoostMultiplier(boost);
 				float pitchLimit = fly->getPitchLimitDegrees();
-				if (ImGui::SliderFloat("Pitch Limit", &pitchLimit, 1.0f, 90.0f, "%.1f deg")) fly->setPitchLimitDegrees(pitchLimit);
+				const bool pitchLimitChanged = ImGui::SliderFloat(
+					"Pitch Limit", &pitchLimit, 1.0f, 90.0f, "%.1f deg");
+				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+				if (pitchLimitChanged) fly->setPitchLimitDegrees(pitchLimit);
 				bool enabled = fly->isEnabled();
-				if (ImGui::Checkbox("Enabled##FlyController", &enabled)) fly->setEnabled(enabled);
+				if (ImGui::Checkbox("Enabled##FlyController", &enabled))
+				{
+					pushUndoSnapshot(inspectorSnapshot);
+					fly->setEnabled(enabled);
+				}
 			}
 		}
 
@@ -3739,19 +3801,19 @@ void dx3d::Game::onInternalUpdate()
 			if (directionalLight->getLightType() != LightType::Directional)
 			{
 				float range = directionalLight->getRange();
-				if (ImGui::DragFloat("Range", &range, 0.1f, 0.1f, 10000.0f))
-				{
-					if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+				const bool rangeChanged = ImGui::DragFloat(
+					"Range", &range, 0.1f, 0.1f, 10000.0f);
+				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+				if (rangeChanged)
 					directionalLight->setRange(range);
-				}
 				if (directionalLight->getLightType() == LightType::Spot)
 				{
 					float angle = directionalLight->getSpotAngle();
-					if (ImGui::SliderFloat("Spot Angle", &angle, 1.0f, 179.0f, "%.1f deg"))
-					{
-						if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+					const bool angleChanged = ImGui::SliderFloat(
+						"Spot Angle", &angle, 1.0f, 179.0f, "%.1f deg");
+					if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
+					if (angleChanged)
 						directionalLight->setSpotAngle(angle);
-					}
 				}
 			}
 
@@ -4197,7 +4259,8 @@ void dx3d::Game::onInternalUpdate()
 	const bool typingText =
 		ImGui::GetIO().WantTextInput;
 
-	if (!m_gameInputCaptured && deletePressed &&
+	if (m_editorMode == EditorMode::Editing &&
+		!m_gameInputCaptured && deletePressed &&
 		!m_transformGizmo.isUsing() &&
 		!editingInspectorValue &&
 		!typingText &&

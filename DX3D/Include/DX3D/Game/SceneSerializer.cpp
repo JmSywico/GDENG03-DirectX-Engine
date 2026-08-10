@@ -54,6 +54,81 @@ namespace
 	constexpr dx3d::ui32 maximumStringLength = 1024 * 1024;
 	constexpr dx3d::ui32 maximumVertexCount = 10000000;
 	constexpr dx3d::ui32 maximumIndexCount = 30000000;
+	constexpr char jsonSceneFormat[] = "jnpf.scene";
+	constexpr char jsonPayloadEncoding[] = "hex";
+
+	std::string encodeHex(const std::string& bytes)
+	{
+		constexpr char digits[] = "0123456789abcdef";
+		std::string encoded{};
+		encoded.resize(bytes.size() * 2);
+		for (size_t index = 0; index < bytes.size(); ++index)
+		{
+			const auto value = static_cast<unsigned char>(bytes[index]);
+			encoded[index * 2] = digits[value >> 4];
+			encoded[index * 2 + 1] = digits[value & 0x0f];
+		}
+		return encoded;
+	}
+
+	bool decodeHex(const std::string& encoded, std::string& bytes)
+	{
+		if ((encoded.size() & 1u) != 0u)
+			return false;
+
+		auto valueOf = [](char value) -> int
+		{
+			if (value >= '0' && value <= '9') return value - '0';
+			if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+			if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+			return -1;
+		};
+
+		bytes.resize(encoded.size() / 2);
+		for (size_t index = 0; index < bytes.size(); ++index)
+		{
+			const int high = valueOf(encoded[index * 2]);
+			const int low = valueOf(encoded[index * 2 + 1]);
+			if (high < 0 || low < 0)
+			{
+				bytes.clear();
+				return false;
+			}
+			bytes[index] = static_cast<char>((high << 4) | low);
+		}
+		return true;
+	}
+
+	bool readJsonStringField(
+		const std::string& document,
+		const std::string& key,
+		std::string& value)
+	{
+		const std::string marker = "\"" + key + "\"";
+		const size_t keyPosition = document.find(marker);
+		if (keyPosition == std::string::npos) return false;
+		const size_t colon = document.find(':', keyPosition + marker.size());
+		if (colon == std::string::npos) return false;
+		const size_t openingQuote = document.find('"', colon + 1);
+		if (openingQuote == std::string::npos) return false;
+		const size_t closingQuote = document.find('"', openingQuote + 1);
+		if (closingQuote == std::string::npos) return false;
+		value = document.substr(openingQuote + 1, closingQuote - openingQuote - 1);
+		return true;
+	}
+
+	bool unwrapJsonScene(const std::string& document, std::string& binaryScene)
+	{
+		std::string format{};
+		std::string encoding{};
+		std::string payload{};
+		return readJsonStringField(document, "format", format) &&
+			format == jsonSceneFormat &&
+			readJsonStringField(document, "encoding", encoding) &&
+			encoding == jsonPayloadEncoding &&
+			readJsonStringField(document, "payload", payload) &&
+			decodeHex(payload, binaryScene);
+	}
 
 	enum class SceneObjectType : dx3d::ui32
 	{
@@ -1247,43 +1322,11 @@ bool dx3d::SceneSerializer::save(
 	const std::string& filePath
 )
 {
-	std::vector<
-		std::pair<
-		GameObject*,
-		SceneObjectType
-		>
-	> objectsToSave{};
-
-	for (auto* object :
-		world.getGameObjects())
-	{
-		SceneObjectType type{};
-
-		if (getObjectType(
-			object,
-			type
-		))
-		{
-			objectsToSave.push_back(
-				{
-					object,
-					type
-				}
-			);
-		}
-	}
-
-	if (
-		objectsToSave.size() >
-		maximumObjectCount
-		)
-	{
-		return false;
-	}
+	const std::string binaryScene = serialize(world);
+	if (binaryScene.empty()) return false;
 
 	std::ofstream stream(
 		filePath,
-		std::ios::binary |
 		std::ios::trunc
 	);
 
@@ -1292,49 +1335,16 @@ bool dx3d::SceneSerializer::save(
 		return false;
 	}
 
-	stream.write(
-		sceneMagic,
-		sizeof(sceneMagic)
-	);
 
-	if (!stream)
-	{
-		return false;
-	}
-
-	const auto objectCount =
-		static_cast<ui32>(
-			objectsToSave.size()
-			);
-
-	if (
-		!writeValue(
-			stream,
-			sceneVersion
-		) ||
-		!writeValue(
-			stream,
-			objectCount
-		)
-		)
-	{
-		return false;
-	}
-
-	for (const auto& [
-		object,
-		type
-	] : objectsToSave)
-	{
-		if (!writeSceneObject(
-			stream,
-			object,
-			type
-		))
-		{
-			return false;
-		}
-	}
+	// Scene files are valid, human-identifiable JSON. The versioned binary
+	// payload remains the single source of truth for undo/play snapshots and
+	// lets existing binary .dx3dscene files remain loadable.
+	stream << "{\n"
+		<< "  \"format\": \"" << jsonSceneFormat << "\",\n"
+		<< "  \"version\": 1,\n"
+		<< "  \"encoding\": \"" << jsonPayloadEncoding << "\",\n"
+		<< "  \"payload\": \"" << encodeHex(binaryScene) << "\"\n"
+		<< "}\n";
 
 	return static_cast<bool>(stream);
 }
@@ -1392,123 +1402,27 @@ dx3d::SceneSerializer::load(
 	const std::string& filePath
 )
 {
-	SceneLoadResult result{};
-
 	std::ifstream stream(
 		filePath,
 		std::ios::binary
 	);
 
-	if (!stream)
+	if (!stream) return {};
+
+	std::ostringstream contents{};
+	contents << stream.rdbuf();
+	if (!stream && !stream.eof()) return {};
+
+	std::string sceneData = contents.str();
+	if (sceneData.size() < sizeof(sceneMagic) ||
+		sceneData.compare(0, sizeof(sceneMagic), sceneMagic, sizeof(sceneMagic)) != 0)
 	{
-		return result;
+		std::string binaryScene{};
+		if (!unwrapJsonScene(sceneData, binaryScene)) return {};
+		sceneData = std::move(binaryScene);
 	}
 
-	char storedMagic[
-		sizeof(sceneMagic)
-	]{};
-
-		stream.read(
-			storedMagic,
-			sizeof(storedMagic)
-		);
-
-		if (!stream)
-		{
-			return result;
-		}
-
-		for (size_t index = 0;
-			index < sizeof(sceneMagic);
-			++index)
-		{
-			if (
-				storedMagic[index] !=
-				sceneMagic[index]
-				)
-			{
-				return result;
-			}
-		}
-
-		ui32 storedVersion = 0;
-		ui32 objectCount = 0;
-
-		if (
-			!readValue(
-				stream,
-				storedVersion
-			) ||
-			!readValue(
-				stream,
-				objectCount
-			)
-			)
-		{
-			return result;
-		}
-
-		if (
-			storedVersion < oldestSupportedSceneVersion ||
-			storedVersion > sceneVersion ||
-			objectCount > maximumObjectCount
-			)
-		{
-			return result;
-		}
-
-		std::vector<
-			SerializedSceneObject
-		> serializedObjects{};
-
-		serializedObjects.resize(
-			objectCount
-		);
-
-		for (auto& object :
-			serializedObjects)
-		{
-			if (!readSceneObject(
-				stream,
-				object,
-				storedVersion
-			))
-			{
-				return result;
-			}
-		}
-
-		clear(world);
-		world.update(0.0f);
-
-		std::unordered_map<ui64, GameObject*> loadedEntities{};
-
-		for (const auto& object :
-			serializedObjects)
-		{
-			auto* loaded = instantiateObject(
-				world,
-				object,
-				result
-			);
-			if (loaded && object.entityId != 0)
-				loadedEntities[object.entityId] = loaded;
-		}
-
-		for (const auto& object : serializedObjects)
-		{
-			if (object.entityId == 0 || object.parentEntityId == 0)
-				continue;
-
-			const auto child = loadedEntities.find(object.entityId);
-			const auto parent = loadedEntities.find(object.parentEntityId);
-			if (child != loadedEntities.end() && parent != loadedEntities.end())
-				world.setParent(child->second, parent->second);
-		}
-
-		result.success = true;
-
-		return result;
+	return deserialize(world, sceneData);
 }
 
 dx3d::SceneLoadResult

@@ -3,10 +3,7 @@
 #include <DX3D/Game/Component.h>
 #include <DX3D/Component/TransformComponent.h>
 #include <DX3D/Component/RotatorComponent.h>
-#include <DX3D/Component/FlyControllerComponent.h>
-#include <DX3D/Input/InputSystem.h>
 #include <algorithm>
-#include <cmath>
 
 dx3d::World::World(const WorldDesc& desc) : Base(desc.base), m_gameContext(desc.gameContext)
 {
@@ -71,39 +68,6 @@ void dx3d::World::fixedUpdate(f32 fixedDeltaTime)
 			transform.getRotation() + rotator.getAngularVelocity() * fixedDeltaTime);
 	}
 
-	auto controllers = m_registry.view<FlyControllerComponent>();
-	for (auto entity : controllers)
-	{
-		auto& controller = controllers.get<FlyControllerComponent>(entity);
-		if (!controller.isEnabled() ||
-			!controller.getGameObject().isActiveInHierarchy()) continue;
-		auto& transform = controller.getGameObject().getTransform();
-		auto rotation = transform.getRotation();
-		if (m_gameContext.input.isKeyDown(KeyCode::MouseRight))
-		{
-			const auto mouse = m_gameContext.input.getMouseDelta();
-			rotation.x += mouse.y * controller.getLookSensitivity();
-			rotation.y += mouse.x * controller.getLookSensitivity();
-			const f32 limit = controller.getPitchLimitDegrees() * 0.01745329252f;
-			rotation.x = std::clamp(rotation.x, -limit, limit);
-			transform.setRotation(rotation);
-		}
-		Vec3 direction{};
-		if (m_gameContext.input.isKeyDown(KeyCode::W)) direction = direction + transform.forward();
-		if (m_gameContext.input.isKeyDown(KeyCode::S)) direction = direction + transform.forward() * -1.0f;
-		if (m_gameContext.input.isKeyDown(KeyCode::D)) direction = direction + transform.right();
-		if (m_gameContext.input.isKeyDown(KeyCode::A)) direction = direction + transform.right() * -1.0f;
-		if (m_gameContext.input.isKeyDown(KeyCode::E)) direction = direction + transform.up();
-		if (m_gameContext.input.isKeyDown(KeyCode::Q)) direction = direction + transform.up() * -1.0f;
-		const f32 lengthSquared = direction.x * direction.x + direction.y * direction.y + direction.z * direction.z;
-		if (lengthSquared > 0.000001f)
-		{
-			const f32 boost = m_gameContext.input.isKeyDown(KeyCode::Shift)
-				? controller.getBoostMultiplier() : 1.0f;
-			transform.setPosition(transform.getPosition()
-				+ Vec3::normalize(direction) * controller.getMoveSpeed() * boost * fixedDeltaTime);
-		}
-	}
 }
 
 dx3d::GameObject* dx3d::World::createGameObjectInternal(
