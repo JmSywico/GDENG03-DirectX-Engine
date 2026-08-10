@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "name": "enignE",
-  "assets": "assets",
-  "startupScene": "scenes/instance-stress.escene",
-  "inputActions": "config/input-actions.json",
-  "cache": ".enigne/cache",
-  "output": "build"
-}

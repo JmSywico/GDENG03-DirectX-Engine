@@ -1,6 +1,6 @@
-# Editor and runtime guide
+# jnpf. editor and runtime guide
 
-The `enignE` executable opens directly into an editor workbench. Editing and simulation happen in one process, but Play Mode reconstructs a private runtime copy and restores the authored scene when stopped.
+The `jnpf` executable opens directly into an editor workbench. Editing and simulation happen in one process, but Play Mode reconstructs a private runtime copy and restores the authored scene when stopped.
 
 ## Workbench layout
 

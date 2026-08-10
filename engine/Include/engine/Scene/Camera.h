@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-namespace enignE::Scene
+namespace jnpf::Scene
 {
 	class Camera
 	{

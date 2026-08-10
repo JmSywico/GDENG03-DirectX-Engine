@@ -68,7 +68,7 @@ namespace
 		DirectX::XMFLOAT4X4 world{};
 		DirectX::XMStoreFloat4x4(
 			&world,
-			registry.get<enignE::Scene::TransformComponent>(entity).GetWorldMatrix());
+			registry.get<jnpf::Scene::TransformComponent>(entity).GetWorldMatrix());
 		return {world._41, world._42, world._43};
 	}
 
@@ -88,60 +88,60 @@ namespace
 	}
 
 	entt::entity CreateSpatialEntity(
-		enignE::Scene::Scene& scene,
+		jnpf::Scene::Scene& scene,
 		const char* name,
 		const DirectX::XMFLOAT3& position = {0.0f, 0.0f, 0.0f})
 	{
 		const entt::entity entity = scene.CreateEntity(name);
-		auto& transform = scene.AddComponent<enignE::Scene::TransformComponent>(entity);
+		auto& transform = scene.AddComponent<jnpf::Scene::TransformComponent>(entity);
 		transform.SetLocalPosition(position);
-		scene.AddComponent<enignE::Scene::HierarchyComponent>(entity);
+		scene.AddComponent<jnpf::Scene::HierarchyComponent>(entity);
 		return entity;
 	}
 
 	void TestHierarchy(TestContext& context)
 	{
-		enignE::Scene::Scene scene("Hierarchy");
+		jnpf::Scene::Scene scene("Hierarchy");
 		auto& registry = scene.GetRegistry();
 		const entt::entity parentA = CreateSpatialEntity(scene, "ParentA");
 		const entt::entity parentB = CreateSpatialEntity(scene, "ParentB");
 		const entt::entity childA = CreateSpatialEntity(scene, "ChildA");
 		const entt::entity childB = CreateSpatialEntity(scene, "ChildB");
 
-		enignE::ECS::HierarchySystem::SetParent(registry, childA, parentA);
-		enignE::ECS::HierarchySystem::SetParent(registry, childB, parentA);
+		jnpf::ECS::HierarchySystem::SetParent(registry, childA, parentA);
+		jnpf::ECS::HierarchySystem::SetParent(registry, childB, parentA);
 
-		const auto children = enignE::ECS::HierarchySystem::GetChildren(registry, parentA);
+		const auto children = jnpf::ECS::HierarchySystem::GetChildren(registry, parentA);
 		context.Expect(children.size() == 2, "parent tracks both direct children");
 		context.Expect(
-			enignE::ECS::HierarchySystem::GetParent(registry, childA) == parentA,
+			jnpf::ECS::HierarchySystem::GetParent(registry, childA) == parentA,
 			"child reports its parent");
 		context.Expect(
-			registry.get<enignE::Scene::HierarchyComponent>(parentA).ChildCount == 2,
+			registry.get<jnpf::Scene::HierarchyComponent>(parentA).ChildCount == 2,
 			"parent child count matches sibling list");
 
-		enignE::ECS::HierarchySystem::SetParent(registry, childA, parentB);
+		jnpf::ECS::HierarchySystem::SetParent(registry, childA, parentB);
 		context.Expect(
-			enignE::ECS::HierarchySystem::GetChildren(registry, parentA).size() == 1,
+			jnpf::ECS::HierarchySystem::GetChildren(registry, parentA).size() == 1,
 			"reparent detaches from the previous parent");
 		context.Expect(
-			enignE::ECS::HierarchySystem::GetChildren(registry, parentB) == std::vector{childA},
+			jnpf::ECS::HierarchySystem::GetChildren(registry, parentB) == std::vector{childA},
 			"reparent attaches to the new parent");
 
-		enignE::ECS::HierarchySystem::SetParent(registry, parentB, childA);
+		jnpf::ECS::HierarchySystem::SetParent(registry, parentB, childA);
 		context.Expect(
-			enignE::ECS::HierarchySystem::GetParent(registry, parentB) == entt::null,
+			jnpf::ECS::HierarchySystem::GetParent(registry, parentB) == entt::null,
 			"cycle-producing reparent is rejected");
 
 		scene.SetLocalPosition(parentA, {10.0f, 0.0f, 0.0f});
 		scene.SetLocalPosition(parentB, {-5.0f, 0.0f, 0.0f});
 		scene.SetLocalPosition(childA, {2.0f, 0.0f, 0.0f});
-		enignE::ECS::TransformPropagationSystem transformSystem;
+		jnpf::ECS::TransformPropagationSystem transformSystem;
 		transformSystem.Update(registry, 0.0f);
 		const DirectX::XMFLOAT3 worldBefore = WorldPosition(registry, childA);
 
-		enignE::Editor::CommandStack commands;
-		commands.Execute(std::make_unique<enignE::Editor::SetParentCommand>(
+		jnpf::Editor::CommandStack commands;
+		commands.Execute(std::make_unique<jnpf::Editor::SetParentCommand>(
 			scene,
 			scene.GetEntityID(childA),
 			scene.GetEntityID(parentB),
@@ -159,7 +159,7 @@ namespace
 		context.Expect(
 			scene.GetParent(childA) == parentB
 				&& NearlyEqual(
-					scene.GetComponent<enignE::Scene::TransformComponent>(childA)
+					scene.GetComponent<jnpf::Scene::TransformComponent>(childA)
 						->GetLocalPosition().x,
 					2.0f),
 			"hierarchy command undo restores the original parent and local transform");
@@ -176,20 +176,20 @@ namespace
 
 	void TestTransforms(TestContext& context)
 	{
-		enignE::Scene::Scene scene("Transforms");
+		jnpf::Scene::Scene scene("Transforms");
 		auto& registry = scene.GetRegistry();
 		const entt::entity parent = CreateSpatialEntity(scene, "Parent", {5.0f, 0.0f, 0.0f});
 		const entt::entity child = CreateSpatialEntity(scene, "Child", {1.0f, 2.0f, 0.0f});
 		const entt::entity grandchild = CreateSpatialEntity(scene, "Grandchild", {0.0f, 0.0f, 3.0f});
 
-		enignE::ECS::HierarchySystem::SetParent(registry, child, parent);
-		enignE::ECS::HierarchySystem::SetParent(registry, grandchild, child);
+		jnpf::ECS::HierarchySystem::SetParent(registry, child, parent);
+		jnpf::ECS::HierarchySystem::SetParent(registry, grandchild, child);
 
-		enignE::ECS::TransformPropagationSystem system;
+		jnpf::ECS::TransformPropagationSystem system;
 		system.Update(registry, 0.0f);
 		ExpectPosition(context, registry, grandchild, {6.0f, 2.0f, 3.0f}, "initial world transform propagates");
 
-		registry.get<enignE::Scene::TransformComponent>(parent)
+		registry.get<jnpf::Scene::TransformComponent>(parent)
 			.SetLocalPosition({10.0f, 0.0f, 0.0f});
 		system.Update(registry, 0.0f);
 		ExpectPosition(
@@ -218,10 +218,10 @@ namespace
 		DirectX::XMStoreFloat4(&zQuaternion, zRotation);
 		scene.SetLocalRotationQuaternion(rotated, xQuaternion, {0.25f, DirectX::XM_PIDIV2, 0.0f});
 		const DirectX::XMMATRIX xMatrix =
-			scene.GetComponent<enignE::Scene::TransformComponent>(rotated)->GetLocalMatrix();
+			scene.GetComponent<jnpf::Scene::TransformComponent>(rotated)->GetLocalMatrix();
 		scene.SetLocalRotationQuaternion(rotated, zQuaternion, {0.0f, DirectX::XM_PIDIV2, 0.25f});
 		const DirectX::XMMATRIX zMatrix =
-			scene.GetComponent<enignE::Scene::TransformComponent>(rotated)->GetLocalMatrix();
+			scene.GetComponent<jnpf::Scene::TransformComponent>(rotated)->GetLocalMatrix();
 		DirectX::XMFLOAT4X4 xStored{};
 		DirectX::XMFLOAT4X4 zStored{};
 		DirectX::XMStoreFloat4x4(&xStored, xMatrix);
@@ -233,11 +233,11 @@ namespace
 			"quaternion rotations keep local X and Z independent at the Euler singularity");
 
 		const DirectX::XMFLOAT4 quaternionBeforePositionEdit =
-			scene.GetComponent<enignE::Scene::TransformComponent>(rotated)
+			scene.GetComponent<jnpf::Scene::TransformComponent>(rotated)
 				->GetLocalRotationQuaternion();
 		scene.SetLocalPosition(rotated, {2.0f, 3.0f, 4.0f});
 		const DirectX::XMFLOAT4 quaternionAfterPositionEdit =
-			scene.GetComponent<enignE::Scene::TransformComponent>(rotated)
+			scene.GetComponent<jnpf::Scene::TransformComponent>(rotated)
 				->GetLocalRotationQuaternion();
 		context.Expect(
 			NearlyEqual(quaternionBeforePositionEdit.x, quaternionAfterPositionEdit.x)
@@ -250,13 +250,13 @@ namespace
 	void TestDestruction(TestContext& context)
 	{
 		{
-			enignE::Scene::Scene scene("RecursiveDestruction");
+			jnpf::Scene::Scene scene("RecursiveDestruction");
 			auto& registry = scene.GetRegistry();
 			const entt::entity parent = CreateSpatialEntity(scene, "Parent");
 			const entt::entity child = CreateSpatialEntity(scene, "Child");
 			const entt::entity grandchild = CreateSpatialEntity(scene, "Grandchild");
-			enignE::ECS::HierarchySystem::SetParent(registry, child, parent);
-			enignE::ECS::HierarchySystem::SetParent(registry, grandchild, child);
+			jnpf::ECS::HierarchySystem::SetParent(registry, child, parent);
+			jnpf::ECS::HierarchySystem::SetParent(registry, grandchild, child);
 
 			context.Expect(scene.DestroyEntity(parent), "valid entity can be queued for destruction");
 			context.Expect(registry.valid(parent), "destruction remains deferred until flush");
@@ -265,64 +265,64 @@ namespace
 		}
 
 		{
-			enignE::Scene::Scene scene("NonRecursiveDestruction");
+			jnpf::Scene::Scene scene("NonRecursiveDestruction");
 			auto& registry = scene.GetRegistry();
 			const entt::entity parent = CreateSpatialEntity(scene, "Parent");
 			const entt::entity child = CreateSpatialEntity(scene, "Child");
-			enignE::ECS::HierarchySystem::SetParent(registry, child, parent);
+			jnpf::ECS::HierarchySystem::SetParent(registry, child, parent);
 
 			scene.DestroyEntityRecursive(parent, false);
 			scene.FlushDestroyQueue();
 			context.Expect(!registry.valid(parent), "non-recursive destruction removes the parent");
 			context.Expect(registry.valid(child), "non-recursive destruction preserves children");
 			context.Expect(
-				enignE::ECS::HierarchySystem::GetParent(registry, child) == entt::null,
+				jnpf::ECS::HierarchySystem::GetParent(registry, child) == entt::null,
 				"preserved children become roots");
 		}
 	}
 
 	void TestPrimitiveCaching(TestContext& context)
 	{
-		enignE::Scene::Scene scene("PrimitiveCaching");
+		jnpf::Scene::Scene scene("PrimitiveCaching");
 		int createCount = 0;
-		const enignE::Scene::PrimitiveModelFactory modelFactory =
+		const jnpf::Scene::PrimitiveModelFactory modelFactory =
 			[&createCount](const MeshData&)
 			{
 				++createCount;
 				return std::make_shared<Model>();
 			};
 
-		enignE::Scene::PrimitiveDesc cube;
+		jnpf::Scene::PrimitiveDesc cube;
 		cube.Name = "CubeA";
-		const entt::entity first = enignE::Scene::CreatePrimitive(scene, cube, modelFactory);
+		const entt::entity first = jnpf::Scene::CreatePrimitive(scene, cube, modelFactory);
 		cube.Name = "CubeB";
-		const entt::entity second = enignE::Scene::CreatePrimitive(scene, cube, modelFactory);
+		const entt::entity second = jnpf::Scene::CreatePrimitive(scene, cube, modelFactory);
 
 		const auto firstModel =
-			scene.GetRegistry().get<enignE::Scene::MeshRendererComponent>(first).ModelPtr;
+			scene.GetRegistry().get<jnpf::Scene::MeshRendererComponent>(first).ModelPtr;
 		const auto secondModel =
-			scene.GetRegistry().get<enignE::Scene::MeshRendererComponent>(second).ModelPtr;
+			scene.GetRegistry().get<jnpf::Scene::MeshRendererComponent>(second).ModelPtr;
 		context.Expect(createCount == 1, "identical primitive geometry is created once");
 		context.Expect(firstModel == secondModel, "identical primitives share the cached model");
 
 		cube.Name = "CubeC";
 		cube.Size = 2.0f;
-		const entt::entity third = enignE::Scene::CreatePrimitive(scene, cube, modelFactory);
+		const entt::entity third = jnpf::Scene::CreatePrimitive(scene, cube, modelFactory);
 		const auto thirdModel =
-			scene.GetRegistry().get<enignE::Scene::MeshRendererComponent>(third).ModelPtr;
+			scene.GetRegistry().get<jnpf::Scene::MeshRendererComponent>(third).ModelPtr;
 		context.Expect(createCount == 2, "geometry-affecting descriptor changes miss the cache");
 		context.Expect(thirdModel != firstModel, "different primitive geometry gets a different model");
 
 		const std::filesystem::path path =
-			std::filesystem::temp_directory_path() / "enigne_primitive_cache.escene";
-		context.Expect(enignE::Scene::SceneSerializer::Save(scene, path),
+			std::filesystem::temp_directory_path() / "jnpf_primitive_cache.escene";
+		context.Expect(jnpf::Scene::SceneSerializer::Save(scene, path),
 			"primitive cache scene saves");
-		enignE::Scene::Scene loaded;
+		jnpf::Scene::Scene loaded;
 		int resolveCount = 0;
-		context.Expect(enignE::Scene::SceneSerializer::Load(
+		context.Expect(jnpf::Scene::SceneSerializer::Load(
 			loaded,
 			path,
-			[&resolveCount](const enignE::Scene::PrimitiveDesc&)
+			[&resolveCount](const jnpf::Scene::PrimitiveDesc&)
 			{
 				++resolveCount;
 				return std::make_shared<Model>();
@@ -331,9 +331,9 @@ namespace
 			{}), "primitive cache scene loads");
 		context.Expect(resolveCount == 2,
 			"scene loading resolves each unique primitive geometry once");
-		const auto loadedFirst = loaded.GetComponent<enignE::Scene::MeshRendererComponent>(
+		const auto loadedFirst = loaded.GetComponent<jnpf::Scene::MeshRendererComponent>(
 			loaded.FindEntityByID(scene.GetEntityID(first)));
-		const auto loadedSecond = loaded.GetComponent<enignE::Scene::MeshRendererComponent>(
+		const auto loadedSecond = loaded.GetComponent<jnpf::Scene::MeshRendererComponent>(
 			loaded.FindEntityByID(scene.GetEntityID(second)));
 		context.Expect(loadedFirst && loadedSecond
 			&& loadedFirst->ModelPtr == loadedSecond->ModelPtr,
@@ -344,7 +344,7 @@ namespace
 
 	void TestDirtyTransformPropagation(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		Scene::Scene scene("DirtyTransforms");
 		const entt::entity parent = CreateSpatialEntity(scene, "Parent", {1.0f, 0.0f, 0.0f});
 		const entt::entity child = CreateSpatialEntity(scene, "Child", {2.0f, 0.0f, 0.0f});
@@ -380,32 +380,32 @@ namespace
 
 	void TestRenderInvalidation(TestContext& context)
 	{
-		enignE::Scene::Scene scene("RenderInvalidation");
+		jnpf::Scene::Scene scene("RenderInvalidation");
 		auto& registry = scene.GetRegistry();
 		const entt::entity entity = scene.CreateEntity("Renderable");
 		const std::uint64_t initialVersion = scene.GetRenderVersion();
 
-		scene.AddComponent<enignE::Scene::TransformComponent>(entity);
+		scene.AddComponent<jnpf::Scene::TransformComponent>(entity);
 		const std::uint64_t transformVersion = scene.GetRenderVersion();
 		context.Expect(transformVersion > initialVersion, "adding a transform invalidates render data");
 
-		scene.AddComponent<enignE::Scene::MeshRendererComponent>(entity);
+		scene.AddComponent<jnpf::Scene::MeshRendererComponent>(entity);
 		const std::uint64_t rendererVersion = scene.GetRenderVersion();
 		context.Expect(rendererVersion > transformVersion, "adding a renderer invalidates render data");
 
-		registry.patch<enignE::Scene::MeshRendererComponent>(
+		registry.patch<jnpf::Scene::MeshRendererComponent>(
 			entity,
-			[](enignE::Scene::MeshRendererComponent& renderer)
+			[](jnpf::Scene::MeshRendererComponent& renderer)
 			{
 				renderer.bVisible = false;
 			});
 		const std::uint64_t patchedVersion = scene.GetRenderVersion();
 		context.Expect(patchedVersion > rendererVersion, "updating a renderer invalidates render data");
 
-		registry.get<enignE::Scene::MeshRendererComponent>(entity).bVisible = true;
-		auto& transform = registry.get<enignE::Scene::TransformComponent>(entity);
+		registry.get<jnpf::Scene::MeshRendererComponent>(entity).bVisible = true;
+		auto& transform = registry.get<jnpf::Scene::TransformComponent>(entity);
 		transform.SetLocalPosition({1.0f, 0.0f, 0.0f});
-		enignE::ECS::TransformPropagationSystem transformSystem;
+		jnpf::ECS::TransformPropagationSystem transformSystem;
 		transformSystem.Update(registry, 0.0f);
 		context.Expect(
 			transformSystem.DidUpdateRenderableTransform(),
@@ -427,37 +427,37 @@ namespace
 
 	void TestPerChunkDirtyTracking(TestContext& context)
 	{
-		enignE::Scene::Scene scene("ChunkDirtyTracking");
+		jnpf::Scene::Scene scene("ChunkDirtyTracking");
 		auto& registry = scene.GetRegistry();
 		auto model = std::make_shared<Model>();
 
 		const auto createRenderable = [&](const DirectX::XMFLOAT3& position)
 		{
 			const entt::entity entity = scene.CreateEntity();
-			auto& transform = scene.AddComponent<enignE::Scene::TransformComponent>(entity);
+			auto& transform = scene.AddComponent<jnpf::Scene::TransformComponent>(entity);
 			transform.SetLocalPosition(position);
-			auto& renderer = scene.AddComponent<enignE::Scene::MeshRendererComponent>(entity);
+			auto& renderer = scene.AddComponent<jnpf::Scene::MeshRendererComponent>(entity);
 			renderer.ModelPtr = model;
 			return entity;
 		};
 
 		const entt::entity first = createRenderable({1.0f, 0.0f, 0.0f});
 		createRenderable({65.0f, 0.0f, 0.0f});
-		enignE::ECS::TransformPropagationSystem transformSystem;
+		jnpf::ECS::TransformPropagationSystem transformSystem;
 		transformSystem.Update(registry, 0.0f);
 
-		enignE::Graphics::ChunkManager chunks;
+		jnpf::Graphics::ChunkManager chunks;
 		context.Expect(chunks.UpdateFromRegistry(registry).size() == 2, "initial chunk sync dirties populated chunks");
 
-		registry.patch<enignE::Scene::MeshRendererComponent>(
+		registry.patch<jnpf::Scene::MeshRendererComponent>(
 			first,
-			[](enignE::Scene::MeshRendererComponent& renderer)
+			[](jnpf::Scene::MeshRendererComponent& renderer)
 			{
 				renderer.Albedo.x = 0.5f;
 			});
 		context.Expect(chunks.UpdateFromRegistry(registry).size() == 1, "material edit dirties only its chunk");
 
-		registry.get<enignE::Scene::TransformComponent>(first).SetLocalPosition({33.0f, 0.0f, 0.0f});
+		registry.get<jnpf::Scene::TransformComponent>(first).SetLocalPosition({33.0f, 0.0f, 0.0f});
 		transformSystem.Update(registry, 0.0f);
 		context.Expect(chunks.UpdateFromRegistry(registry).size() == 2, "cross-chunk move dirties old and new chunks");
 		context.Expect(chunks.GetChunks().size() == 2, "empty old chunk is removed after a cross-chunk move");
@@ -474,7 +474,7 @@ namespace
 				&& chunk->second.GetBoundsMin().x >= 34.0f,
 			"same-chunk rebuild retains the entity and refreshes its bounds");
 
-		auto& renderer = registry.get<enignE::Scene::MeshRendererComponent>(first);
+		auto& renderer = registry.get<jnpf::Scene::MeshRendererComponent>(first);
 		renderer.MaterialResourcePtr = std::make_shared<MaterialResource>();
 		context.Expect(chunks.UpdateFromRegistry(registry).size() == 1,
 			"assigning a material resource dirties its chunk");
@@ -485,9 +485,9 @@ namespace
 
 	void TestRenderChunkBoundsAndCulling(TestContext& context)
 	{
-		using enignE::Graphics::ChunkCoord;
-		using enignE::Graphics::Frustum;
-		using enignE::Graphics::RenderChunk;
+		using jnpf::Graphics::ChunkCoord;
+		using jnpf::Graphics::Frustum;
+		using jnpf::Graphics::RenderChunk;
 
 		RenderChunk chunk(ChunkCoord{0, 0, 0}, 32.0f);
 		chunk.AddEntity(
@@ -532,7 +532,7 @@ namespace
 
 	void TestStableIDsAndVersions(TestContext& context)
 	{
-		enignE::Scene::Scene scene("IDs");
+		jnpf::Scene::Scene scene("IDs");
 		const auto structure = scene.GetStructureVersion();
 		const entt::entity first = scene.CreateEntity("First");
 		const entt::entity loaded = scene.CreateEntityWithID(1001, "Loaded");
@@ -551,7 +551,7 @@ namespace
 		context.Expect(scene.CreateEntityWithID(1001, "Reused") != entt::null,
 			"an ID can be restored after its previous entity is destroyed");
 
-		scene.AddComponent<enignE::Scene::TransformComponent>(first);
+		scene.AddComponent<jnpf::Scene::TransformComponent>(first);
 		const auto transformVersion = scene.GetTransformVersion();
 		const auto renderVersion = scene.GetRenderVersion();
 		scene.SetLocalPosition(first, {1.0f, 2.0f, 3.0f});
@@ -562,7 +562,7 @@ namespace
 
 	void TestSerializationAndCommands(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		Scene::Scene source("Serialized");
 		const entt::entity parent = source.CreateEntityWithID(10, "Parent");
 		const entt::entity child = source.CreateEntityWithID(20, "Child");
@@ -629,7 +629,7 @@ namespace
 			"redo reapplies command");
 
 		const std::filesystem::path path =
-			std::filesystem::temp_directory_path() / "enigne_scene_regression.escene";
+			std::filesystem::temp_directory_path() / "jnpf_scene_regression.escene";
 		context.Expect(Scene::SceneSerializer::Save(source, path), "scene saves to JSON");
 		Scene::Scene loaded;
 		std::vector<std::string> resolvedTextures;
@@ -712,9 +712,9 @@ namespace
 
 	void TestSceneMigrations(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		const std::filesystem::path path =
-			std::filesystem::temp_directory_path() / "enigne_v1_scene.escene";
+			std::filesystem::temp_directory_path() / "jnpf_v1_scene.escene";
 		{
 			std::ofstream output(path, std::ios::binary | std::ios::trunc);
 			output << R"({
@@ -782,12 +782,12 @@ namespace
 
 	void TestMalformedSceneLoad(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		Scene::Scene scene("KeepMe");
 		const entt::entity entity = scene.CreateEntityWithID(77, "Existing");
 		scene.AddComponent<Scene::TransformComponent>(entity);
 		const std::filesystem::path path =
-			std::filesystem::temp_directory_path() / "enigne_malformed_scene.escene";
+			std::filesystem::temp_directory_path() / "jnpf_malformed_scene.escene";
 
 		const auto expectRejected = [&](const std::string& document, const std::string& message)
 		{
@@ -820,7 +820,7 @@ namespace
 
 	void TestCameraLightCommandsAndEdges(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		Scene::Scene scene("Settings");
 		const entt::entity cameraEntity = CreateSpatialEntity(scene, "Camera");
 		const entt::entity lightEntity = CreateSpatialEntity(scene, "Light");
@@ -907,7 +907,7 @@ namespace
 
 	void TestAssetPathsAndTextureFailures(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		Graphics::AssetRegistry assets(std::filesystem::current_path());
 		const Graphics::AssetHandle first = assets.RegisterPath("textures/checker.png");
 		const Graphics::AssetHandle second =
@@ -917,7 +917,7 @@ namespace
 		context.Expect(assets.GetPath(first) == "textures/checker.png",
 			"asset registry stores project-relative paths");
 		const std::filesystem::path manifest =
-			std::filesystem::temp_directory_path() / "enigne_asset_manifest.json";
+			std::filesystem::temp_directory_path() / "jnpf_asset_manifest.json";
 		context.Expect(assets.SaveManifest(manifest), "asset manifest saves");
 		Graphics::AssetRegistry restored(std::filesystem::current_path());
 		context.Expect(
@@ -934,7 +934,7 @@ namespace
 
 	void TestSnapshotEntityCommands(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		Scene::Scene scene("SnapshotCommands");
 		const entt::entity parent = CreateSpatialEntity(scene, "Parent");
 		const entt::entity child = CreateSpatialEntity(scene, "Child", {2.0f, 0.0f, 0.0f});
@@ -1036,7 +1036,7 @@ namespace
 
 	void TestRecordedTransformCommand(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		Scene::Scene scene("RecordedTransform");
 		const entt::entity entity = CreateSpatialEntity(scene, "Dragged");
 		const std::uint64_t id = scene.GetEntityID(entity);
@@ -1058,7 +1058,7 @@ namespace
 
 	void TestJobSystemAndParallelTransforms(TestContext& context)
 	{
-		enignE::Core::JobSystem jobs(4);
+		jnpf::Core::JobSystem jobs(4);
 		std::atomic_size_t sum = 0;
 		jobs.ParallelFor(1000, 16, [&sum](std::size_t index)
 		{
@@ -1075,29 +1075,29 @@ namespace
 		context.Expect(cancelled.get(), "cancelable jobs observe the pool cancellation token");
 		jobs.ResetCancellation();
 
-		enignE::Scene::Scene scene("Parallel Transforms");
+		jnpf::Scene::Scene scene("Parallel Transforms");
 		for (std::size_t index = 0; index < 128; ++index)
 		{
 			const entt::entity entity = scene.CreateEntity("Root");
-			auto& transform = scene.AddComponent<enignE::Scene::TransformComponent>(entity);
+			auto& transform = scene.AddComponent<jnpf::Scene::TransformComponent>(entity);
 			transform.SetLocalPosition({static_cast<float>(index), 2.0f, -3.0f});
-			scene.AddComponent<enignE::Scene::HierarchyComponent>(entity);
+			scene.AddComponent<jnpf::Scene::HierarchyComponent>(entity);
 		}
-		enignE::ECS::TransformPropagationSystem transforms;
+		jnpf::ECS::TransformPropagationSystem transforms;
 		transforms.Update(scene.GetRegistry(), 0.0f, &jobs);
 		context.Expect(transforms.GetVisitedTransformCount() == 128,
 			"parallel transform propagation visits each independent root once");
-		for (const entt::entity entity : scene.View<enignE::Scene::TransformComponent>())
+		for (const entt::entity entity : scene.View<jnpf::Scene::TransformComponent>())
 		{
-			const auto* transform = scene.GetComponent<enignE::Scene::TransformComponent>(entity);
+			const auto* transform = scene.GetComponent<jnpf::Scene::TransformComponent>(entity);
 			context.Expect(transform && !transform->IsWorldTransformDirty(),
 				"parallel transform propagation commits every world matrix");
 		}
-		const enignE::Core::JobSystemStats stats = jobs.GetStats();
+		const jnpf::Core::JobSystemStats stats = jobs.GetStats();
 		context.Expect(stats.CompletedJobs > 0 && stats.WorkerCount == 4,
 			"job telemetry reports completed work and worker capacity");
 
-		const auto modelPath = std::filesystem::temp_directory_path() / "enigne_job_import.obj";
+		const auto modelPath = std::filesystem::temp_directory_path() / "jnpf_job_import.obj";
 		{
 			std::ofstream output(modelPath);
 			output << "o Triangle\n"
@@ -1118,8 +1118,8 @@ namespace
 		const DirectX::XMMATRIX world =
 			DirectX::XMMatrixScaling(2.0f, 3.0f, 4.0f)
 			* DirectX::XMMatrixTranslation(7.0f, 8.0f, 9.0f);
-		const enignE::Graphics::InstanceData data =
-			enignE::Graphics::InstanceData::FromWorldMatrix(world);
+		const jnpf::Graphics::InstanceData data =
+			jnpf::Graphics::InstanceData::FromWorldMatrix(world);
 		context.Expect(
 			NearlyEqual(data.WorldRow0.x, 2.0f)
 				&& NearlyEqual(data.WorldRow1.y, 3.0f)
@@ -1133,15 +1133,15 @@ namespace
 
 	void TestProjectAndMetadataIdentity(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		const std::filesystem::path root =
-			std::filesystem::temp_directory_path() / "enigne_project_metadata_test";
+			std::filesystem::temp_directory_path() / "jnpf_project_metadata_test";
 		std::error_code error;
 		std::filesystem::remove_all(root, error);
 		std::filesystem::create_directories(root / "assets", error);
 		Project::ProjectConfig project;
 		project.Name = "Metadata Test";
-		project.ProjectFile = root / "test.enigneproject";
+		project.ProjectFile = root / "test.jnpfproject";
 		project.StartupScene = "scenes/opening.escene";
 		project.InputActions = "config/game-input.json";
 		project.OutputDirectory = "dist";
@@ -1208,11 +1208,11 @@ namespace
 		source.Roughness = 0.22f;
 		source.AlbedoTextureHandle = 42;
 		source.AlbedoTexturePath = "assets/albedo.png";
-		const auto path = std::filesystem::temp_directory_path() / "enigne_material_test.ematerial";
+		const auto path = std::filesystem::temp_directory_path() / "jnpf_material_test.ematerial";
 		MaterialResource loaded;
 		context.Expect(
-			enignE::Graphics::MaterialAsset::Save(source, path)
-				&& enignE::Graphics::MaterialAsset::Load(path, loaded)
+			jnpf::Graphics::MaterialAsset::Save(source, path)
+				&& jnpf::Graphics::MaterialAsset::Load(path, loaded)
 				&& NearlyEqual(loaded.Albedo.z, source.Albedo.z)
 				&& NearlyEqual(loaded.Metallic, source.Metallic)
 				&& NearlyEqual(loaded.Roughness, source.Roughness)
@@ -1221,29 +1221,29 @@ namespace
 		std::error_code error;
 		std::filesystem::remove(path, error);
 
-		enignE::Scene::Scene scene("MaterialUndo");
+		jnpf::Scene::Scene scene("MaterialUndo");
 		const entt::entity entity = scene.CreateEntity("Surface");
-		scene.AddComponent<enignE::Scene::MeshRendererComponent>(entity);
+		scene.AddComponent<jnpf::Scene::MeshRendererComponent>(entity);
 		const std::uint64_t id = scene.GetEntityID(entity);
-		enignE::Editor::CommandStack commands;
-		commands.Execute(std::make_unique<enignE::Editor::SetRendererMaterialResourceCommand>(
+		jnpf::Editor::CommandStack commands;
+		commands.Execute(std::make_unique<jnpf::Editor::SetRendererMaterialResourceCommand>(
 			scene, id, std::nullopt, source));
 		context.Expect(
-			scene.GetComponent<enignE::Scene::MeshRendererComponent>(entity)->MaterialResourcePtr
+			scene.GetComponent<jnpf::Scene::MeshRendererComponent>(entity)->MaterialResourcePtr
 				&& NearlyEqual(
-					scene.GetComponent<enignE::Scene::MeshRendererComponent>(entity)
+					scene.GetComponent<jnpf::Scene::MeshRendererComponent>(entity)
 						->MaterialResourcePtr->Metallic,
 					source.Metallic),
 			"material command applies a value snapshot");
 		commands.Undo();
 		context.Expect(
-			!scene.GetComponent<enignE::Scene::MeshRendererComponent>(entity)->MaterialResourcePtr,
+			!scene.GetComponent<jnpf::Scene::MeshRendererComponent>(entity)->MaterialResourcePtr,
 			"undo restores the absence of a material resource");
 		commands.Redo();
 		context.Expect(
-			scene.GetComponent<enignE::Scene::MeshRendererComponent>(entity)->MaterialResourcePtr
+			scene.GetComponent<jnpf::Scene::MeshRendererComponent>(entity)->MaterialResourcePtr
 				&& NearlyEqual(
-					scene.GetComponent<enignE::Scene::MeshRendererComponent>(entity)
+					scene.GetComponent<jnpf::Scene::MeshRendererComponent>(entity)
 						->MaterialResourcePtr->Roughness,
 					source.Roughness),
 			"redo restores the complete material resource");
@@ -1251,48 +1251,48 @@ namespace
 		auto firstModel = std::make_shared<Model>();
 		auto secondModel = std::make_shared<Model>();
 		scene.SetRendererModel(entity, firstModel);
-		enignE::Scene::RenderSourceComponent sourceBefore;
-		sourceBefore.Type = enignE::Scene::RenderSourceType::ImportedModel;
+		jnpf::Scene::RenderSourceComponent sourceBefore;
+		sourceBefore.Type = jnpf::Scene::RenderSourceType::ImportedModel;
 		sourceBefore.AssetPath = "assets/first.obj";
-		scene.AddComponent<enignE::Scene::RenderSourceComponent>(entity, sourceBefore);
-		enignE::Scene::RenderSourceComponent sourceAfter = sourceBefore;
+		scene.AddComponent<jnpf::Scene::RenderSourceComponent>(entity, sourceBefore);
+		jnpf::Scene::RenderSourceComponent sourceAfter = sourceBefore;
 		sourceAfter.AssetPath = "assets/second.obj";
-		commands.Execute(std::make_unique<enignE::Editor::SetRendererModelCommand>(
+		commands.Execute(std::make_unique<jnpf::Editor::SetRendererModelCommand>(
 			scene, id, firstModel, sourceBefore, secondModel, sourceAfter));
 		commands.Undo();
 		context.Expect(
-			scene.GetComponent<enignE::Scene::MeshRendererComponent>(entity)->ModelPtr == firstModel
-				&& scene.GetComponent<enignE::Scene::RenderSourceComponent>(entity)->AssetPath
+			scene.GetComponent<jnpf::Scene::MeshRendererComponent>(entity)->ModelPtr == firstModel
+				&& scene.GetComponent<jnpf::Scene::RenderSourceComponent>(entity)->AssetPath
 					== sourceBefore.AssetPath,
 			"undo restores both model data and its serialized asset source");
 		commands.Redo();
 		context.Expect(
-			scene.GetComponent<enignE::Scene::MeshRendererComponent>(entity)->ModelPtr == secondModel
-				&& scene.GetComponent<enignE::Scene::RenderSourceComponent>(entity)->AssetPath
+			scene.GetComponent<jnpf::Scene::MeshRendererComponent>(entity)->ModelPtr == secondModel
+				&& scene.GetComponent<jnpf::Scene::RenderSourceComponent>(entity)->AssetPath
 					== sourceAfter.AssetPath,
 			"redo reapplies model assignment and its serialized asset source");
 	}
 
 	void TestCommandStackDirtyRevisions(TestContext& context)
 	{
-		enignE::Scene::Scene scene("DirtyRevisions");
+		jnpf::Scene::Scene scene("DirtyRevisions");
 		const entt::entity entity = scene.CreateEntity("Original");
 		const std::uint64_t id = scene.GetEntityID(entity);
-		enignE::Editor::CommandStack commands;
+		jnpf::Editor::CommandStack commands;
 		context.Expect(!commands.IsDirty(), "a cleared command stack starts clean");
-		commands.Execute(std::make_unique<enignE::Editor::RenameEntityCommand>(
+		commands.Execute(std::make_unique<jnpf::Editor::RenameEntityCommand>(
 			scene, id, "Original", "Saved"));
 		context.Expect(commands.IsDirty(), "executing a command marks the scene dirty");
 		commands.MarkSaved();
 		context.Expect(!commands.IsDirty(), "marking the current revision saved clears dirty state");
-		commands.Execute(std::make_unique<enignE::Editor::RenameEntityCommand>(
+		commands.Execute(std::make_unique<jnpf::Editor::RenameEntityCommand>(
 			scene, id, "Saved", "Changed"));
 		commands.Undo();
 		context.Expect(!commands.IsDirty(), "undoing to the saved revision clears dirty state");
 		commands.Redo();
 		context.Expect(commands.IsDirty(), "redoing past the saved revision restores dirty state");
 		commands.Undo();
-		commands.Execute(std::make_unique<enignE::Editor::RenameEntityCommand>(
+		commands.Execute(std::make_unique<jnpf::Editor::RenameEntityCommand>(
 			scene, id, "Saved", "Branched"));
 		context.Expect(commands.IsDirty() && !commands.CanRedo(),
 			"branching from a saved revision creates a distinct dirty revision");
@@ -1300,7 +1300,7 @@ namespace
 
 	void TestClipboardSnapshotPaste(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		Scene::Scene scene("Clipboard");
 		const entt::entity root = CreateSpatialEntity(scene, "Copied Root");
 		const entt::entity child = CreateSpatialEntity(scene, "Copied Child");
@@ -1328,7 +1328,7 @@ namespace
 
 	void TestShadowConfiguration(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		const auto splits = Graphics::ShadowRenderer::CalculateCascadeSplits(0.1f, 100.0f);
 		context.Expect(
 			splits[0] > 0.1f
@@ -1370,7 +1370,7 @@ namespace
 
 	void TestFixedStepRotator(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		Scene::Scene editorScene("RotatorEditor");
 		const entt::entity editorEntity = CreateSpatialEntity(editorScene, "Spinner");
 		editorScene.AddComponent<Scene::RotatorComponent>(editorEntity,
@@ -1386,7 +1386,7 @@ namespace
 		context.Expect(
 			std::abs(editorScene.GetComponent<Scene::TransformComponent>(editorEntity)->GetLocalRotation().y) < 0.0001f,
 			"fixed-step behavior does not mutate the editor scene copy");
-		const auto path = std::filesystem::temp_directory_path() / "enigne_rotator.escene";
+		const auto path = std::filesystem::temp_directory_path() / "jnpf_rotator.escene";
 		context.Expect(Scene::SceneSerializer::Save(editorScene, path),
 			"rotator behavior serializes with the scene");
 		Scene::Scene loaded("LoadedRotator");
@@ -1398,7 +1398,7 @@ namespace
 
 	void TestRotatorAuthoringCommands(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		Scene::Scene scene("RotatorAuthoring");
 		const entt::entity entity = CreateSpatialEntity(scene, "Authored Spinner");
 		const std::uint64_t id = scene.GetEntityID(entity);
@@ -1426,7 +1426,7 @@ namespace
 
 	void TestFlyController(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		Scene::Scene scene("FlyController");
 		const entt::entity camera = CreateSpatialEntity(scene, "Fly Camera");
 		scene.AddComponent<Scene::FlyControllerComponent>(camera);
@@ -1448,7 +1448,7 @@ namespace
 		Scene::Scene copy("FlyCopy"); copy.CopyFrom(scene);
 		context.Expect(copy.HasComponent<Scene::FlyControllerComponent>(copy.FindEntityByID(scene.GetEntityID(camera))),
 			"play-scene copies preserve fly controllers");
-		const auto path = std::filesystem::temp_directory_path() / "enigne_fly_controller.escene";
+		const auto path = std::filesystem::temp_directory_path() / "jnpf_fly_controller.escene";
 		context.Expect(Scene::SceneSerializer::Save(scene, path), "fly controller serializes");
 		Scene::Scene loaded("LoadedFly");
 		context.Expect(Scene::SceneSerializer::Load(loaded, path)
@@ -1459,7 +1459,7 @@ namespace
 
 	void TestInstanceSubmissionPlanning(TestContext& context)
 	{
-		using enignE::Graphics::InstanceSubmissionPlanner;
+		using jnpf::Graphics::InstanceSubmissionPlanner;
 		const auto split = InstanceSubmissionPlanner::Build(10, 4);
 		context.Expect(split == std::vector<std::uint32_t>({4, 4, 2}),
 			"instance submission planner preserves all instances across capacity splits");
@@ -1478,7 +1478,7 @@ namespace
 
 	void TestViewportRenderPlanning(TestContext& context)
 	{
-		using enignE::Editor::ViewportRenderPlan;
+		using jnpf::Editor::ViewportRenderPlan;
 		const auto sceneOnly = ViewportRenderPlan::Build(true, false, true, false);
 		context.Expect(sceneOnly.RenderScene && !sceneOnly.RenderGame
 			&& sceneOnly.SceneOwnsShadows && !sceneOnly.GameOwnsShadows,
@@ -1499,7 +1499,7 @@ namespace
 
 	void TestPhaseOneFoundation(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		Core::SimulationClock clock(0.02);
 		context.Expect(clock.Advance(0.05, true) == 2 && clock.GetTickCount() == 2,
 			"fixed simulation clock emits deterministic steps");
@@ -1543,7 +1543,7 @@ namespace
 			&& playRootRenderer->MaterialResourcePtr != sharedMaterial,
 			"play-scene copies preserve material sharing while isolating editor resources");
 
-		const auto prefabPath = std::filesystem::temp_directory_path() / "enigne_phase1.eprefab";
+		const auto prefabPath = std::filesystem::temp_directory_path() / "jnpf_phase1.eprefab";
 		std::string error;
 		context.Expect(Editor::PrefabAsset::SaveFromScene(editorScene, root, prefabPath, &error),
 			"entity subtrees save as prefab assets");
@@ -1552,7 +1552,7 @@ namespace
 			"prefab assets load through versioned scene persistence");
 		Editor::CommandStack commands;
 		auto instantiate = std::make_unique<Editor::InstantiatePrefabCommand>(
-			editorScene, std::move(prefab), 42, "assets/enigne_phase1.eprefab");
+			editorScene, std::move(prefab), 42, "assets/jnpf_phase1.eprefab");
 		auto* result = instantiate.get();
 		commands.Execute(std::move(instantiate));
 		const std::uint64_t instanceID = result->GetEntityID();
@@ -1577,7 +1577,7 @@ namespace
 			"unpacking a prefab instance is undoable");
 		std::filesystem::remove(prefabPath);
 
-		const auto assetRoot = std::filesystem::temp_directory_path() / "enigne_prefab_delete_test";
+		const auto assetRoot = std::filesystem::temp_directory_path() / "jnpf_prefab_delete_test";
 		std::filesystem::create_directories(assetRoot / "assets");
 		const auto assetPath = assetRoot / "assets" / "delete.eprefab";
 		{ std::ofstream output(assetPath); output << "{}"; }
@@ -1596,7 +1596,7 @@ namespace
 		Scene::Scene previewScene("Preview");
 		const entt::entity preview = CreateSpatialEntity(previewScene, "Transient Preview");
 		previewScene.AddComponent<Scene::TransientEditorComponent>(preview);
-		const auto previewPath = std::filesystem::temp_directory_path() / "enigne_preview_filter.escene";
+		const auto previewPath = std::filesystem::temp_directory_path() / "jnpf_preview_filter.escene";
 		context.Expect(Scene::SceneSerializer::Save(previewScene, previewPath),
 			"scenes containing a drag preview still serialize");
 		{
@@ -1621,7 +1621,7 @@ namespace
 
 	void TestPhysicsComponentSlice(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		Scene::Scene scene("PhysicsComponents");
 		const entt::entity entity = CreateSpatialEntity(scene, "Physics Cube", {0.0f, 4.0f, 0.0f});
 		const std::uint64_t id = scene.GetEntityID(entity);
@@ -1652,7 +1652,7 @@ namespace
 			&& playCopy.GetComponent<Scene::ColliderComponent>(copied)->HalfExtents.z == 0.8f,
 			"Play scene copies preserve complete physics configuration");
 
-		const auto path = std::filesystem::temp_directory_path() / "enigne_physics_components.escene";
+		const auto path = std::filesystem::temp_directory_path() / "jnpf_physics_components.escene";
 		context.Expect(Scene::SceneSerializer::Save(scene, path), "physics components serialize");
 		Scene::Scene loaded("LoadedPhysics");
 		const bool loadedPhysics = Scene::SceneSerializer::Load(loaded, path);
@@ -1687,7 +1687,7 @@ namespace
 			"component catalog records physics persistence contracts");
 
 		const auto malformedPath =
-			std::filesystem::temp_directory_path() / "enigne_malformed_physics.escene";
+			std::filesystem::temp_directory_path() / "jnpf_malformed_physics.escene";
 		{
 			nlohmann::json malformed;
 			malformed["scene"] = {{"name", "MalformedPhysics"}, {"version", 8},
@@ -1712,7 +1712,7 @@ namespace
 
 	void TestJoltPhysicsWorld(TestContext& context)
 	{
-		using namespace enignE::Physics;
+		using namespace jnpf::Physics;
 		const auto simulateDrop = [&context]()
 		{
 			PhysicsWorld world;
@@ -1843,7 +1843,7 @@ namespace
 
 	void TestFallingCubesScene(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		const std::filesystem::path scenePath =
 			std::filesystem::path(__FILE__).parent_path().parent_path()
 			/ "scenes" / "falling-cubes.escene";
@@ -1901,7 +1901,7 @@ namespace
 
 	void TestPhysicsStressScene(TestContext& context)
 	{
-		using namespace enignE;
+		using namespace jnpf;
 		const std::filesystem::path scenePath =
 			std::filesystem::path(__FILE__).parent_path().parent_path()
 			/ "scenes" / "physics-stress.escene";

@@ -7,7 +7,7 @@
 #include <string>
 #include <thread>
 
-namespace enignE::Editor::UI
+namespace jnpf::Editor::UI
 {
 	/** Responsive native progress window for blocking editor operations. */
 	class EditorLoadingWindow

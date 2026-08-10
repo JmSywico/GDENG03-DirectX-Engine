@@ -8,7 +8,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace enignE::Graphics
+namespace jnpf::Graphics
 {
 	struct ShadowViewData
 	{

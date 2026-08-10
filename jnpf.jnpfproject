@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "name": "jnpf",
+  "assets": "assets",
+  "startupScene": "scenes/instance-stress.escene",
+  "inputActions": "config/input-actions.json",
+  "cache": ".jnpf/cache",
+  "output": "build"
+}

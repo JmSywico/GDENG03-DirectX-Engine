@@ -9,7 +9,7 @@
 
 class InputManager;
 
-namespace enignE::Input
+namespace jnpf::Input
 {
 	enum class BindingType : std::uint8_t { Key, MouseButton, GamepadButton, GamepadAxis };
 	enum class GamepadAxis : std::uint16_t { LeftX, LeftY, RightX, RightY, LeftTrigger, RightTrigger };

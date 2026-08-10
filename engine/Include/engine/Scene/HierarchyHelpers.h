@@ -7,7 +7,7 @@
 #include <vector>
 #include <functional>
 
-namespace enignE::Scene
+namespace jnpf::Scene
 {
 	/// \brief Thin convenience wrapper around ECS hierarchy operations.
 	class HierarchyHelpers

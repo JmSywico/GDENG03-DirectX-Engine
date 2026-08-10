@@ -9,7 +9,7 @@
 class Model;
 class Texture2D;
 
-namespace enignE::Scene
+namespace jnpf::Scene
 {
 	class Scene;
 

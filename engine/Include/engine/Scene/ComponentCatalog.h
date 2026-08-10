@@ -5,7 +5,7 @@
 #include <array>
 #include <string_view>
 
-namespace enignE::Scene
+namespace jnpf::Scene
 {
 	enum class ComponentKind : std::uint8_t { Rotator, FlyController, RigidBody, Collider };
 

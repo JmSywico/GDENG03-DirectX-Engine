@@ -2,7 +2,7 @@
 
 #include <DirectXMath.h>
 
-namespace enignE::Graphics
+namespace jnpf::Graphics
 {
 	struct InstanceData
 	{

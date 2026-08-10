@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace enignE::Graphics
+namespace jnpf::Graphics
 {
 	struct Frustum
 	{

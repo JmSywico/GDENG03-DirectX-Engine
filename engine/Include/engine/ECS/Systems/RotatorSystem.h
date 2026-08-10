@@ -2,7 +2,7 @@
 
 #include "Scene/Scene.h"
 
-namespace enignE::ECS
+namespace jnpf::ECS
 {
 	class RotatorSystem
 	{

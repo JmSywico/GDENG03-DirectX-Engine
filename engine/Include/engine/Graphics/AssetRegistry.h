@@ -9,9 +9,9 @@
 
 class Model;
 class Texture2D;
-namespace enignE::Core { class JobSystem; }
+namespace jnpf::Core { class JobSystem; }
 
-namespace enignE::Graphics
+namespace jnpf::Graphics
 {
 	using AssetHandle = std::uint64_t;
 	inline constexpr AssetHandle InvalidAssetHandle = 0;

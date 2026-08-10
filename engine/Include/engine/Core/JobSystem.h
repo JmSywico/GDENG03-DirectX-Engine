@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-namespace enignE::Core
+namespace jnpf::Core
 {
 	struct JobSystemStats
 	{

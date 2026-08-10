@@ -2,7 +2,7 @@
 
 #include <nlohmann/json_fwd.hpp>
 
-namespace enignE::Scene
+namespace jnpf::Scene
 {
 	class SceneMigration
 	{

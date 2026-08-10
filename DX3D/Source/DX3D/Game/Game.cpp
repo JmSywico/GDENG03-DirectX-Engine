@@ -285,7 +285,7 @@ dx3d::Game::Game(const GameDesc& desc)
 
 	m_logger = std::make_unique<Logger>(desc.logLevel);
 
-	DX3DLogInfo("GDENG03 | DirectX Game Engine");
+	DX3DLogInfo("jnpf. | DirectX 11 Game Engine");
 	DX3DLogInfo("--------------------------------------");
 
 	m_inputSystem = std::make_unique<InputSystem>(InputSystemDesc{ *m_logger });
@@ -1007,7 +1007,7 @@ void dx3d::Game::handleViewportPicking(
 		m_inputSystem->getMousePosition();
 
 	// Camera entities have no mesh to ray-test, so their Scene-view icon is
-	// an explicit selectable target just like it is in enignE.
+	// an explicit selectable target just like it is in jnpf.
 	GameObject* closestCamera = nullptr;
 	f32 closestCameraDistanceSquared = std::numeric_limits<f32>::max();
 	const Mat4x4 viewProjection = camera->getViewMatrix() * camera->getProjectionMatrix();
@@ -1548,7 +1548,7 @@ void dx3d::Game::openSceneDialog()
 		convertedPath.replace_extension(".dx3dscene");
 		if (!std::filesystem::exists(convertedPath))
 		{
-			convertedPath = std::filesystem::path("Scenes") / "enignE" / path.filename();
+			convertedPath = std::filesystem::path("Scenes") / "jnpf" / path.filename();
 			convertedPath.replace_extension(".dx3dscene");
 		}
 		if (!std::filesystem::exists(convertedPath))
@@ -2015,7 +2015,7 @@ void dx3d::Game::onInternalUpdate()
 	);
 	m_display->getSwapChain().captureGameFrame();
 
-	// Native enignE chrome: a fixed 32 px title bar owns the menus and the
+	// Native jnpf. chrome: a fixed 32 px title bar owns the menus and the
 	// borderless Win32 caption controls.
 	const ImGuiViewport* viewport = ImGui::GetMainViewport();
 	const float titleBarHeight = 32.0f * m_uiScale;
@@ -2875,7 +2875,7 @@ void dx3d::Game::onInternalUpdate()
 	}
 
 	// Authored cameras are scene objects. Draw the same compact camera marker
-	// and selected-camera frustum used by enignE's Scene viewport.
+	// and selected-camera frustum used by jnpf.'s Scene viewport.
 	if (sceneViewportVisible && viewportOverlaysAllowed && editorCameraComponent)
 	{
 		const Mat4x4 viewProjection = editorCameraComponent->getViewMatrix() *

@@ -20,26 +20,26 @@
 class EditorLayer : public Layer
 {
 public:
-	using MatrixProvider = enignE::Editor::EditorContext::MatrixProvider;
-	using ViewportProvider = enignE::Editor::EditorContext::ViewportProvider;
-	using SceneChangedCallback = enignE::Editor::EditorContext::SceneChangedCallback;
-	using WindowAction = enignE::Editor::EditorContext::WindowAction;
-	using SceneAction = enignE::Editor::EditorContext::SceneAction;
-	using WindowStateProvider = enignE::Editor::EditorContext::WindowStateProvider;
-	using PrimitiveModelFactory = enignE::Editor::EditorContext::PrimitiveModelFactory;
-	using TextureLoader = enignE::Editor::EditorContext::TextureLoader;
-	using ModelLoader = enignE::Editor::EditorContext::ModelLoader;
-	using SimulationStateProvider = enignE::Editor::EditorContext::SimulationStateProvider;
-	using SimulationAction = enignE::Editor::EditorContext::SimulationAction;
-	using GameInputCaptureAction = enignE::Editor::EditorContext::GameInputCaptureAction;
-	using SceneProvider = std::function<enignE::Scene::Scene&()>;
+	using MatrixProvider = jnpf::Editor::EditorContext::MatrixProvider;
+	using ViewportProvider = jnpf::Editor::EditorContext::ViewportProvider;
+	using SceneChangedCallback = jnpf::Editor::EditorContext::SceneChangedCallback;
+	using WindowAction = jnpf::Editor::EditorContext::WindowAction;
+	using SceneAction = jnpf::Editor::EditorContext::SceneAction;
+	using WindowStateProvider = jnpf::Editor::EditorContext::WindowStateProvider;
+	using PrimitiveModelFactory = jnpf::Editor::EditorContext::PrimitiveModelFactory;
+	using TextureLoader = jnpf::Editor::EditorContext::TextureLoader;
+	using ModelLoader = jnpf::Editor::EditorContext::ModelLoader;
+	using SimulationStateProvider = jnpf::Editor::EditorContext::SimulationStateProvider;
+	using SimulationAction = jnpf::Editor::EditorContext::SimulationAction;
+	using GameInputCaptureAction = jnpf::Editor::EditorContext::GameInputCaptureAction;
+	using SceneProvider = std::function<jnpf::Scene::Scene&()>;
 	using TextureProvider = std::function<ID3D11ShaderResourceView*()>;
 	using ViewportResizeCallback = std::function<void(std::uint16_t, std::uint16_t)>;
 	using ViewportInteractionCallback = std::function<void(bool)>;
 	using ViewportStateCallback = std::function<void(bool, bool, bool, bool)>;
 
 	EditorLayer(
-		enignE::Scene::Scene& scene,
+		jnpf::Scene::Scene& scene,
 		SceneProvider activeSceneProvider,
 		MatrixProvider viewProvider,
 		MatrixProvider projectionProvider,
@@ -56,7 +56,7 @@ public:
 		PrimitiveModelFactory createPrimitiveModel,
 		TextureLoader loadTexture,
 		ModelLoader loadModel,
-		enignE::Graphics::AssetRegistry* assets,
+		jnpf::Graphics::AssetRegistry* assets,
 		std::filesystem::path assetDirectory,
 		SimulationStateProvider simulationStateProvider,
 		SimulationAction beginPlay,
@@ -79,7 +79,7 @@ private:
 	struct GizmoDragEntry
 	{
 		std::uint64_t EntityID = 0;
-		enignE::Editor::TransformValue Start;
+		jnpf::Editor::TransformValue Start;
 	};
 
 	void ApplyWorkbenchStyle();
@@ -100,14 +100,14 @@ private:
 	void BeginGizmoDrag();
 	void CommitGizmoDrag();
 	void SynchronizeActiveScene(const std::vector<std::uint64_t>* preservedSelection = nullptr);
-	bool LoadPrefab(const std::string& path, enignE::Editor::PrefabAsset& result) const;
+	bool LoadPrefab(const std::string& path, jnpf::Editor::PrefabAsset& result) const;
 	entt::entity CreateModelAssetEntity(
 		std::uint64_t handle,
 		const std::string& path,
 		std::uint64_t parentID,
 		const DirectX::XMFLOAT3* position);
 	bool UpdateAssetPreview(
-		const enignE::Editor::AssetDragPayload& asset,
+		const jnpf::Editor::AssetDragPayload& asset,
 		const DirectX::XMFLOAT3& position);
 	void CommitAssetPreview();
 	void CancelAssetPreview();
@@ -117,17 +117,17 @@ private:
 		std::function<bool()> action,
 		std::function<void(bool)> completion = {});
 
-	enignE::Editor::EditorContext m_context;
-	enignE::Editor::CommandStack m_commandStack;
-	enignE::Editor::CommandStack m_suspendedEditorCommandStack;
-	enignE::Scene::Scene* m_editorScene = nullptr;
+	jnpf::Editor::EditorContext m_context;
+	jnpf::Editor::CommandStack m_commandStack;
+	jnpf::Editor::CommandStack m_suspendedEditorCommandStack;
+	jnpf::Scene::Scene* m_editorScene = nullptr;
 	SceneProvider m_activeSceneProvider;
 	bool m_usingPlayScene = false;
-	enignE::Editor::TitleBar m_titleBar;
-	enignE::Editor::SceneHierarchyPanel m_sceneHierarchyPanel;
-	enignE::Editor::InspectorPanel m_inspectorPanel;
-	enignE::Editor::AssetBrowserPanel m_assetBrowserPanel;
-	enignE::Editor::GizmoToolbar m_gizmoToolbar;
+	jnpf::Editor::TitleBar m_titleBar;
+	jnpf::Editor::SceneHierarchyPanel m_sceneHierarchyPanel;
+	jnpf::Editor::InspectorPanel m_inspectorPanel;
+	jnpf::Editor::AssetBrowserPanel m_assetBrowserPanel;
+	jnpf::Editor::GizmoToolbar m_gizmoToolbar;
 	TextureProvider m_sceneTextureProvider;
 	TextureProvider m_gameTextureProvider;
 	ViewportResizeCallback m_resizeSceneViewport;
@@ -154,19 +154,19 @@ private:
 	float m_dragWorldUnitsPerPixel = 0.0f;
 	DirectX::XMFLOAT3 m_dragStartValue{};
 	std::vector<GizmoDragEntry> m_gizmoDragEntries;
-	std::vector<enignE::Editor::EntitySnapshot> m_entityClipboard;
+	std::vector<jnpf::Editor::EntitySnapshot> m_entityClipboard;
 	bool m_workbenchStyleApplied = false;
 	std::function<bool()> m_pendingEditorAction;
 	std::function<void(bool)> m_pendingEditorCompletion;
 	std::string m_pendingEditorTitle;
 	std::string m_pendingEditorDetail;
-	enignE::Editor::UI::EditorLoadingWindow m_loadingWindow;
+	jnpf::Editor::UI::EditorLoadingWindow m_loadingWindow;
 	bool m_gizmoDragActive = false;
 	bool m_mouseWasDown = false;
 	bool m_gizmoConsumedClick = false;
 	bool m_defaultDockLayoutBuilt = false;
 	std::uint64_t m_assetPreviewRootID = 0;
 	std::uint64_t m_assetPreviewHandle = 0;
-	enignE::Graphics::AssetType m_assetPreviewType = enignE::Graphics::AssetType::Unknown;
+	jnpf::Graphics::AssetType m_assetPreviewType = jnpf::Graphics::AssetType::Unknown;
 	bool m_assetPreviewTouchedThisFrame = false;
 };

@@ -7,9 +7,9 @@
 #include <entt/entity/registry.hpp>
 #include <vector>
 
-namespace enignE::Core { class JobSystem; }
+namespace jnpf::Core { class JobSystem; }
 
-namespace enignE::ECS
+namespace jnpf::ECS
 {
 	/// \brief Computes cached world matrices from local transforms and hierarchy links.
 	class TransformPropagationSystem : public SystemBase

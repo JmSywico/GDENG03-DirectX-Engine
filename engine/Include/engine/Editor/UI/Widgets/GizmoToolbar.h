@@ -2,7 +2,7 @@
 
 #include <DirectXMath.h>
 
-namespace enignE::Editor
+namespace jnpf::Editor
 {
 	struct EditorContext;
 

@@ -15,13 +15,13 @@
     },
     {
       "name": "x64-debug",
-      "displayName": "enignE DX11 x64 Debug",
+      "displayName": "jnpf. DX11 x64 Debug",
       "inherits": "base",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
     },
     {
       "name": "x64-release",
-      "displayName": "enignE DX11 x64 Release",
+      "displayName": "jnpf. DX11 x64 Release",
       "inherits": "base",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
     }

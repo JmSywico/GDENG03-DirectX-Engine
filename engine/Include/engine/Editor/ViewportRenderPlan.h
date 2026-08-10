@@ -1,6 +1,6 @@
 #pragma once
 
-namespace enignE::Editor
+namespace jnpf::Editor
 {
 	struct ViewportRenderPlan
 	{

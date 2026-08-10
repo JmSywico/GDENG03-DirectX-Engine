@@ -4,7 +4,7 @@
 
 #include <DirectXMath.h>
 
-namespace enignE::Scene
+namespace jnpf::Scene
 {
 	struct CameraComponent
 	{

@@ -4,12 +4,12 @@
 
 #include <cstdint>
 
-namespace enignE::Scene
+namespace jnpf::Scene
 {
 	class Scene;
 }
 
-namespace enignE::Editor
+namespace jnpf::Editor
 {
 	struct EditorContext;
 

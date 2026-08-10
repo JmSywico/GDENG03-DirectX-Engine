@@ -6,7 +6,7 @@
 #include <filesystem>
 #include <string>
 
-namespace enignE::Editor
+namespace jnpf::Editor
 {
 	class PrefabAsset
 	{

@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace enignE::Editor
+namespace jnpf::Editor
 {
 	/** @brief Reversible editor operation stored by CommandStack. @ingroup editor */
 	class EditorCommand

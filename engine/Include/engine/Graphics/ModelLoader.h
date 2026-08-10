@@ -11,7 +11,7 @@
 
 class Model;
 class Texture2D;
-namespace enignE::Core { class JobSystem; }
+namespace jnpf::Core { class JobSystem; }
 
 struct PreparedModelMesh
 {
@@ -31,7 +31,7 @@ public:
 	using TextureLoader = std::function<std::shared_ptr<Texture2D>(const std::string&)>;
 	static std::optional<PreparedModel> Prepare(
 		const std::string& filepath,
-		enignE::Core::JobSystem* jobs = nullptr);
+		jnpf::Core::JobSystem* jobs = nullptr);
 	static std::shared_ptr<Model> Finalize(
 		PreparedModel prepared,
 		const TextureLoader& textureLoader = {});

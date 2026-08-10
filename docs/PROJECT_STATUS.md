@@ -1,22 +1,22 @@
-# Current project status
+# Current jnpf. project status
 
 This page distinguishes production behavior from code that only compiles or runs in regression tests. It is the practical source of truth for the repository's current integration state.
 
 ## Status vocabulary
 
-- **Production**: reachable in the `enignE` executable.
+- **Production**: reachable in the `jnpf` executable.
 - **Compile-checked**: built by CMake but not connected to the executable.
-- **Regression-tested**: exercised by `enignE_scene_tests` without the full production editor.
+- **Regression-tested**: exercised by `jnpf_scene_tests` without the full production editor.
 - **Pending**: represented by code or design intent but not complete end to end.
 
 ## Target status
 
 | Target | Status | Notes |
 |---|---|---|
-| `enignE` | Production | Native DX11 editor/application built from `DX3D` and `Game` |
-| `enignE_dx11_backend` | Compile-checked and test dependency | Canonical context, targets, mesh, texture, and shadow resources |
-| `enignE_editor_ui` | Compile-checked | Canonical modular workbench; not linked into `enignE` |
-| `enignE_scene_tests` | Regression-tested | Canonical scene/editor/assets/render planning/physics suite |
+| `jnpf` | Production | Native DX11 editor/application built from `DX3D` and `Game` |
+| `jnpf_dx11_backend` | Compile-checked and test dependency | Canonical context, targets, mesh, texture, and shadow resources |
+| `jnpf_editor_ui` | Compile-checked | Canonical modular workbench; not linked into `jnpf` |
+| `jnpf_scene_tests` | Regression-tested | Canonical scene/editor/assets/render planning/physics suite |
 | Editor-free runtime | Pending | No active standalone runtime target |
 | Canonical folder package | Pending | Baseline install exists; strict project package script is not integrated |
 
@@ -42,7 +42,7 @@ This page distinguishes production behavior from code that only compiles or runs
 
 ### Two scene APIs
 
-`dx3d::World`/`GameObject` and `enignE::Scene::Scene` are separate models. A feature implemented only under `engine/` does not automatically appear in the editor. Scene files also require explicit conversion between `.escene` and `.dx3dscene`.
+`dx3d::World`/`GameObject` and `jnpf::Scene::Scene` are separate models. A feature implemented only under `engine/` does not automatically appear in the editor. Scene files also require explicit conversion between `.escene` and `.dx3dscene`.
 
 ### Two editor implementations
 
@@ -54,7 +54,7 @@ The production renderer is functional and feature-rich but submits objects direc
 
 ### Configuration is not yet unified
 
-`enignE.enigneproject` and `config/input-actions.json` belong to the canonical project/runtime design. The production entry point uses a positional `.dx3dscene` argument and `InputActionMap::createDefaults()` instead.
+`jnpf.jnpfproject` and `config/input-actions.json` belong to the canonical project/runtime design. The production entry point uses a positional `.dx3dscene` argument and `InputActionMap::createDefaults()` instead.
 
 ## Known limitations
 
@@ -75,7 +75,7 @@ The production renderer is functional and feature-rich but submits objects direc
 ## Recommended next integration milestones
 
 1. Choose the canonical `Scene` as the production world boundary or build a temporary explicit adapter.
-2. Host `enignE_editor_ui` from a canonical executable using the existing DX11 SRV providers.
+2. Host `jnpf_editor_ui` from a canonical executable using the existing DX11 SRV providers.
 3. Connect canonical chunk visibility and bounded instance submission to the DX11 draw backend.
 4. Unify `.escene` authoring, project discovery, and configurable input in the production host.
 5. Add an editor-free runtime target and make the strict folder package script an active verified target.

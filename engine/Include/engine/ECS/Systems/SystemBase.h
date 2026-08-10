@@ -2,7 +2,7 @@
 
 #include <entt/entity/registry.hpp>
 
-namespace enignE::ECS
+namespace jnpf::ECS
 {
 	class SystemBase
 	{

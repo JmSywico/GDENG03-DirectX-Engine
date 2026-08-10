@@ -8,7 +8,7 @@
 #include "../../Graphics/Model.h"
 #include <entt/entity/entity.hpp>
 
-namespace enignE::Scene
+namespace jnpf::Scene
 {
 	struct IDComponent
 	{

@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <memory>
 
-namespace enignE::Graphics::DX11
+namespace jnpf::Graphics::DX11
 {
 	struct ContextStats
 	{

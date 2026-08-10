@@ -12,7 +12,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace enignE::Scene
+namespace jnpf::Scene
 {
 	/**
 	 * @brief Monotonic invalidation counters consumed by scene and render systems.

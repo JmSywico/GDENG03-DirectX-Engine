@@ -1,4 +1,4 @@
-# Development guide
+# jnpf. development guide
 
 This guide is for contributors changing the current repository. Read [Project status](PROJECT_STATUS.md) first: production `DX3D` code and canonical `engine` code compile into different targets and require deliberate integration.
 
@@ -6,10 +6,10 @@ This guide is for contributors changing the current repository. Read [Project st
 
 | CMake target | Source ownership | Dependencies | Purpose |
 |---|---|---|---|
-| `enignE` | `DX3D/Source`, `Game`, production serializer, vendored ImGui | EnTT, Jolt, Windows/DX11 libraries | Runnable editor/application |
-| `enignE_dx11_backend` | canonical DX11 context, mesh, texture, shadow resource code | fmt, Windows/DX11 libraries | Backend compile/test dependency |
-| `enignE_editor_ui` | canonical layers and editor panels | EnTT, JSON, fmt, spdlog, ImGui docking, D3D11 | Compile-check modular workbench |
-| `enignE_scene_tests` | canonical scene/ECS/editor/assets/physics slices and tests | backend, Assimp, EnTT, fmt, spdlog, JSON, Jolt | Registered regression executable |
+| `jnpf` | `DX3D/Source`, `Game`, production serializer, vendored ImGui | EnTT, Jolt, Windows/DX11 libraries | Runnable editor/application |
+| `jnpf_dx11_backend` | canonical DX11 context, mesh, texture, shadow resource code | fmt, Windows/DX11 libraries | Backend compile/test dependency |
+| `jnpf_editor_ui` | canonical layers and editor panels | EnTT, JSON, fmt, spdlog, ImGui docking, D3D11 | Compile-check modular workbench |
+| `jnpf_scene_tests` | canonical scene/ECS/editor/assets/physics slices and tests | backend, Assimp, EnTT, fmt, spdlog, JSON, Jolt | Registered regression executable |
 | `docs` | Doxyfile and maintained docs | Doxygen, optional | Generate HTML API docs |
 
 The default build includes all non-optional targets. `BUILD_TESTING` defaults through CTest and is enabled explicitly by the presets.
@@ -18,7 +18,7 @@ The default build includes all non-optional targets. `BUILD_TESTING` defaults th
 
 Change `DX3D/` and `Game/` when the behavior must appear in the runnable application now. Change `engine/` when extending the canonical architecture or its regression contracts. If a feature must exist in both, implement and test each representation consciously; identical class names do not imply ABI or semantic compatibility.
 
-Avoid introducing a new third implementation. Prefer moving production behavior toward the canonical boundary in reviewable slices while keeping `enignE` buildable.
+Avoid introducing a new third implementation. Prefer moving production behavior toward the canonical boundary in reviewable slices while keeping `jnpf` buildable.
 
 ## Production conventions
 
@@ -94,7 +94,7 @@ Imported/combined meshes use `MeshData` with position, color, and normal per ver
 
 ## Adding canonical functionality
 
-Canonical mutations should go through `enignE::Scene::Scene` setters or explicitly call the right dirty/version method after direct component changes. Persistent references use stable `IDComponent` values, not `entt::entity`.
+Canonical mutations should go through `jnpf::Scene::Scene` setters or explicitly call the right dirty/version method after direct component changes. Persistent references use stable `IDComponent` values, not `entt::entity`.
 
 Editor mutations should be commands/snapshots so dirty revisions and undo behavior stay observable. CPU asset preparation may run in jobs, but Direct3D finalization and scene structural commits belong on the engine thread.
 

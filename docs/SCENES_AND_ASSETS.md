@@ -1,4 +1,4 @@
-# Scenes and assets
+# jnpf. scenes and assets
 
 The repository contains two scene families because the production DX11 editor and the canonical migration layer currently use different serializers.
 
@@ -7,13 +7,13 @@ The repository contains two scene families because the production DX11 editor an
 | Extension/location | Owner | Use today |
 |---|---|---|
 | `.dx3dscene` | Production `dx3d::SceneSerializer` | Load/save in the runnable editor and pass on the executable command line |
-| `.escene` | Canonical `enignE::Scene::SceneSerializer` | Canonical tests, migration inputs, and source counterparts for converted samples |
+| `.escene` | Canonical `jnpf::Scene::SceneSerializer` | Canonical tests, migration inputs, and source counterparts for converted samples |
 | `Scene.dx3dscene` | Production serializer | Default scene when no startup argument is supplied |
 
 The two formats are not interchangeable. The editor's open dialog displays both, but selecting an `.escene` does not parse it directly. Instead, the editor searches for a same-named `.dx3dscene`:
 
 1. beside the selected `.escene`; then
-2. under `Scenes/enignE/`.
+2. under `Scenes/jnpf/`.
 
 If neither converted counterpart exists, loading stops with an explanatory Console error.
 
@@ -79,12 +79,12 @@ These files are valuable as readable source scenes and test fixtures, but the ru
 | Scene | Purpose |
 |---|---|
 | `Scene.dx3dscene` | Default production editor scene |
-| `Scenes/enignE/editor-test.dx3dscene` | Compact editor feature check |
-| `Scenes/enignE/falling-cubes.dx3dscene` | Dynamic-body and collision demonstration |
-| `Scenes/enignE/rotator-demo.dx3dscene` | Rotator behavior demonstration |
-| `Scenes/enignE/test.dx3dscene` | Small runtime-style sample |
-| `Scenes/enignE/physics-stress.dx3dscene` | Large physics workload |
-| `Scenes/enignE/instance-stress.dx3dscene` | Very large geometry/instance source workload |
+| `Scenes/jnpf/editor-test.dx3dscene` | Compact editor feature check |
+| `Scenes/jnpf/falling-cubes.dx3dscene` | Dynamic-body and collision demonstration |
+| `Scenes/jnpf/rotator-demo.dx3dscene` | Rotator behavior demonstration |
+| `Scenes/jnpf/test.dx3dscene` | Small runtime-style sample |
+| `Scenes/jnpf/physics-stress.dx3dscene` | Large physics workload |
+| `Scenes/jnpf/instance-stress.dx3dscene` | Very large geometry/instance source workload |
 
 The corresponding `.escene` files are canonical fixtures. The large stress scenes are intended for validation and profiling, not as default authoring templates. The production renderer does not yet use the canonical instance-submission path, so the instance stress scene can be expensive in the runnable editor.
 
@@ -99,10 +99,10 @@ Save is only performed in Edit Mode. Invoking it while playing stops and restore
 The executable reads an optional positional scene path:
 
 ```powershell
-./out/build/x64-debug/bin/enignE.exe Scenes/enignE/falling-cubes.dx3dscene
+./out/build/x64-debug/bin/jnpf.exe Scenes/jnpf/falling-cubes.dx3dscene
 ```
 
-Without an argument, the editor does not read `enignE.enigneproject`; it uses `Scene.dx3dscene`. The project configuration and its `startupScene` field are part of the canonical runtime/package path and are exercised by tests, but not connected to the current production entry point.
+Without an argument, the editor does not read `jnpf.jnpfproject`; it uses `Scene.dx3dscene`. The project configuration and its `startupScene` field are part of the canonical runtime/package path and are exercised by tests, but not connected to the current production entry point.
 
 ## Asset roots
 
@@ -145,4 +145,4 @@ Missing or undecodable textures are logged once and cached as failed paths for t
 
 The production renderer compiles `DX3D/Assets/Shaders/Basic.hlsl` at startup through D3DCompiler. The same file contains vertex and pixel shader entry points and supports lighting, material modes, texture sampling, and shadow sampling.
 
-CMake copies the entire `DX3D/Assets` directory beside the executable after a successful `enignE` build and includes it in baseline installs. If shader edits appear stale, rebuild the target or run from the repository root.
+CMake copies the entire `DX3D/Assets` directory beside the executable after a successful `jnpf` build and includes it in baseline installs. If shader edits appear stale, rebuild the target or run from the repository root.

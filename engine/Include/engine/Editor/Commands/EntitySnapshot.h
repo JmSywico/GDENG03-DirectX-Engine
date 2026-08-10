@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace enignE::Editor
+namespace jnpf::Editor
 {
 	/**
 	 * @brief Serializable-in-memory state for one entity in an editor snapshot.

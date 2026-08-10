@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <functional>
 
-namespace enignE::Graphics
+namespace jnpf::Graphics
 {
 	class MaterialAsset
 	{

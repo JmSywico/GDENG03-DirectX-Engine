@@ -1,5 +1,0 @@
-Source: D:\GitHub\source\repos\enignE\scenes\physics-stress.escene
-Scene: Physics Stress
-Source entities: 752
-Imported entities: 752
-Warnings: 0

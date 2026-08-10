@@ -1,0 +1,5 @@
+Source: D:\GitHub\source\repos\jnpf\scenes\test.escene
+Scene: Runtime Sample
+Source entities: 2
+Imported entities: 2
+Warnings: 0

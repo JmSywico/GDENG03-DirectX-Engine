@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 
-namespace enignE::Core
+namespace jnpf::Core
 {
 	class SimulationClock
 	{

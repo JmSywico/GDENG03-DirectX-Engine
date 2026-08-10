@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace enignE::Editor
+namespace jnpf::Editor
 {
 	class EditorCamera
 	{

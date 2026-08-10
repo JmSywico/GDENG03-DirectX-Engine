@@ -6,7 +6,7 @@
 #include <entt/entity/registry.hpp>
 #include <vector>
 
-namespace enignE::ECS
+namespace jnpf::ECS
 {
 	/// \brief Maintains parent-child links and marks moved subtrees dirty.
 	class HierarchySystem : public SystemBase

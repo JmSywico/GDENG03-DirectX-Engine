@@ -2,7 +2,7 @@
 
 #include <Windows.h>
 
-namespace enignE::Platform
+namespace jnpf::Platform
 {
 	inline void EnablePerMonitorDpiAwareness()
 	{

@@ -9,7 +9,7 @@
 class Model;
 struct MeshData;
 
-namespace enignE::Scene
+namespace jnpf::Scene
 {
 	struct PrimitiveDesc
 	{

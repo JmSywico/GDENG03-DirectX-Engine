@@ -11,9 +11,9 @@
 
 class Model;
 struct MaterialResource;
-namespace enignE::Core { class JobSystem; }
+namespace jnpf::Core { class JobSystem; }
 
-namespace enignE::Graphics
+namespace jnpf::Graphics
 {
 	class ChunkManager
 	{

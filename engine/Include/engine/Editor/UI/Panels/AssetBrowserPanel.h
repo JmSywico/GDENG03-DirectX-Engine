@@ -4,11 +4,11 @@
 
 #include <array>
 
-namespace enignE::Editor
+namespace jnpf::Editor
 {
 	struct EditorContext;
 
-	inline constexpr const char* AssetDragPayloadID = "ENIGNE_ASSET_REFERENCE";
+	inline constexpr const char* AssetDragPayloadID = "JNPF_ASSET_REFERENCE";
 	struct AssetDragPayload
 	{
 		Graphics::AssetHandle Handle = Graphics::InvalidAssetHandle;

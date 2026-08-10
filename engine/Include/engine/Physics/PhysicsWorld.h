@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-namespace enignE::Physics
+namespace jnpf::Physics
 {
 	enum class MotionType : std::uint8_t { Static, Dynamic, Kinematic };
 	enum class ShapeType : std::uint8_t { Box, Sphere };

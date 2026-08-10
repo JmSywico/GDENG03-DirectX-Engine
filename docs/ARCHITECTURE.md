@@ -1,6 +1,6 @@
-# Architecture
+# jnpf. architecture
 
-enignE currently has a production application and a canonical engine migration layer in the same repository. Both use native DirectX 11, but they are not yet one runtime and their scene/component types are not interchangeable.
+The jnpf. project currently has a production application and a canonical engine migration layer in the same repository. Both use native DirectX 11, but they are not yet one runtime and their scene/component types are not interchangeable.
 
 ## Repository boundary
 
@@ -9,18 +9,18 @@ Game/main.cpp
     -> MainGame
         -> dx3d::Game
             -> DX3D world, editor, renderer, input, physics
-            -> enignE.exe
+            -> jnpf.exe
 
 engine/Include + engine/Source
     -> canonical scene/editor/assets/physics/DX11 libraries
-    -> enignE_dx11_backend
-    -> enignE_editor_ui
-    -> enignE_scene_tests
+    -> jnpf_dx11_backend
+    -> jnpf_editor_ui
+    -> jnpf_scene_tests
 ```
 
 ### Production application
 
-`enignE.exe` is built from `DX3D/Source`, `Game`, the serializer implementation currently stored under `DX3D/Include`, and the vendored ImGui implementation in `DX3D/External/ImGui`. This is the editor users run today.
+`jnpf.exe` is built from `DX3D/Source`, `Game`, the serializer implementation currently stored under `DX3D/Include`, and the vendored ImGui implementation in `DX3D/External/ImGui`. This is the editor users run today.
 
 The entry point constructs `MainGame`, which derives from `dx3d::Game`. `dx3d::Game` owns the top-level services:
 
@@ -39,9 +39,9 @@ The entry point constructs `MainGame`, which derives from `dx3d::Game`. `dx3d::G
 
 The `engine/` tree is a newer modular design under active integration. CMake keeps three slices healthy:
 
-- `enignE_dx11_backend`: device/swap-chain context, render/depth targets, mesh buffers, WIC textures, and shadow targets;
-- `enignE_editor_ui`: layers, editor context, title bar, hierarchy, inspector, asset browser, and gizmo toolbar; and
-- `enignE_scene_tests`: scene/ECS, command stack, persistence/migrations, assets, jobs, chunk planning, input systems, and Jolt physics.
+- `jnpf_dx11_backend`: device/swap-chain context, render/depth targets, mesh buffers, WIC textures, and shadow targets;
+- `jnpf_editor_ui`: layers, editor context, title bar, hierarchy, inspector, asset browser, and gizmo toolbar; and
+- `jnpf_scene_tests`: scene/ECS, command stack, persistence/migrations, assets, jobs, chunk planning, input systems, and Jolt physics.
 
 The canonical tree does not currently provide the executable entry point. Treat it as tested integration work, not as a second runnable editor.
 
@@ -93,7 +93,7 @@ Production components include:
 | Simulation | Rotator, Fly Controller |
 | Physics | Rigid Body, Collider |
 
-### Canonical `enignE::Scene::Scene`
+### Canonical `jnpf::Scene::Scene`
 
 The canonical scene owns its EnTT registry directly and uses data-oriented entities with `IDComponent`, hierarchy, transform, renderer, camera, light, behavior, and physics components. It adds:
 

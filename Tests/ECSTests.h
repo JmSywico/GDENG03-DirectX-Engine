@@ -8,7 +8,7 @@
 
 #include <cassert>
 
-namespace enignE::Tests::ECS
+namespace jnpf::Tests::ECS
 {
 	inline void RunAllTests()
 	{
@@ -27,10 +27,10 @@ namespace enignE::Tests::ECS
 		registry.emplace<Scene::HierarchyComponent>(parent);
 		registry.emplace<Scene::HierarchyComponent>(child);
 
-		enignE::ECS::HierarchySystem::SetParent(registry, child, parent);
-		assert(enignE::ECS::HierarchySystem::GetParent(registry, child) == parent);
+		jnpf::ECS::HierarchySystem::SetParent(registry, child, parent);
+		assert(jnpf::ECS::HierarchySystem::GetParent(registry, child) == parent);
 
-		enignE::ECS::TransformPropagationSystem transformSystem;
+		jnpf::ECS::TransformPropagationSystem transformSystem;
 		transformSystem.Update(registry, 0.0f);
 
 		DirectX::XMFLOAT4X4 childWorld;

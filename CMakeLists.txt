@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
-project(enignE LANGUAGES CXX)
+project(jnpf LANGUAGES CXX)
 
 if(NOT WIN32 OR NOT MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-    message(FATAL_ERROR "enignE DX11 requires an x64 MSVC Windows toolchain")
+    message(FATAL_ERROR "jnpf. DX11 requires an x64 MSVC Windows toolchain")
 endif()
 
 include(FetchContent)
@@ -13,7 +13,7 @@ if(DOXYGEN_FOUND)
     add_custom_target(docs
         COMMAND "${DOXYGEN_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/Doxyfile"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        COMMENT "Generating enignE API documentation"
+        COMMENT "Generating jnpf. API documentation"
         VERBATIM)
 endif()
 
@@ -21,7 +21,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Match the authoritative enignE dependency pins. Third-party source belongs
+# Match the authoritative jnpf. dependency pins. Third-party source belongs
 # under the CMake build tree, never in the engine source tree.
 FetchContent_Declare(
     EnTT
@@ -88,136 +88,136 @@ FetchContent_Declare(
     SOURCE_SUBDIR Build)
 FetchContent_MakeAvailable(JoltPhysics)
 
-set(ENIGNE_LEGACY_MODULE_DIR "${CMAKE_SOURCE_DIR}/DX3D")
-set(ENIGNE_IMGUI_DIR "${ENIGNE_LEGACY_MODULE_DIR}/External/ImGui")
+set(JNPF_PRODUCTION_MODULE_DIR "${CMAKE_SOURCE_DIR}/DX3D")
+set(JNPF_IMGUI_DIR "${JNPF_PRODUCTION_MODULE_DIR}/External/ImGui")
 
-file(GLOB_RECURSE ENIGNE_DX11_SOURCES CONFIGURE_DEPENDS
-    "${ENIGNE_LEGACY_MODULE_DIR}/Source/*.cpp"
+file(GLOB_RECURSE JNPF_DX11_SOURCES CONFIGURE_DEPENDS
+    "${JNPF_PRODUCTION_MODULE_DIR}/Source/*.cpp"
     "${CMAKE_SOURCE_DIR}/Game/*.cpp")
-list(REMOVE_ITEM ENIGNE_DX11_SOURCES
+list(REMOVE_ITEM JNPF_DX11_SOURCES
     "${CMAKE_SOURCE_DIR}/Game/EditorMain.cpp"
     "${CMAKE_SOURCE_DIR}/Game/RuntimeMain.cpp")
-list(APPEND ENIGNE_DX11_SOURCES
-    "${ENIGNE_LEGACY_MODULE_DIR}/Include/DX3D/Game/SceneSerializer.cpp"
-    "${ENIGNE_IMGUI_DIR}/imgui.cpp"
-    "${ENIGNE_IMGUI_DIR}/imgui_draw.cpp"
-    "${ENIGNE_IMGUI_DIR}/imgui_tables.cpp"
-    "${ENIGNE_IMGUI_DIR}/imgui_widgets.cpp"
-    "${ENIGNE_IMGUI_DIR}/imgui_impl_dx11.cpp"
-    "${ENIGNE_IMGUI_DIR}/imgui_impl_win32.cpp")
+list(APPEND JNPF_DX11_SOURCES
+    "${JNPF_PRODUCTION_MODULE_DIR}/Include/DX3D/Game/SceneSerializer.cpp"
+    "${JNPF_IMGUI_DIR}/imgui.cpp"
+    "${JNPF_IMGUI_DIR}/imgui_draw.cpp"
+    "${JNPF_IMGUI_DIR}/imgui_tables.cpp"
+    "${JNPF_IMGUI_DIR}/imgui_widgets.cpp"
+    "${JNPF_IMGUI_DIR}/imgui_impl_dx11.cpp"
+    "${JNPF_IMGUI_DIR}/imgui_impl_win32.cpp")
 
-add_executable(enignE ${ENIGNE_DX11_SOURCES})
-target_include_directories(enignE PRIVATE
-    "${ENIGNE_LEGACY_MODULE_DIR}/Include"
-    "${ENIGNE_LEGACY_MODULE_DIR}/Source"
-    "${ENIGNE_IMGUI_DIR}")
-target_compile_definitions(enignE PRIVATE
+add_executable(jnpf ${JNPF_DX11_SOURCES})
+target_include_directories(jnpf PRIVATE
+    "${JNPF_PRODUCTION_MODULE_DIR}/Include"
+    "${JNPF_PRODUCTION_MODULE_DIR}/Source"
+    "${JNPF_IMGUI_DIR}")
+target_compile_definitions(jnpf PRIVATE
     UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-target_compile_options(enignE PRIVATE /W4 /permissive- /bigobj /Zc:preprocessor)
-target_link_libraries(enignE PRIVATE
+target_compile_options(jnpf PRIVATE /W4 /permissive- /bigobj /Zc:preprocessor)
+target_link_libraries(jnpf PRIVATE
 	EnTT::EnTT Jolt
 	d3d11 d3dcompiler dxgi user32 gdi32 shell32 comdlg32 winmm windowscodecs ole32)
 
-add_library(enignE_dx11_backend STATIC
-    "${CMAKE_SOURCE_DIR}/engine/Source/enignE/Graphics/DX11/DX11Context.cpp"
+add_library(jnpf_dx11_backend STATIC
+    "${CMAKE_SOURCE_DIR}/engine/Source/jnpf/Graphics/DX11/DX11Context.cpp"
     "${CMAKE_SOURCE_DIR}/engine/Include/engine/Graphics/DX11/DX11Context.h"
-    "${CMAKE_SOURCE_DIR}/engine/Source/enignE/Graphics/Mesh.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/Source/jnpf/Graphics/Mesh.cpp"
     "${CMAKE_SOURCE_DIR}/engine/Include/engine/Graphics/Mesh.h"
     "${CMAKE_SOURCE_DIR}/engine/Include/engine/Graphics/VertexTypes.h"
-    "${CMAKE_SOURCE_DIR}/engine/Source/enignE/Graphics/Texture2D.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/Source/jnpf/Graphics/Texture2D.cpp"
     "${CMAKE_SOURCE_DIR}/engine/Include/engine/Graphics/Texture2D.h")
-target_sources(enignE_dx11_backend PRIVATE
-    "${CMAKE_SOURCE_DIR}/engine/Source/enignE/Graphics/ShadowRenderer.cpp"
+target_sources(jnpf_dx11_backend PRIVATE
+    "${CMAKE_SOURCE_DIR}/engine/Source/jnpf/Graphics/ShadowRenderer.cpp"
     "${CMAKE_SOURCE_DIR}/engine/Include/engine/Graphics/ShadowRenderer.h")
-target_include_directories(enignE_dx11_backend PUBLIC
+target_include_directories(jnpf_dx11_backend PUBLIC
     "${CMAKE_SOURCE_DIR}/engine/Include/engine")
-target_compile_definitions(enignE_dx11_backend PRIVATE
+target_compile_definitions(jnpf_dx11_backend PRIVATE
     UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-target_compile_options(enignE_dx11_backend PRIVATE /W4 /permissive- /Zc:preprocessor)
-target_link_libraries(enignE_dx11_backend PUBLIC d3d11 dxgi windowscodecs ole32 fmt::fmt)
+target_compile_options(jnpf_dx11_backend PRIVATE /W4 /permissive- /Zc:preprocessor)
+target_link_libraries(jnpf_dx11_backend PUBLIC d3d11 dxgi windowscodecs ole32 fmt::fmt)
 
 # Build the canonical editor workbench independently from the proven DX11
 # executable. This keeps panel, command, viewport-SRV, and profiler code
 # continuously compile-checked during the engine migration.
-add_library(enignE_editor_ui STATIC
-    engine/Source/enignE/Layer/Layer.cpp
-    engine/Source/enignE/Layer/LayerStack.cpp
-    engine/Source/enignE/Layer/EditorLayer.cpp
-    engine/Source/enignE/Layer/DebugLayer.cpp
-    engine/Source/enignE/Editor/EditorContext.cpp
-    engine/Source/enignE/Editor/UI/EditorLoadingWindow.cpp
-    engine/Source/enignE/Editor/UI/Chrome/TitleBar.cpp
-    engine/Source/enignE/Editor/UI/Panels/AssetBrowserPanel.cpp
-    engine/Source/enignE/Editor/UI/Panels/InspectorPanel.cpp
-    engine/Source/enignE/Editor/UI/Panels/SceneHierarchyPanel.cpp
-    engine/Source/enignE/Editor/UI/Widgets/GizmoToolbar.cpp)
-target_include_directories(enignE_editor_ui PUBLIC
+add_library(jnpf_editor_ui STATIC
+    engine/Source/jnpf/Layer/Layer.cpp
+    engine/Source/jnpf/Layer/LayerStack.cpp
+    engine/Source/jnpf/Layer/EditorLayer.cpp
+    engine/Source/jnpf/Layer/DebugLayer.cpp
+    engine/Source/jnpf/Editor/EditorContext.cpp
+    engine/Source/jnpf/Editor/UI/EditorLoadingWindow.cpp
+    engine/Source/jnpf/Editor/UI/Chrome/TitleBar.cpp
+    engine/Source/jnpf/Editor/UI/Panels/AssetBrowserPanel.cpp
+    engine/Source/jnpf/Editor/UI/Panels/InspectorPanel.cpp
+    engine/Source/jnpf/Editor/UI/Panels/SceneHierarchyPanel.cpp
+    engine/Source/jnpf/Editor/UI/Widgets/GizmoToolbar.cpp)
+target_include_directories(jnpf_editor_ui PUBLIC
     "${CMAKE_SOURCE_DIR}/engine/Include/engine"
     "${imgui_docking_SOURCE_DIR}")
-target_compile_definitions(enignE_editor_ui PRIVATE
+target_compile_definitions(jnpf_editor_ui PRIVATE
     UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-target_compile_options(enignE_editor_ui PRIVATE /W4 /permissive- /Zc:preprocessor /bigobj)
-target_link_libraries(enignE_editor_ui PUBLIC
+target_compile_options(jnpf_editor_ui PRIVATE /W4 /permissive- /Zc:preprocessor /bigobj)
+target_link_libraries(jnpf_editor_ui PUBLIC
     d3d11 EnTT::EnTT nlohmann_json::nlohmann_json fmt::fmt spdlog::spdlog psapi)
 
 if(BUILD_TESTING)
-    add_executable(enignE_scene_tests
+    add_executable(jnpf_scene_tests
         Tests/SceneRegressionTests.cpp
-        engine/Source/enignE/Core/JobSystem.cpp
-        engine/Source/enignE/Scene/Scene.cpp
-        engine/Source/enignE/Scene/ComponentCatalog.cpp
-        engine/Source/enignE/Scene/SceneFactory.cpp
-        engine/Source/enignE/Scene/Serialization/SceneSerializer.cpp
-        engine/Source/enignE/Scene/Serialization/SceneMigration.cpp
-        engine/Source/enignE/Editor/Commands/EditorCommand.cpp
-        engine/Source/enignE/Editor/Commands/CommandStack.cpp
-        engine/Source/enignE/Editor/Commands/EntitySnapshot.cpp
-        engine/Source/enignE/Editor/PrefabAsset.cpp
-        engine/Source/enignE/Input/InputActions.cpp
-        engine/Source/enignE/ECS/Systems/HierarchySystem.cpp
-        engine/Source/enignE/ECS/Systems/FlyControllerSystem.cpp
-        engine/Source/enignE/ECS/Systems/RotatorSystem.cpp
-        engine/Source/enignE/ECS/Systems/TransformPropagationSystem.cpp
-        engine/Source/enignE/Graphics/Instancing/ChunkManager.cpp
-        engine/Source/enignE/Graphics/Instancing/RenderChunk.cpp
-        engine/Source/enignE/Graphics/ProcGen/ProcGen.cpp
-        engine/Source/enignE/Graphics/AssetRegistry.cpp
-        engine/Source/enignE/Graphics/ModelLoader.cpp
-        engine/Source/enignE/Graphics/MaterialAsset.cpp
-        engine/Source/enignE/Project/ProjectConfig.cpp
-        engine/Source/enignE/Physics/PhysicsWorld.cpp
-        engine/Source/enignE/Logging/Logging.cpp
-        engine/Source/enignE/Logging/Logging.win.cpp)
-    target_include_directories(enignE_scene_tests PRIVATE
+        engine/Source/jnpf/Core/JobSystem.cpp
+        engine/Source/jnpf/Scene/Scene.cpp
+        engine/Source/jnpf/Scene/ComponentCatalog.cpp
+        engine/Source/jnpf/Scene/SceneFactory.cpp
+        engine/Source/jnpf/Scene/Serialization/SceneSerializer.cpp
+        engine/Source/jnpf/Scene/Serialization/SceneMigration.cpp
+        engine/Source/jnpf/Editor/Commands/EditorCommand.cpp
+        engine/Source/jnpf/Editor/Commands/CommandStack.cpp
+        engine/Source/jnpf/Editor/Commands/EntitySnapshot.cpp
+        engine/Source/jnpf/Editor/PrefabAsset.cpp
+        engine/Source/jnpf/Input/InputActions.cpp
+        engine/Source/jnpf/ECS/Systems/HierarchySystem.cpp
+        engine/Source/jnpf/ECS/Systems/FlyControllerSystem.cpp
+        engine/Source/jnpf/ECS/Systems/RotatorSystem.cpp
+        engine/Source/jnpf/ECS/Systems/TransformPropagationSystem.cpp
+        engine/Source/jnpf/Graphics/Instancing/ChunkManager.cpp
+        engine/Source/jnpf/Graphics/Instancing/RenderChunk.cpp
+        engine/Source/jnpf/Graphics/ProcGen/ProcGen.cpp
+        engine/Source/jnpf/Graphics/AssetRegistry.cpp
+        engine/Source/jnpf/Graphics/ModelLoader.cpp
+        engine/Source/jnpf/Graphics/MaterialAsset.cpp
+        engine/Source/jnpf/Project/ProjectConfig.cpp
+        engine/Source/jnpf/Physics/PhysicsWorld.cpp
+        engine/Source/jnpf/Logging/Logging.cpp
+        engine/Source/jnpf/Logging/Logging.win.cpp)
+    target_include_directories(jnpf_scene_tests PRIVATE
         "${CMAKE_SOURCE_DIR}/engine/Include/engine")
-    target_compile_definitions(enignE_scene_tests PRIVATE
+    target_compile_definitions(jnpf_scene_tests PRIVATE
         UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-    target_compile_options(enignE_scene_tests PRIVATE /W4 /permissive- /Zc:preprocessor /bigobj)
-    target_link_libraries(enignE_scene_tests PRIVATE
-        enignE_dx11_backend assimp::assimp EnTT::EnTT fmt::fmt
+    target_compile_options(jnpf_scene_tests PRIVATE /W4 /permissive- /Zc:preprocessor /bigobj)
+    target_link_libraries(jnpf_scene_tests PRIVATE
+        jnpf_dx11_backend assimp::assimp EnTT::EnTT fmt::fmt
         spdlog::spdlog nlohmann_json::nlohmann_json Jolt xinput9_1_0)
-    add_test(NAME scene_regressions COMMAND enignE_scene_tests)
+    add_test(NAME scene_regressions COMMAND jnpf_scene_tests)
 endif()
 
-set_target_properties(enignE PROPERTIES
+set_target_properties(jnpf PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
-add_custom_command(TARGET enignE POST_BUILD
+add_custom_command(TARGET jnpf POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${ENIGNE_LEGACY_MODULE_DIR}/Assets"
-        "$<TARGET_FILE_DIR:enignE>/DX3D/Assets"
+        "${JNPF_PRODUCTION_MODULE_DIR}/Assets"
+        "$<TARGET_FILE_DIR:jnpf>/DX3D/Assets"
     COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:enignE>/Scenes"
+        "$<TARGET_FILE_DIR:jnpf>/Scenes"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/Scenes"
-        "$<TARGET_FILE_DIR:enignE>/Scenes"
+        "$<TARGET_FILE_DIR:jnpf>/Scenes"
     VERBATIM)
 
-install(TARGETS enignE RUNTIME DESTINATION . COMPONENT Runtime)
-install(DIRECTORY "${ENIGNE_LEGACY_MODULE_DIR}/Assets/"
+install(TARGETS jnpf RUNTIME DESTINATION . COMPONENT Runtime)
+install(DIRECTORY "${JNPF_PRODUCTION_MODULE_DIR}/Assets/"
     DESTINATION DX3D/Assets COMPONENT Runtime)
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/Scenes/"
     DESTINATION Scenes COMPONENT Runtime)
 
-# Canonical enignE modules are being ported under enignE/{Include,Source}.
+# Canonical jnpf. modules are being ported under engine/{Include,Source}.
 # This keeps the proven DX11 executable buildable throughout that migration.

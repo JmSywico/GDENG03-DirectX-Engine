@@ -9,15 +9,15 @@
 
 class Model;
 class Texture2D;
-namespace enignE::Graphics { class AssetRegistry; }
+namespace jnpf::Graphics { class AssetRegistry; }
 struct MeshData;
 
-namespace enignE::Scene
+namespace jnpf::Scene
 {
 	class Scene;
 }
 
-namespace enignE::Editor
+namespace jnpf::Editor
 {
 	class CommandStack;
 	enum class GizmoMode

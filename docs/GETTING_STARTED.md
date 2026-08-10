@@ -1,10 +1,10 @@
-# Getting started
+# Getting started with jnpf.
 
-This guide covers the supported CMake workflow for configuring, building, testing, running, and installing enignE.
+This guide covers the supported CMake workflow for configuring, building, testing, running, and installing jnpf.
 
 ## Supported environment
 
-enignE deliberately targets a narrow platform:
+jnpf. deliberately targets a narrow platform:
 
 - Windows 10 or Windows 11, 64-bit
 - MSVC with C++20 support
@@ -42,31 +42,31 @@ cmake --build --preset x64-debug
 Useful target-specific builds:
 
 ```powershell
-cmake --build --preset x64-debug --target enignE
-cmake --build --preset x64-debug --target enignE_scene_tests
-cmake --build --preset x64-debug --target enignE_editor_ui
+cmake --build --preset x64-debug --target jnpf
+cmake --build --preset x64-debug --target jnpf_scene_tests
+cmake --build --preset x64-debug --target jnpf_editor_ui
 ```
 
 The runnable executable is written to:
 
 ```text
-out/build/x64-debug/bin/enignE.exe
+out/build/x64-debug/bin/jnpf.exe
 ```
 
-After linking `enignE`, CMake copies `DX3D/Assets` and `Scenes` beside the executable. Rebuilding the target refreshes those copied resources.
+After linking `jnpf`, CMake copies `DX3D/Assets` and `Scenes` beside the executable. Rebuilding the target refreshes those copied resources.
 
 ## Run
 
 From the repository root:
 
 ```powershell
-./out/build/x64-debug/bin/enignE.exe
+./out/build/x64-debug/bin/jnpf.exe
 ```
 
 The default scene path is `Scene.dx3dscene`. You can pass a different converted scene as the only positional argument:
 
 ```powershell
-./out/build/x64-debug/bin/enignE.exe Scenes/enignE/rotator-demo.dx3dscene
+./out/build/x64-debug/bin/jnpf.exe Scenes/jnpf/rotator-demo.dx3dscene
 ```
 
 Paths may be absolute or relative to the process working directory. The editor also expects the HLSL shader at `DX3D/Assets/Shaders/Basic.hlsl`, so either:
@@ -112,10 +112,10 @@ The baseline install rule stages the editor executable, DirectX shader assets, a
 ```powershell
 cmake --preset x64-release
 cmake --build --preset x64-release
-cmake --install out/build/x64-release --prefix dist/enignE
+cmake --install out/build/x64-release --prefix dist/jnpf
 ```
 
-The installed program remains the editor-enabled `enignE` executable. A separate editor-free runtime package is not yet an active CMake target.
+The installed program remains the editor-enabled `jnpf` executable. A separate editor-free runtime package is not yet an active CMake target.
 
 ## Generate API documentation
 
@@ -146,11 +146,11 @@ Run from the repository root or the executable output directory. Confirm this fi
 DX3D/Assets/Shaders/Basic.hlsl
 ```
 
-Rebuild `enignE` to refresh the post-build asset copy.
+Rebuild `jnpf` to refresh the post-build asset copy.
 
 ### A scene fails to load
 
-Use a `.dx3dscene` produced for the DX11 application. Selecting a source `.escene` in the dialog only works when a same-named converted `.dx3dscene` exists beside it or under `Scenes/enignE`. See [Scenes and assets](SCENES_AND_ASSETS.md).
+Use a `.dx3dscene` produced for the DX11 application. Selecting a source `.escene` in the dialog only works when a same-named converted `.dx3dscene` exists beside it or under `Scenes/jnpf`. See [Scenes and assets](SCENES_AND_ASSETS.md).
 
 ### The CMake cache references an old compiler or path
 

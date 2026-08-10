@@ -1,0 +1,5 @@
+Source: D:\GitHub\source\repos\jnpf\scenes\instance-stress.escene
+Scene: Instance Stress 70,000
+Source entities: 70002
+Imported entities: 70002
+Warnings: 0

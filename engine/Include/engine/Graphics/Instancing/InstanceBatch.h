@@ -10,7 +10,7 @@
 
 class Mesh;
 
-namespace enignE::Graphics
+namespace jnpf::Graphics
 {
 	struct InstanceBatch
 	{

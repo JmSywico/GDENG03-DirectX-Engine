@@ -1,5 +1,0 @@
-Source: D:\GitHub\source\repos\enignE\scenes\rotator-demo.escene
-Scene: Rotator Demo
-Source entities: 3
-Imported entities: 3
-Warnings: 0

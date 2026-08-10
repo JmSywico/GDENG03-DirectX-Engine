@@ -3,18 +3,18 @@
 #include <filesystem>
 #include <string>
 
-namespace enignE::Project
+namespace jnpf::Project
 {
 	struct ProjectConfig
 	{
 		static constexpr int CurrentVersion = 1;
 
-		std::string Name = "enignE Project";
+		std::string Name = "jnpf Project";
 		std::filesystem::path ProjectFile;
 		std::filesystem::path AssetDirectory = "assets";
 		std::filesystem::path StartupScene = "scenes/test.escene";
 		std::filesystem::path InputActions = "config/input-actions.json";
-		std::filesystem::path CacheDirectory = ".enigne/cache";
+		std::filesystem::path CacheDirectory = ".jnpf/cache";
 		std::filesystem::path OutputDirectory = "build";
 
 		std::filesystem::path GetRoot() const;

@@ -1,6 +1,6 @@
-# enignE
+# jnpf.
 
-enignE is a Windows-only C++20 game-engine and editor project built on native DirectX 11. The runnable application combines a borderless ImGui editor, an EnTT-backed object/component world, versioned scene persistence, Jolt physics, primitive and OBJ rendering, lighting, shadows, editor cameras, transform gizmos, and isolated Play Mode.
+jnpf. is a Windows-only C++20 game-engine and editor project built on native DirectX 11. The runnable application combines a borderless ImGui editor, an EnTT-backed object/component world, versioned scene persistence, Jolt physics, primitive and OBJ rendering, lighting, shadows, editor cameras, transform gizmos, and isolated Play Mode.
 
 The repository is also the workspace for a newer canonical engine layer under `engine/`. Those libraries compile and are regression-tested independently while integration with the runnable `DX3D` application continues. See [Project status](docs/PROJECT_STATUS.md) before choosing an API surface.
 
@@ -37,13 +37,13 @@ Run these commands from an **x64 Native Tools Command Prompt for Visual Studio**
 cmake --preset x64-debug
 cmake --build --preset x64-debug
 ctest --preset x64-debug
-./out/build/x64-debug/bin/enignE.exe
+./out/build/x64-debug/bin/jnpf.exe
 ```
 
 To open a converted sample scene at startup:
 
 ```powershell
-./out/build/x64-debug/bin/enignE.exe Scenes/enignE/falling-cubes.dx3dscene
+./out/build/x64-debug/bin/jnpf.exe Scenes/jnpf/falling-cubes.dx3dscene
 ```
 
 The executable accepts one optional positional argument: a `.dx3dscene` path. Run it with the repository root as the working directory, or run from its output directory where CMake copies the required shader and scene assets.
@@ -78,10 +78,10 @@ The checked-in Visual Studio solution is a convenience path after the matching C
 
 | Target | Role |
 |---|---|
-| `enignE` | Runnable DirectX 11 editor/application |
-| `enignE_dx11_backend` | Canonical DirectX 11 resource/backend library |
-| `enignE_editor_ui` | Compile-checked canonical editor workbench library |
-| `enignE_scene_tests` | Regression test executable registered with CTest |
+| `jnpf` | Runnable DirectX 11 editor/application |
+| `jnpf_dx11_backend` | Canonical DirectX 11 resource/backend library |
+| `jnpf_editor_ui` | Compile-checked canonical editor workbench library |
+| `jnpf_scene_tests` | Regression test executable registered with CTest |
 | `docs` | Doxygen target, available when Doxygen is installed at configure time |
 
 ## Authors

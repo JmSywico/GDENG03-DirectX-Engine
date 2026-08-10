@@ -2,7 +2,7 @@
 
 #include <entt/entity/entity.hpp>
 
-namespace enignE::Editor
+namespace jnpf::Editor
 {
 	struct EditorContext;
 

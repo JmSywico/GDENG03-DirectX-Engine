@@ -84,6 +84,6 @@ wwwroot/
 *.swp
 /docs/doxygen/
 /Tools/GeneratePhysicsStressScene.ps1
-/Tools/Convert-EnignEScenes.ps1
 /Tools/GenerateStressScene.ps1
 /docs/doxygen.zip
+/Tools/Convert-JnpfScenes.ps1

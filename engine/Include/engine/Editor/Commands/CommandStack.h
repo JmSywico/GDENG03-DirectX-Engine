@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace enignE::Editor
+namespace jnpf::Editor
 {
 	/**
 	 * @brief Owns editor commands and provides linear undo/redo history.

@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <imgui.h>
 
-namespace enignE::Editor::UI
+namespace jnpf::Editor::UI
 {
 	inline float g_scaleFactor = 1.0f;
 	inline void SetScaleFactor(float value)

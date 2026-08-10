@@ -1,4 +1,4 @@
-# enignE API documentation
+# jnpf. API documentation
 #
 # Generate directly:
 #   doxygen Doxyfile
@@ -6,7 +6,7 @@
 # Or after configuring CMake:
 #   cmake --build --preset x64-debug --target docs
 
-PROJECT_NAME           = "enignE"
+PROJECT_NAME           = "jnpf."
 PROJECT_BRIEF          = "Windows C++20 native DirectX 11 game engine and editor"
 PROJECT_NUMBER         = "development"
 
@@ -27,14 +27,14 @@ INPUT                  = README.md \
                          DX3D/Include/DX3D \
                          DX3D/Source/DX3D \
                          engine/Include/engine \
-                         engine/Source/enignE \
+                         engine/Source/jnpf \
                          Game
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.hpp *.cpp *.inl *.md *.dox
 
 # Only engine-owned sources are inputs. Do not add external/ or build trees here.
 EXCLUDE                = engine/Include/engine/pch.h \
-                         engine/Source/enignE/pch.cpp \
+                         engine/Source/jnpf/pch.cpp \
                          DX3D/Source/DX3D/Graphics/MeshMerger.cpp \
                          DX3D/External
 EXCLUDE_PATTERNS       = */docs/doxygen/* \

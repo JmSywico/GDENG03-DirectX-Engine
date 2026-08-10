@@ -1,0 +1,5 @@
+Source: D:\GitHub\source\repos\jnpf\scenes\falling-cubes.escene
+Scene: Falling Cubes
+Source entities: 12
+Imported entities: 12
+Warnings: 0
