@@ -164,8 +164,15 @@ namespace
 	{
 		const DPI_AWARENESS_CONTEXT previousDpiContext =
 			SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-		wchar_t path[MAX_PATH]{};
-		if (!initial.empty()) wcsncpy_s(path, initial.c_str(), _TRUNCATE);
+		std::array<wchar_t, 32768> path{};
+		std::wstring initialDirectory;
+		if (!initial.empty())
+		{
+			std::error_code error;
+			auto directory = std::filesystem::absolute(initial, error).parent_path();
+			if (!error && std::filesystem::is_directory(directory, error) && !error)
+				initialDirectory = directory.wstring();
+		}
 		OPENFILENAMEW dialog{};
 		dialog.lStructSize = sizeof(dialog);
 		dialog.hwndOwner = owner;
@@ -173,13 +180,14 @@ namespace
 			L"jnpf. Scenes (*.dx3dscene;*.escene)\0*.dx3dscene;*.escene\0"
 			L"jnpf. DirectX Scene (*.dx3dscene)\0*.dx3dscene\0"
 			L"jnpf. Original Scene (*.escene)\0*.escene\0All Files (*.*)\0*.*\0";
-		dialog.lpstrFile = path;
+		dialog.lpstrFile = path.data();
 		dialog.nMaxFile = static_cast<DWORD>(std::size(path));
+		dialog.lpstrInitialDir = initialDirectory.empty() ? nullptr : initialDirectory.c_str();
 		dialog.lpstrDefExt = L"dx3dscene";
-		dialog.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+		dialog.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
 		const bool accepted = GetOpenFileNameW(&dialog) != FALSE;
 		if (previousDpiContext) SetThreadDpiAwarenessContext(previousDpiContext);
-		return accepted ? std::filesystem::path(path) : std::filesystem::path{};
+		return accepted ? std::filesystem::path(path.data()) : std::filesystem::path{};
 	}
 
 	ImVec4 rgba(
@@ -1527,7 +1535,7 @@ void dx3d::Game::loadScene()
 		m_requestSceneLoad = true;
 		return;
 	}
-	openSceneDialog();
+	m_openSceneDialogRequested = true;
 }
 
 void dx3d::Game::openSceneDialog()
@@ -1927,6 +1935,11 @@ void dx3d::Game::onInternalUpdate()
 	ImGui_ImplDX11_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
+	if (m_openSceneDialogRequested)
+	{
+		m_openSceneDialogRequested = false;
+		openSceneDialog();
+	}
 	if (m_gameInputCaptured &&
 		m_inputSystem->isKeyPressed(KeyCode::Escape))
 	{
@@ -2477,14 +2490,14 @@ void dx3d::Game::onInternalUpdate()
 			saveScene();
 			if (!m_sceneDirty)
 			{
-				openSceneDialog();
+				m_openSceneDialogRequested = true;
 				ImGui::CloseCurrentPopup();
 			}
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Discard and load"))
 		{
-			openSceneDialog();
+			m_openSceneDialogRequested = true;
 			ImGui::CloseCurrentPopup();
 		}
 		ImGui::SameLine();

@@ -218,6 +218,7 @@ namespace dx3d
 		bool m_singleStepRequested{};
 		bool m_sceneDirty{};
 		bool m_requestSceneLoad{};
+		bool m_openSceneDialogRequested{};
 		bool m_requestEditorClose{};
 		bool m_showStats{ true };
 		bool m_showAssetLens{ true };
