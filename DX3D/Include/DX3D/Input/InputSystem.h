@@ -25,7 +25,7 @@ namespace dx3d
 
 		void update();
 	private:
-		short getInternalKeyCode(const KeyCode& key);
+		int getInternalKeyCode(const KeyCode& key);
 		void centerCursor();
 	private:
 		std::array<bool, static_cast<std::size_t>(KeyCode::Count)> m_currentKeys{};

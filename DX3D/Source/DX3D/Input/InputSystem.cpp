@@ -89,7 +89,7 @@ void dx3d::InputSystem::update()
 	if (m_cursorLocked) centerCursor();
 }
 
-short dx3d::InputSystem::getInternalKeyCode(const KeyCode& key)
+int dx3d::InputSystem::getInternalKeyCode(const KeyCode& key)
 {
 	const auto value = static_cast<int>(key);
 	// A-Z
@@ -105,6 +105,9 @@ short dx3d::InputSystem::getInternalKeyCode(const KeyCode& key)
 	case KeyCode::Enter: return VK_RETURN;
 	case KeyCode::Backspace: return VK_BACK;
 	case KeyCode::Delete: return VK_DELETE;
+	case KeyCode::F6: return VK_F6;
+	case KeyCode::F7: return VK_F7;
+	case KeyCode::F8: return VK_F8;
 	case KeyCode::MouseLeft: return VK_LBUTTON;
 	case KeyCode::MouseMiddle: return VK_MBUTTON;
 	case KeyCode::MouseRight: return VK_RBUTTON;

@@ -160,6 +160,8 @@ namespace dx3d
 		void redo();
 		void startPlayMode();
 		void stopPlayMode();
+		void togglePauseMode();
+		void stepSimulation();
 		void setGameInputCaptured(bool captured);
 		void refreshAssetLens();
 

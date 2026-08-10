@@ -1432,6 +1432,8 @@ void dx3d::Game::startPlayMode()
 	m_editorMode = EditorMode::Playing;
 	m_focusSceneViewRequested = false;
 	m_focusGameViewRequested = true;
+	m_sceneViewportHovered = false;
+	m_sceneViewportFocused = false;
 	setGameInputCaptured(true);
 	m_sceneStatusMessage = "Play Mode";
 }
@@ -1445,6 +1447,41 @@ void dx3d::Game::setGameInputCaptured(bool captured)
 	m_gameInputCaptured = allowed;
 	m_inputSystem->setCursorLocked(allowed);
 	m_inputSystem->setCursorVisible(!allowed);
+}
+
+void dx3d::Game::togglePauseMode()
+{
+	if (m_editorMode == EditorMode::Editing)
+		return;
+
+	if (m_editorMode == EditorMode::Playing)
+	{
+		m_editorMode = EditorMode::Paused;
+		setGameInputCaptured(false);
+		m_sceneStatusMessage = "Simulation paused";
+		return;
+	}
+
+	m_editorMode = EditorMode::Playing;
+	setGameInputCaptured(true);
+	m_focusSceneViewRequested = false;
+	m_focusGameViewRequested = true;
+	m_sceneStatusMessage = "Simulation resumed";
+}
+
+void dx3d::Game::stepSimulation()
+{
+	if (m_editorMode == EditorMode::Editing)
+		return;
+
+	if (m_editorMode == EditorMode::Playing)
+	{
+		m_editorMode = EditorMode::Paused;
+		setGameInputCaptured(false);
+	}
+
+	m_singleStepRequested = true;
+	m_sceneStatusMessage = "Simulation step";
 }
 
 void dx3d::Game::stopPlayMode()
@@ -1554,6 +1591,21 @@ void dx3d::Game::onInternalUpdate()
 		m_inputSystem->isKeyPressed(KeyCode::Escape))
 	{
 		setGameInputCaptured(false);
+	}
+	if (m_inputSystem->isKeyPressed(KeyCode::F6))
+	{
+		if (m_editorMode == EditorMode::Editing)
+			startPlayMode();
+		else
+			stopPlayMode();
+	}
+	else if (m_inputSystem->isKeyPressed(KeyCode::F7))
+	{
+		togglePauseMode();
+	}
+	else if (m_inputSystem->isKeyPressed(KeyCode::F8))
+	{
+		stepSimulation();
 	}
 
 	m_frameTimes[m_frameTimeCursor] = deltaTime * 1000.0f;
@@ -2333,20 +2385,29 @@ void dx3d::Game::onInternalUpdate()
 	ImGui::SameLine();
 	if (m_editorMode == EditorMode::Editing)
 	{
-		if (ImGui::Button("Run", { 42.0f * m_uiScale, 30.0f * m_uiScale })) startPlayMode();
+		const bool playPressed = ImGui::Button(
+			"Play", { 46.0f * m_uiScale, 30.0f * m_uiScale });
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Play [F6]");
+		if (playPressed) startPlayMode();
 	}
 	else
 	{
-		if (ImGui::Button("Stop", { 42.0f * m_uiScale, 30.0f * m_uiScale })) stopPlayMode();
-		ImGui::SameLine();
 		const bool paused = m_editorMode == EditorMode::Paused;
-		if (ImGui::Button(paused ? "Resume" : "Pause", { 58.0f * m_uiScale, 30.0f * m_uiScale }))
-			m_editorMode = paused ? EditorMode::Playing : EditorMode::Paused;
-		if (paused)
-		{
-			ImGui::SameLine();
-			if (ImGui::Button("Step", { 42.0f * m_uiScale, 30.0f * m_uiScale })) m_singleStepRequested = true;
-		}
+		const bool stopPressed = ImGui::Button(
+			"Stop", { 46.0f * m_uiScale, 30.0f * m_uiScale });
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stop [F6]");
+		ImGui::SameLine();
+		const bool pausePressed = ImGui::Button(
+			paused ? "Resume" : "Pause", { 58.0f * m_uiScale, 30.0f * m_uiScale });
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s [F7]", paused ? "Resume" : "Pause");
+		ImGui::SameLine();
+		const bool stepPressed = ImGui::Button(
+			"Step", { 46.0f * m_uiScale, 30.0f * m_uiScale });
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Step one fixed frame [F8]");
+
+		if (stopPressed) stopPlayMode();
+		else if (pausePressed) togglePauseMode();
+		else if (stepPressed) stepSimulation();
 	}
 	ImGui::End();
 	ImGui::PopStyleVar(2);

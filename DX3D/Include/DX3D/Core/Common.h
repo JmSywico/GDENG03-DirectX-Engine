@@ -156,6 +156,9 @@ namespace dx3d
 		Enter,
 		Backspace,
 		Delete,
+		F6,
+		F7,
+		F8,
 
 		MouseLeft,
 		MouseRight,
