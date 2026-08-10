@@ -432,11 +432,14 @@ void dx3d::WorldRenderer::render(
 				lightComponent->getIntensity() };
 			data.lightColors[lightCount] = {
 				lightColor.x, lightColor.y, lightColor.z, 0.0f };
+			const f32 effectiveRange = std::max(
+				lightComponent->getRange(), 0.02f);
 			data.lightPositions[lightCount] = {
 				lightPosition.x, lightPosition.y, lightPosition.z,
-				lightComponent->getRange() };
-			const f32 pointNearPlane = std::clamp(
-				lightComponent->getRange() * 0.01f, 0.01f, 0.10f);
+				effectiveRange };
+			const f32 pointNearPlane = std::min(
+				std::clamp(effectiveRange * 0.01f, 0.01f, 0.10f),
+				effectiveRange * 0.5f);
 			data.lightParameters[lightCount] = {
 				static_cast<f32>(lightComponent->getLightType()), spotCosine,
 				pointNearPlane, 0.0f };
@@ -449,7 +452,7 @@ void dx3d::WorldRenderer::render(
 				shadowLightPosition = lightPosition;
 				shadowLightForward = Vec3::normalize(lightForward);
 				shadowArea = lightComponent->getShadowArea();
-				shadowRange = std::max(lightComponent->getRange(), pointNearPlane + 0.01f);
+				shadowRange = effectiveRange;
 				shadowSpotAngle = lightComponent->getSpotAngle();
 				shadowNearPlane = pointNearPlane;
 				if (shadowLightType == LightType::Directional)

@@ -132,7 +132,7 @@
       <AdditionalLibraryDirectories>$(ProjectDir)out\build\x64-debug\_deps\joltphysics-build;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
-      <Command>&quot;$(DevEnvDir)CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe&quot; --preset x64-debug
+      <Command>&quot;$(DevEnvDir)CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe&quot; --preset x64-debug -DCMAKE_MAKE_PROGRAM=&quot;$(DevEnvDir)CommonExtensions\Microsoft\CMake\Ninja\ninja.exe&quot;
 &quot;$(DevEnvDir)CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe&quot; --build --preset x64-debug --target Jolt --parallel</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
@@ -158,7 +158,7 @@
       <AdditionalLibraryDirectories>$(ProjectDir)out\build\x64-release\_deps\joltphysics-build;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
-      <Command>&quot;$(DevEnvDir)CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe&quot; --preset x64-release
+      <Command>&quot;$(DevEnvDir)CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe&quot; --preset x64-release -DCMAKE_MAKE_PROGRAM=&quot;$(DevEnvDir)CommonExtensions\Microsoft\CMake\Ninja\ninja.exe&quot;
 &quot;$(DevEnvDir)CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe&quot; --build --preset x64-release --target Jolt --parallel</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
