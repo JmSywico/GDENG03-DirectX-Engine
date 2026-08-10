@@ -317,6 +317,7 @@ void dx3d::PhysicsWorld::reset(World& world)
 	{
 		if (!body->isEnabled()) continue;
 		auto& object = body->getGameObject();
+		if (!object.isActiveInHierarchy()) continue;
 		auto* collider = object.getComponent<ColliderComponent>();
 		if (!collider) continue;
 		if (body->getBodyType() == RigidBodyType::Dynamic && object.getParent()) continue;

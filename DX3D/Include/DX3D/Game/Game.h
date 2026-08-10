@@ -70,6 +70,7 @@ namespace dx3d
 			};
 
 			std::string sourceName{};
+			bool activeSelf{ true };
 
 			Vec3 position{};
 			Vec3 rotation{};

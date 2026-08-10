@@ -45,7 +45,7 @@ namespace
 		'E'
 	};
 
-	constexpr dx3d::ui32 sceneVersion = 7;
+	constexpr dx3d::ui32 sceneVersion = 8;
 	constexpr dx3d::ui32 oldestSupportedSceneVersion = 1;
 	constexpr dx3d::ui32 maximumObjectCount = 100000;
 	constexpr dx3d::ui32 maximumStringLength = 1024 * 1024;
@@ -68,6 +68,7 @@ namespace
 		dx3d::ui64 parentEntityId{};
 		SceneObjectType type{};
 		std::string name{};
+		bool activeSelf{ true };
 
 		dx3d::Vec3 position{};
 		dx3d::Vec3 rotation{};
@@ -487,6 +488,16 @@ namespace
 
 		if (
 			object->getComponent<
+			dx3d::SphereComponent
+			>()
+			)
+		{
+			type = SceneObjectType::Sphere;
+			return true;
+		}
+
+		if (
+			object->getComponent<
 			dx3d::PlaneComponent
 			>()
 			)
@@ -532,10 +543,12 @@ namespace
 
 		auto* material = object->getComponent<dx3d::MaterialComponent>();
 		const dx3d::ui32 hasMaterial = material ? 1u : 0u;
+		const dx3d::ui32 activeSelf = object->isActiveSelf() ? 1u : 0u;
 
 		if (
 			!writeValue(stream, object->getEntityId()) ||
 			!writeValue(stream, parentEntityId) ||
+			!writeValue(stream, activeSelf) ||
 			!writeValue(stream, hasMaterial)
 		)
 		{
@@ -571,12 +584,6 @@ namespace
 			{
 				return false;
 			}
-		}
-
-		if (object->getComponent<dx3d::SphereComponent>())
-		{
-			type = SceneObjectType::Sphere;
-			return true;
 		}
 
 		auto* collider = object->getComponent<dx3d::ColliderComponent>();
@@ -743,6 +750,13 @@ namespace
 			 !readValue(stream, object.parentEntityId)))
 		{
 			return false;
+		}
+		if (storedVersion >= 8)
+		{
+			dx3d::ui32 activeSelf = 0;
+			if (!readValue(stream, activeSelf) || activeSelf > 1u)
+				return false;
+			object.activeSelf = activeSelf != 0;
 		}
 
 		if (storedVersion >= 3)
@@ -924,7 +938,6 @@ namespace
 		{
 			return false;
 		}
-
 		object.hasRotationQuaternion = storedVersion >= 5;
 
 		switch (object.type)
@@ -998,6 +1011,7 @@ namespace
 		object->setName(
 			data.name
 		);
+		object->setActive(data.activeSelf);
 
 		switch (data.type)
 		{

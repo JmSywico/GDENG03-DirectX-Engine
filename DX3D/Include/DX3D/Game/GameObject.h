@@ -31,6 +31,9 @@ namespace dx3d
 
 		void setName(const std::string& name);
 		const std::string& getName() const noexcept;
+		void setActive(bool active) noexcept;
+		bool isActiveSelf() const noexcept;
+		bool isActiveInHierarchy() const noexcept;
 		ui64 getEntityId() const noexcept;
 		GameObject* getParent() const noexcept;
 		const std::vector<GameObject*>& getChildren() const noexcept;
@@ -45,6 +48,7 @@ namespace dx3d
 
 	private:
 		std::string m_name{ "GameObject" };
+		bool m_activeSelf{ true };
 		ui64 m_entityId{};
 		entt::entity m_registryEntity{ entt::null };
 		GameObject* m_parent{};

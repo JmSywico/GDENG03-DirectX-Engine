@@ -46,7 +46,8 @@ void dx3d::World::update(f32 deltaTime)
 	{
 		for (auto& object : objects)
 		{
-			object->onUpdate(deltaTime);
+			if (object->isActiveInHierarchy())
+				object->onUpdate(deltaTime);
 		}
 	}	
 
@@ -63,7 +64,8 @@ void dx3d::World::fixedUpdate(f32 fixedDeltaTime)
 	for (auto entity : rotators)
 	{
 		auto& rotator = rotators.get<RotatorComponent>(entity);
-		if (!rotator.isEnabled()) continue;
+		if (!rotator.isEnabled() ||
+			!rotator.getGameObject().isActiveInHierarchy()) continue;
 		auto& transform = rotator.getGameObject().getTransform();
 		transform.setRotation(
 			transform.getRotation() + rotator.getAngularVelocity() * fixedDeltaTime);
@@ -73,7 +75,8 @@ void dx3d::World::fixedUpdate(f32 fixedDeltaTime)
 	for (auto entity : controllers)
 	{
 		auto& controller = controllers.get<FlyControllerComponent>(entity);
-		if (!controller.isEnabled()) continue;
+		if (!controller.isEnabled() ||
+			!controller.getGameObject().isActiveInHierarchy()) continue;
 		auto& transform = controller.getGameObject().getTransform();
 		auto rotation = transform.getRotation();
 		if (m_gameContext.input.isKeyDown(KeyCode::MouseRight))

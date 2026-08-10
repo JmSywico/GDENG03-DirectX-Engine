@@ -318,7 +318,8 @@ void dx3d::WorldRenderer::render(
 			auto* lightComponent =
 				components[i];
 
-			if (!lightComponent)
+			if (!lightComponent ||
+				!lightComponent->getGameObject().isActiveInHierarchy())
 				continue;
 
 			auto& lightTransform =
@@ -452,7 +453,8 @@ void dx3d::WorldRenderer::render(
 			auto* component =
 				components[i];
 
-			if (!component)
+			if (!component ||
+				!component->getGameObject().isActiveInHierarchy())
 				continue;
 
 			const bool editorCamera = component->getGameObject().getName() == "Editor Camera";
@@ -592,8 +594,11 @@ void dx3d::WorldRenderer::render(
 			GameObject& object,
 			VertexBuffer& vertexBuffer,
 			IndexBuffer& indexBuffer
-			)
+		)
 		{
+			if (!object.isActiveInHierarchy())
+				return;
+
 			auto& transform = object.getTransform();
 			data.materialAlbedo = { 1.0f, 1.0f, 1.0f, 1.0f };
 			data.materialEmissiveAndStrength = {};

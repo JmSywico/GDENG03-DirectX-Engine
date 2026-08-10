@@ -29,6 +29,28 @@ dx3d::GameObject::getName() const noexcept
 	return m_name;
 }
 
+void dx3d::GameObject::setActive(bool active) noexcept
+{
+	m_activeSelf = active;
+}
+
+bool dx3d::GameObject::isActiveSelf() const noexcept
+{
+	return m_activeSelf;
+}
+
+bool dx3d::GameObject::isActiveInHierarchy() const noexcept
+{
+	if (!m_activeSelf)
+		return false;
+
+	for (const GameObject* parent = m_parent; parent; parent = parent->m_parent)
+		if (!parent->m_activeSelf)
+			return false;
+
+	return true;
+}
+
 dx3d::TransformComponent&
 dx3d::GameObject::getTransform() noexcept
 {

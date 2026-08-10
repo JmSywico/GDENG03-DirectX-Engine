@@ -83,9 +83,9 @@ namespace
 		dialog.lStructSize = sizeof(dialog);
 		dialog.hwndOwner = owner;
 		dialog.lpstrFilter =
-			L"enignE Scenes (*.dx3dscene;*.escene)\0*.dx3dscene;*.escene\0"
-			L"DirectX enignE Scene (*.dx3dscene)\0*.dx3dscene\0"
-			L"Original enignE Scene (*.escene)\0*.escene\0All Files (*.*)\0*.*\0";
+			L"jnpf. Scenes (*.dx3dscene;*.escene)\0*.dx3dscene;*.escene\0"
+			L"jnpf. DirectX Scene (*.dx3dscene)\0*.dx3dscene\0"
+			L"jnpf. Original Scene (*.escene)\0*.escene\0All Files (*.*)\0*.*\0";
 		dialog.lpstrFile = path;
 		dialog.nMaxFile = static_cast<DWORD>(std::size(path));
 		dialog.lpstrDefExt = L"dx3dscene";
@@ -609,6 +609,7 @@ void dx3d::Game::copySelectedObject()
 	copiedData.isValid = true;
 	copiedData.sourceName =
 		m_selectedObject->getName();
+	copiedData.activeSelf = m_selectedObject->isActiveSelf();
 
 	auto& transform =
 		m_selectedObject->getTransform();
@@ -751,6 +752,7 @@ void dx3d::Game::pasteCopiedObject()
 	pastedObject->setName(
 		pastedName
 	);
+	pastedObject->setActive(m_objectClipboard.activeSelf);
 
 	auto& pastedTransform =
 		pastedObject->getTransform();
@@ -871,7 +873,7 @@ void dx3d::Game::handleViewportPicking(
 	const Mat4x4 viewProjection = camera->getViewMatrix() * camera->getProjectionMatrix();
 	for (auto* object : m_world->getGameObjects())
 	{
-		if (!object || isEditorCamera(object) ||
+		if (!object || !object->isActiveInHierarchy() || isEditorCamera(object) ||
 			!object->getComponent<CameraComponent>()) continue;
 		ImVec2 iconPosition{};
 		if (!projectWorldPoint(object->getTransform().getPosition(), viewProjection,
@@ -919,7 +921,7 @@ void dx3d::Game::handleViewportPicking(
 
 			for (auto* object : objects)
 			{
-				if (!object)
+				if (!object || !object->isActiveInHierarchy())
 					continue;
 
 				if (object->getComponent<
@@ -1423,7 +1425,15 @@ void dx3d::Game::startPlayMode()
 
 	// Reconstruct authorable objects so runtime mutations are isolated from
 	// the editor scene. The editor camera is intentionally preserved.
-	SceneSerializer::deserialize(*m_world, m_editorSceneSnapshot);
+	const SceneLoadResult playScene =
+		SceneSerializer::deserialize(*m_world, m_editorSceneSnapshot);
+	if (!playScene.success)
+	{
+		m_editorSceneSnapshot.clear();
+		m_sceneStatusMessage = "Could not reconstruct Play scene";
+		DX3DLogError("Play snapshot deserialization failed.");
+		return;
+	}
 	ensureEditorCamera();
 	ensureGameCamera();
 	m_physicsWorld->reset(*m_world);
@@ -1492,12 +1502,19 @@ void dx3d::Game::stopPlayMode()
 
 	if (!m_editorSceneSnapshot.empty())
 	{
-		SceneSerializer::deserialize(
+		const SceneLoadResult restoredScene = SceneSerializer::deserialize(
 			*m_world,
 			m_editorSceneSnapshot
 		);
+		if (!restoredScene.success)
+		{
+			m_sceneStatusMessage = "Could not restore scene after Play";
+			DX3DLogError("Editor snapshot restoration failed.");
+			return;
+		}
 		ensureEditorCamera();
 		ensureGameCamera();
+		m_physicsWorld->reset(*m_world);
 	}
 
 	clearSelection();
@@ -1693,7 +1710,7 @@ void dx3d::Game::onInternalUpdate()
 			{ iconMax.x - 1.0f, iconMin.y + 4.0f }, captionText);
 		drawList->AddText(
 			{ barMin.x + 32.0f * m_uiScale, barMin.y + (titleBarHeight - ImGui::GetFontSize()) * 0.5f },
-			captionText, m_sceneDirty ? "enignE  *" : "enignE");
+			captionText, m_sceneDirty ? "jnpf.  *" : "jnpf.");
 
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.07f, 0.07f, 0.075f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.215f, 0.205f, 1.0f));
@@ -1703,6 +1720,10 @@ void dx3d::Game::onInternalUpdate()
 		ImGui::SetCursorScreenPos({ barMin.x + 92.0f * m_uiScale, barMin.y + 4.0f * m_uiScale });
 		if (ImGui::Button("File", { 48.0f * m_uiScale, 24.0f * m_uiScale }))
 			ImGui::OpenPopup("##FileMenu");
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+			{ 12.0f * m_uiScale, 8.0f * m_uiScale });
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+			{ 10.0f * m_uiScale, 5.0f * m_uiScale });
 		if (ImGui::BeginPopup("##FileMenu"))
 		{
 			if (false && ImGui::MenuItem(
@@ -1731,6 +1752,7 @@ void dx3d::Game::onInternalUpdate()
 
 			ImGui::EndPopup();
 		}
+		ImGui::PopStyleVar(2);
 
 		constexpr bool showLegacyChromeMenus = false;
 		ImGui::SetCursorScreenPos({ barMin.x + 196.0f * m_uiScale, barMin.y + 4.0f * m_uiScale });
@@ -1949,6 +1971,10 @@ void dx3d::Game::onInternalUpdate()
 		ImGui::SetCursorScreenPos({ barMin.x + 144.0f * m_uiScale, barMin.y + 4.0f * m_uiScale });
 		if (ImGui::Button("Edit", { 48.0f * m_uiScale, 24.0f * m_uiScale }))
 			ImGui::OpenPopup("##EditMenu");
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+			{ 12.0f * m_uiScale, 8.0f * m_uiScale });
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+			{ 10.0f * m_uiScale, 5.0f * m_uiScale });
 		if (ImGui::BeginPopup("##EditMenu"))
 		{
 			if (ImGui::MenuItem(
@@ -1981,6 +2007,7 @@ void dx3d::Game::onInternalUpdate()
 			}
 			ImGui::EndPopup();
 		}
+		ImGui::PopStyleVar(2);
 
 		ImGui::SetCursorScreenPos({ barMin.x + 256.0f * m_uiScale, barMin.y + 4.0f * m_uiScale });
 		if (showLegacyChromeMenus && ImGui::Button("View", { 48.0f * m_uiScale, 24.0f * m_uiScale }))
@@ -2495,7 +2522,7 @@ void dx3d::Game::onInternalUpdate()
 
 		for (auto* object : sceneObjects)
 		{
-			if (!object || isEditorCamera(object)) continue;
+			if (!object || !object->isActiveInHierarchy() || isEditorCamera(object)) continue;
 			auto* camera = object->getComponent<CameraComponent>();
 			if (!camera) continue;
 
@@ -2617,8 +2644,13 @@ void dx3d::Game::onInternalUpdate()
 			flags |= ImGuiTreeNodeFlags_Selected;
 
 		ImGui::PushID(object);
+		const bool activeInHierarchy = object->isActiveInHierarchy();
+		if (!activeInHierarchy)
+			ImGui::PushStyleColor(ImGuiCol_Text, rgba(125, 123, 118));
 		const bool open = ImGui::TreeNodeEx(
 			"##Entity", flags, "%s", object->getName().c_str());
+		if (!activeInHierarchy)
+			ImGui::PopStyleColor();
 
 		if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
 		{
@@ -2752,44 +2784,6 @@ void dx3d::Game::onInternalUpdate()
 			? SceneSerializer::serialize(*m_world)
 			: std::string{};
 
-		ImGui::TextDisabled("ACTIVE OBJECT");
-		ImGui::TextColored(
-			rgba(235, 171, 77),
-			"%s",
-			m_selectedObject->getName().c_str()
-		);
-		ImGui::TextDisabled(
-			"ENTITY %llu  /  PARENT %s",
-			static_cast<unsigned long long>(m_selectedObject->getEntityId()),
-			m_selectedObject->getParent()
-				? m_selectedObject->getParent()->getName().c_str()
-				: "ROOT"
-		);
-
-		const char* gizmoModeName = "Translate";
-
-		switch (m_transformGizmo.getOperation())
-		{
-		case TransformGizmo::Operation::Translate:
-			gizmoModeName = "Translate";
-			break;
-
-		case TransformGizmo::Operation::Rotate:
-			gizmoModeName = "Rotate";
-			break;
-
-		case TransformGizmo::Operation::Scale:
-			gizmoModeName = "Scale";
-			break;
-		}
-
-		ImGui::SameLine();
-		ImGui::TextDisabled(
-			"  /  %s",
-			gizmoModeName
-		);
-		ImGui::Separator();
-
 		char objectName[256]{};
 		std::snprintf(
 			objectName,
@@ -2798,6 +2792,22 @@ void dx3d::Game::onInternalUpdate()
 			m_selectedObject->getName().c_str()
 		);
 		ImGui::BeginDisabled(m_editorMode != EditorMode::Editing);
+		bool activeSelf = m_selectedObject->isActiveSelf();
+		if (ImGui::Checkbox("##ObjectActive", &activeSelf))
+		{
+			pushUndoSnapshot(inspectorSnapshot);
+			m_selectedObject->setActive(activeSelf);
+			m_sceneDirty = true;
+		}
+		if (ImGui::IsItemHovered())
+		{
+			if (activeSelf && !m_selectedObject->isActiveInHierarchy())
+				ImGui::SetTooltip("Active locally; disabled by an inactive parent");
+			else
+				ImGui::SetTooltip(activeSelf ? "Deactivate object" : "Activate object");
+		}
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(-54.0f * m_uiScale);
 		const bool nameChanged = ImGui::InputText(
 			"Name",
 			objectName,
@@ -2835,9 +2845,6 @@ void dx3d::Game::onInternalUpdate()
 			scale.y,
 			scale.z
 		};
-
-		ImGui::TextDisabled("TRANSFORM FLOW  /  LOCAL STATE");
-		ImGui::Spacing();
 
 		const bool positionChanged = ImGui::DragFloat3(
 			"Position",
@@ -2919,6 +2926,7 @@ void dx3d::Game::onInternalUpdate()
 
 		const bool isRenderable =
 			m_selectedObject->getComponent<CubeComponent>() ||
+			m_selectedObject->getComponent<SphereComponent>() ||
 			m_selectedObject->getComponent<PlaneComponent>() ||
 			m_selectedObject->getComponent<CombinedMeshComponent>();
 
@@ -3363,7 +3371,6 @@ void dx3d::Game::onInternalUpdate()
 			if (ImGui::Button("REFRESH"))
 				refreshAssetLens();
 
-			ImGui::TextDisabled("%zu DISCOVERED  /  PROJECT-RELATIVE", m_assetPaths.size());
 			ImGui::Separator();
 
 			auto containsFilter = [this](const std::string& path)

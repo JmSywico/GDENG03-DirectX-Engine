@@ -115,7 +115,7 @@ dx3d::Window::Window(
 		CreateWindowEx(
 			0,
 			MAKEINTATOM(windowClassId),
-			L"enignE",
+			L"jnpf.",
 			windowStyle,
 			monitorRectangle.left,
 			monitorRectangle.top,
