@@ -90,6 +90,7 @@ namespace dx3d
 	{
 		ui32 width{ 2048 };
 		ui32 height{ 2048 };
+		bool cube{};
 	};
 
 	struct GameContext

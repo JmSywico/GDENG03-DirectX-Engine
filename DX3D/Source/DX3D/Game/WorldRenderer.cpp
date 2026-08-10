@@ -120,6 +120,14 @@ dx3d::WorldRenderer::WorldRenderer(
 				2048
 			}
 		);
+	m_pointShadowMap =
+		device.createShadowMap(
+			{
+				1024,
+				1024,
+				true
+			}
+		);
 
 	constexpr char shaderFilePath[] =
 		"DX3D/Assets/Shaders/Basic.hlsl";
@@ -371,6 +379,12 @@ void dx3d::WorldRenderer::render(
 
 	f32 ambientStrength = 0.03f;
 	f32 shadowArea = 30.0f;
+	f32 shadowRange = 50.0f;
+	f32 shadowSpotAngle = 45.0f;
+	f32 shadowNearPlane = 0.05f;
+	LightType shadowLightType = LightType::Directional;
+	Vec3 shadowLightPosition{};
+	Vec3 shadowLightForward{ 0.0f, 0.0f, 1.0f };
 	bool castShadows = false;
 	int shadowLightIndex = -1;
 	ui32 lightCount = 0;
@@ -421,18 +435,28 @@ void dx3d::WorldRenderer::render(
 			data.lightPositions[lightCount] = {
 				lightPosition.x, lightPosition.y, lightPosition.z,
 				lightComponent->getRange() };
+			const f32 pointNearPlane = std::clamp(
+				lightComponent->getRange() * 0.01f, 0.01f, 0.10f);
 			data.lightParameters[lightCount] = {
-				static_cast<f32>(lightComponent->getLightType()), spotCosine, 0.0f, 0.0f };
+				static_cast<f32>(lightComponent->getLightType()), spotCosine,
+				pointNearPlane, 0.0f };
 			ambientStrength = std::max(
 				ambientStrength, lightComponent->getAmbientStrength());
 
-			if (shadowLightIndex < 0 &&
-				lightComponent->getLightType() == LightType::Directional &&
-				lightComponent->getCastShadows())
+			if (shadowLightIndex < 0 && lightComponent->getCastShadows())
 			{
-				directionToLight = Vec3::normalize({
-					-lightForward.x, -lightForward.y, -lightForward.z });
+				shadowLightType = lightComponent->getLightType();
+				shadowLightPosition = lightPosition;
+				shadowLightForward = Vec3::normalize(lightForward);
 				shadowArea = lightComponent->getShadowArea();
+				shadowRange = std::max(lightComponent->getRange(), pointNearPlane + 0.01f);
+				shadowSpotAngle = lightComponent->getSpotAngle();
+				shadowNearPlane = pointNearPlane;
+				if (shadowLightType == LightType::Directional)
+				{
+					directionToLight = Vec3::normalize({
+						-lightForward.x, -lightForward.y, -lightForward.z });
+				}
 				castShadows = true;
 				shadowLightIndex = static_cast<int>(lightCount);
 			}
@@ -456,54 +480,34 @@ void dx3d::WorldRenderer::render(
 		static_cast<f32>(lightCount), ambientStrength,
 		static_cast<f32>(shadowLightIndex), castShadows ? 1.0f : 0.0f };
 
-	const Vec3 lightTarget
+	if (shadowLightType == LightType::Directional)
 	{
-		0.0f,
-		0.0f,
-		0.0f
-	};
-
-	const f32 lightDistance =
-		15.0f;
-
-	const Vec3 lightPosition
+		const Vec3 lightTarget{};
+		const f32 lightDistance = 15.0f;
+		shadowLightPosition = lightTarget + directionToLight * lightDistance;
+		const Vec3 lightUp = std::fabs(directionToLight.y) > 0.99f
+			? Vec3{ 0.0f, 0.0f, 1.0f }
+			: Vec3{ 0.0f, 1.0f, 0.0f };
+		data.lightView = Mat4x4::lookAtLH(
+			shadowLightPosition, lightTarget, lightUp);
+		data.lightProj = Mat4x4::orthoLH(
+			shadowArea, shadowArea, 0.1f, 50.0f);
+	}
+	else
 	{
-		lightTarget.x +
-			directionToLight.x *
-				lightDistance,
-
-		lightTarget.y +
-			directionToLight.y *
-				lightDistance,
-
-		lightTarget.z +
-			directionToLight.z *
-				lightDistance
-	};
-
-	const Vec3 lightUp =
-		std::fabs(
-			directionToLight.y
-		) > 0.99f
-		?
-		Vec3{ 0.0f, 0.0f, 1.0f }
-		:
-		Vec3{ 0.0f, 1.0f, 0.0f };
-
-	data.lightView =
-		Mat4x4::lookAtLH(
-			lightPosition,
-			lightTarget,
-			lightUp
-		);
-
-	data.lightProj =
-		Mat4x4::orthoLH(
-			shadowArea,
-			shadowArea,
-			0.1f,
-			50.0f
-		);
+		const Vec3 lightTarget = shadowLightPosition + shadowLightForward;
+		const Vec3 lightUp = std::fabs(shadowLightForward.y) > 0.99f
+			? Vec3{ 0.0f, 0.0f, 1.0f }
+			: Vec3{ 0.0f, 1.0f, 0.0f };
+		data.lightView = Mat4x4::lookAtLH(
+			shadowLightPosition, lightTarget, lightUp);
+		const f32 shadowFov = shadowLightType == LightType::Spot
+			? std::clamp(shadowSpotAngle * MathUtils::PI / 180.0f,
+				0.02f, MathUtils::PI - 0.02f)
+			: MathUtils::PI * 0.5f;
+		data.lightProj = Mat4x4::perspectiveFovLH(
+			shadowFov, 1.0f, shadowNearPlane, shadowRange);
+	}
 
 	Mat4x4 cameraView =
 		Mat4x4::identity();
@@ -916,23 +920,46 @@ void dx3d::WorldRenderer::render(
 			}
 		};
 
-	if (castShadows)
+	if (castShadows && !useSceneCamera)
 	{
-		context.beginShadowPass(
-			*m_shadowMap
-		);
-
 		context.setGraphicsPipelineState(
 			*m_pipeline
 		);
 
-		data.view =
-			data.lightView;
+		if (shadowLightType == LightType::Point)
+		{
+			const Vec3 faceDirections[6]
+			{
+				{ 1.0f, 0.0f, 0.0f }, { -1.0f, 0.0f, 0.0f },
+				{ 0.0f, 1.0f, 0.0f }, { 0.0f, -1.0f, 0.0f },
+				{ 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f }
+			};
+			const Vec3 faceUp[6]
+			{
+				{ 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f },
+				{ 0.0f, 0.0f, -1.0f }, { 0.0f, 0.0f, 1.0f },
+				{ 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }
+			};
 
-		data.proj =
-			data.lightProj;
-
-		drawSceneGeometry();
+			for (ui32 face = 0; face < 6; ++face)
+			{
+				context.beginShadowPass(*m_pointShadowMap, face);
+				data.lightView = Mat4x4::lookAtLH(
+					shadowLightPosition,
+					shadowLightPosition + faceDirections[face],
+					faceUp[face]);
+				data.view = data.lightView;
+				data.proj = data.lightProj;
+				drawSceneGeometry();
+			}
+		}
+		else
+		{
+			context.beginShadowPass(*m_shadowMap);
+			data.view = data.lightView;
+			data.proj = data.lightProj;
+			drawSceneGeometry();
+		}
 	}
 
 	context.clearAndSetBackBuffer(
@@ -952,6 +979,9 @@ void dx3d::WorldRenderer::render(
 
 	context.setShadowMap(
 		*m_shadowMap
+	);
+	context.setPointShadowMap(
+		*m_pointShadowMap
 	);
 
 	data.view =

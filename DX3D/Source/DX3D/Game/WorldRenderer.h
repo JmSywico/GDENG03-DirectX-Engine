@@ -81,6 +81,7 @@ namespace dx3d
 		RefPtr<DeviceContext> m_deviceContext{};
 		RefPtr<GraphicsPipelineState> m_pipeline{};
 		RefPtr<ShadowMap> m_shadowMap{};
+		RefPtr<ShadowMap> m_pointShadowMap{};
 
 		RefPtr<VertexBuffer> m_cubeVertexBuffer{};
 		RefPtr<IndexBuffer> m_cubeIndexBuffer{};

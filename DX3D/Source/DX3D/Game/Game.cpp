@@ -3839,30 +3839,18 @@ void dx3d::Game::onInternalUpdate()
 
 			if (directionalLight->getLightType() == LightType::Directional)
 			{
-			float shadowArea =
-				directionalLight->
-				getShadowArea();
-
-			const bool shadowAreaChanged = ImGui::DragFloat(
-				"Shadow Area",
-				&shadowArea,
-				0.5f,
-				1.0f,
-				200.0f
-			);
-			if (ImGui::IsItemActivated())
-				pushUndoSnapshot(inspectorSnapshot);
-			if (shadowAreaChanged)
-			{
-				directionalLight->
-					setShadowArea(
-						shadowArea
-					);
+				float shadowArea = directionalLight->getShadowArea();
+				const bool shadowAreaChanged = ImGui::DragFloat(
+					"Shadow Area", &shadowArea, 0.5f, 1.0f, 200.0f);
+				if (ImGui::IsItemActivated())
+					pushUndoSnapshot(inspectorSnapshot);
+				if (shadowAreaChanged)
+					directionalLight->setShadowArea(shadowArea);
 			}
 
 			bool castShadows =
 				directionalLight->
-				getCastShadows();
+					getCastShadows();
 
 			const bool castShadowsChanged = ImGui::Checkbox(
 				"Cast Shadows",
@@ -3877,11 +3865,15 @@ void dx3d::Game::onInternalUpdate()
 						castShadows
 				);
 			}
-			}
-			else
-			{
-				ImGui::TextDisabled("Point and spot shadows are not available");
-			}
+
+			const char* shadowMode =
+				directionalLight->getLightType() == LightType::Point
+				? "Cube depth / 6 faces / 1024"
+				: directionalLight->getLightType() == LightType::Spot
+					? "Perspective depth / 2048"
+					: "Orthographic depth / 2048";
+			ImGui::TextDisabled("SHADOW MODE  /  %s", shadowMode);
+			ImGui::TextDisabled("First active shadow-casting light drives the shadow pass.");
 		}
 
 		ImGui::EndDisabled();

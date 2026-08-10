@@ -38,6 +38,7 @@ cbuffer ConstantData : register(b0)
 
 Texture2D shadowMap : register(t0);
 Texture2D albedoMap : register(t1);
+TextureCube pointShadowMap : register(t2);
 
 SamplerComparisonState shadowSampler :
     register(s0);
@@ -104,7 +105,7 @@ VSOutput VSMain(
     return output;
 }
 
-float calculateShadow(
+float calculateProjectedShadow(
     float4 lightPosition,
     float3 normal,
     float3 directionToLight
@@ -211,6 +212,58 @@ float calculateShadow(
     return shadowAmount / 9.0f;
 }
 
+float calculatePointShadow(
+    float3 worldPosition,
+    float3 normal,
+    float3 directionToLight,
+    float3 lightPosition,
+    float lightRange,
+    float nearPlane
+)
+{
+    const float3 lightToFragment = worldPosition - lightPosition;
+    const float3 absoluteDirection = abs(lightToFragment);
+    const float faceDepth = max(
+        absoluteDirection.x,
+        max(absoluteDirection.y, absoluteDirection.z));
+    if (faceDepth <= nearPlane || faceDepth >= lightRange)
+        return 1.0f;
+
+    const float projectedDepth =
+        lightRange / (lightRange - nearPlane) -
+        (nearPlane * lightRange) /
+        ((lightRange - nearPlane) * faceDepth);
+    const float normalLightAmount = saturate(dot(normal, directionToLight));
+    const float shadowBias = max(
+        0.0030f * (1.0f - normalLightAmount), 0.0008f);
+
+    const float3 sampleDirection = normalize(lightToFragment);
+    const float3 referenceAxis = abs(sampleDirection.y) < 0.99f
+        ? float3(0.0f, 1.0f, 0.0f)
+        : float3(1.0f, 0.0f, 0.0f);
+    const float3 tangent = normalize(cross(referenceAxis, sampleDirection));
+    const float3 bitangent = cross(sampleDirection, tangent);
+    const float texelSize = 1.5f / 1024.0f;
+
+    float shadowAmount = 0.0f;
+    [unroll]
+    for (int y = -1; y <= 1; ++y)
+    {
+        [unroll]
+        for (int x = -1; x <= 1; ++x)
+        {
+            const float3 offsetDirection = normalize(
+                sampleDirection +
+                (tangent * x + bitangent * y) * texelSize);
+            shadowAmount += pointShadowMap.SampleCmpLevelZero(
+                shadowSampler,
+                offsetDirection,
+                projectedDepth - shadowBias);
+        }
+    }
+    return shadowAmount / 9.0f;
+}
+
 float4 PSMain(
     VSOutput input
 ) : SV_Target
@@ -262,11 +315,18 @@ float4 PSMain(
         float shadowAmount = 1.0f;
         if (lightMeta.w > 0.5f && lightIndex == shadowLightIndex)
         {
-            shadowAmount = calculateShadow(
-                input.lightPosition,
-                normal,
-                directionToLight
-            );
+            shadowAmount = lightType == 1
+                ? calculatePointShadow(
+                    input.worldPosition,
+                    normal,
+                    directionToLight,
+                    positionRange.xyz,
+                    positionRange.w,
+                    parameters.z)
+                : calculateProjectedShadow(
+                    input.lightPosition,
+                    normal,
+                    directionToLight);
         }
         directLighting += lightColors[lightIndex].rgb * directionIntensity.w
             * diffuseAmount * attenuation * shadowAmount;

@@ -62,20 +62,22 @@ void dx3d::DeviceContext::clearAndSetBackBuffer(
 }
 
 void dx3d::DeviceContext::beginShadowPass(
-	const ShadowMap& shadowMap
+	const ShadowMap& shadowMap,
+	ui32 faceIndex
 )
 {
-	ID3D11ShaderResourceView*
-		nullShaderResource = nullptr;
+	if ((!shadowMap.m_cube && faceIndex != 0) || faceIndex >= 6)
+		return;
 
+	ID3D11ShaderResourceView* nullShaderResources[3]{};
 	m_context->PSSetShaderResources(
 		0,
-		1,
-		&nullShaderResource
+		3,
+		nullShaderResources
 	);
 
 	auto depthStencilView =
-		shadowMap.m_depthStencilView.Get();
+		shadowMap.m_depthStencilViews[faceIndex].Get();
 
 	m_context->ClearDepthStencilView(
 		depthStencilView,
@@ -135,6 +137,14 @@ void dx3d::DeviceContext::setShadowMap(
 		1,
 		&samplerState
 	);
+}
+
+void dx3d::DeviceContext::setPointShadowMap(
+	const ShadowMap& shadowMap
+)
+{
+	auto shaderResourceView = shadowMap.m_shaderResourceView.Get();
+	m_context->PSSetShaderResources(2, 1, &shaderResourceView);
 }
 
 void dx3d::DeviceContext::setAlbedoTexture(

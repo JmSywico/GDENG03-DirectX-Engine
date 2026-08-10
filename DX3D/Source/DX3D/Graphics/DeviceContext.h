@@ -21,10 +21,14 @@ namespace dx3d
 		);
 
 		void beginShadowPass(
-			const ShadowMap& shadowMap
+			const ShadowMap& shadowMap,
+			ui32 faceIndex = 0
 		);
 
 		void setShadowMap(
+			const ShadowMap& shadowMap
+		);
+		void setPointShadowMap(
 			const ShadowMap& shadowMap
 		);
 		void setAlbedoTexture(ID3D11ShaderResourceView* view, ID3D11SamplerState* sampler);

@@ -6,7 +6,8 @@ dx3d::ShadowMap::ShadowMap(
 )
 	: GraphicsResource(graphicsDesc),
 	m_width(desc.width),
-	m_height(desc.height)
+	m_height(desc.height),
+	m_cube(desc.cube)
 {
 	if (
 		m_width == 0 ||
@@ -23,7 +24,7 @@ dx3d::ShadowMap::ShadowMap(
 	textureDesc.Width = m_width;
 	textureDesc.Height = m_height;
 	textureDesc.MipLevels = 1;
-	textureDesc.ArraySize = 1;
+	textureDesc.ArraySize = m_cube ? 6 : 1;
 	textureDesc.Format =
 		DXGI_FORMAT_R32_TYPELESS;
 
@@ -36,6 +37,9 @@ dx3d::ShadowMap::ShadowMap(
 	textureDesc.BindFlags =
 		D3D11_BIND_DEPTH_STENCIL |
 		D3D11_BIND_SHADER_RESOURCE;
+	textureDesc.MiscFlags = m_cube
+		? D3D11_RESOURCE_MISC_TEXTURECUBE
+		: 0;
 
 	DX3DGraphicsLogThrowOnFail(
 		m_device.CreateTexture2D(
@@ -46,25 +50,33 @@ dx3d::ShadowMap::ShadowMap(
 		"Failed to create shadow map texture."
 	);
 
-	D3D11_DEPTH_STENCIL_VIEW_DESC
-		depthViewDesc{};
+	const ui32 faceCount = m_cube ? 6u : 1u;
+	for (ui32 face = 0; face < faceCount; ++face)
+	{
+		D3D11_DEPTH_STENCIL_VIEW_DESC depthViewDesc{};
+		depthViewDesc.Format = DXGI_FORMAT_D32_FLOAT;
+		if (m_cube)
+		{
+			depthViewDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+			depthViewDesc.Texture2DArray.MipSlice = 0;
+			depthViewDesc.Texture2DArray.FirstArraySlice = face;
+			depthViewDesc.Texture2DArray.ArraySize = 1;
+		}
+		else
+		{
+			depthViewDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+			depthViewDesc.Texture2D.MipSlice = 0;
+		}
 
-	depthViewDesc.Format =
-		DXGI_FORMAT_D32_FLOAT;
-
-	depthViewDesc.ViewDimension =
-		D3D11_DSV_DIMENSION_TEXTURE2D;
-
-	depthViewDesc.Texture2D.MipSlice = 0;
-
-	DX3DGraphicsLogThrowOnFail(
-		m_device.CreateDepthStencilView(
-			m_texture.Get(),
-			&depthViewDesc,
-			&m_depthStencilView
-		),
-		"Failed to create shadow map depth-stencil view."
-	);
+		DX3DGraphicsLogThrowOnFail(
+			m_device.CreateDepthStencilView(
+				m_texture.Get(),
+				&depthViewDesc,
+				&m_depthStencilViews[face]
+			),
+			"Failed to create shadow map depth-stencil view."
+		);
+	}
 
 	D3D11_SHADER_RESOURCE_VIEW_DESC
 		resourceViewDesc{};
@@ -72,11 +84,18 @@ dx3d::ShadowMap::ShadowMap(
 	resourceViewDesc.Format =
 		DXGI_FORMAT_R32_FLOAT;
 
-	resourceViewDesc.ViewDimension =
-		D3D11_SRV_DIMENSION_TEXTURE2D;
-
-	resourceViewDesc.Texture2D.MostDetailedMip = 0;
-	resourceViewDesc.Texture2D.MipLevels = 1;
+	if (m_cube)
+	{
+		resourceViewDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+		resourceViewDesc.TextureCube.MostDetailedMip = 0;
+		resourceViewDesc.TextureCube.MipLevels = 1;
+	}
+	else
+	{
+		resourceViewDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+		resourceViewDesc.Texture2D.MostDetailedMip = 0;
+		resourceViewDesc.Texture2D.MipLevels = 1;
+	}
 
 	DX3DGraphicsLogThrowOnFail(
 		m_device.CreateShaderResourceView(
@@ -132,4 +151,9 @@ dx3d::ui32
 dx3d::ShadowMap::getHeight() const noexcept
 {
 	return m_height;
+}
+
+bool dx3d::ShadowMap::isCube() const noexcept
+{
+	return m_cube;
 }
