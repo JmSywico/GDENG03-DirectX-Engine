@@ -61,6 +61,34 @@ void dx3d::DeviceContext::clearAndSetBackBuffer(
 	);
 }
 
+void dx3d::DeviceContext::clearAndSetViewportFrame(
+	const SwapChain& swapChain,
+	bool gameFrame,
+	const Vec4& color
+)
+{
+	const f32 clearColor[]{ color.x, color.y, color.z, color.w };
+	ID3D11RenderTargetView* renderTargetView = gameFrame
+		? swapChain.m_gameFrameTarget.Get()
+		: swapChain.m_sceneFrameTarget.Get();
+	ID3D11DepthStencilView* depthStencilView = gameFrame
+		? swapChain.m_gameFrameDepth.Get()
+		: swapChain.m_sceneFrameDepth.Get();
+
+	if (!renderTargetView || !depthStencilView)
+		return;
+
+	ID3D11ShaderResourceView* nullShaderResources[3]{};
+	m_context->PSSetShaderResources(0, 3, nullShaderResources);
+	m_context->ClearRenderTargetView(renderTargetView, clearColor);
+	m_context->ClearDepthStencilView(
+		depthStencilView,
+		D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
+		1.0f,
+		0);
+	m_context->OMSetRenderTargets(1, &renderTargetView, depthStencilView);
+}
+
 void dx3d::DeviceContext::beginShadowPass(
 	const ShadowMap& shadowMap,
 	ui32 faceIndex

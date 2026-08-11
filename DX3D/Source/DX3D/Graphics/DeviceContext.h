@@ -19,6 +19,11 @@ namespace dx3d
 			const SwapChain& swapChain,
 			const Vec4& color
 		);
+		void clearAndSetViewportFrame(
+			const SwapChain& swapChain,
+			bool gameFrame,
+			const Vec4& color
+		);
 
 		void beginShadowPass(
 			const ShadowMap& shadowMap,

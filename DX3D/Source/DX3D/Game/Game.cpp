@@ -1999,22 +1999,6 @@ void dx3d::Game::onInternalUpdate()
 		m_singleStepRequested = false;
 	}
 
-	// Render the 3D scene first.
-	m_worldRenderer->render(
-		*m_world,
-		m_display->getSwapChain(),
-		deltaTime,
-		false
-	);
-	m_display->getSwapChain().captureSceneFrame();
-	m_worldRenderer->render(
-		*m_world,
-		m_display->getSwapChain(),
-		deltaTime,
-		true
-	);
-	m_display->getSwapChain().captureGameFrame();
-
 	// Native jnpf. chrome: a fixed 32 px title bar owns the menus and the
 	// borderless Win32 caption controls.
 	const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -2622,6 +2606,10 @@ void dx3d::Game::onInternalUpdate()
 			m_focusSceneViewRequested = false;
 		sceneViewportOrigin = ImGui::GetCursorScreenPos();
 		sceneViewportSize = ImGui::GetContentRegionAvail();
+		m_display->getSwapChain().resizeSceneFrame({
+			(std::max)(1, static_cast<i32>(sceneViewportSize.x)),
+			(std::max)(1, static_cast<i32>(sceneViewportSize.y))
+		});
 		if (ID3D11ShaderResourceView* sceneView =
 			m_display->getSwapChain().getSceneFrameView())
 			ImGui::Image(sceneView, sceneViewportSize);
@@ -2671,6 +2659,10 @@ void dx3d::Game::onInternalUpdate()
 			m_focusGameViewRequested = false;
 		gameViewportOrigin = ImGui::GetCursorScreenPos();
 		gameViewportSize = ImGui::GetContentRegionAvail();
+		m_display->getSwapChain().resizeGameFrame({
+			(std::max)(1, static_cast<i32>(gameViewportSize.x)),
+			(std::max)(1, static_cast<i32>(gameViewportSize.y))
+		});
 		m_gameViewportScreenArea = {
 			static_cast<i32>(gameViewportOrigin.x),
 			static_cast<i32>(gameViewportOrigin.y),
@@ -2690,10 +2682,9 @@ void dx3d::Game::onInternalUpdate()
 			setGameInputCaptured(true);
 		}
 
-		// Game owns this dock surface for the frame. Clear the previous Scene
-		// input state before MainGame consumes it on the next update.
-		m_sceneViewportHovered = false;
-		m_sceneViewportFocused = false;
+		// Scene owns its own input state. Both viewports may be visible when the
+		// user splits their dock nodes, so showing Game must not invalidate the
+		// hover/focus state captured by Scene above.
 	}
 	ImGui::End();
 	// Select dock tabs only after both windows have been submitted. This wins
@@ -2707,6 +2698,26 @@ void dx3d::Game::onInternalUpdate()
 		ImGui::SetWindowFocus("Game");
 	}
 	ImGui::PopStyleVar();
+
+	// ImGui has now measured the current dock rectangles and recorded the
+	// viewport texture handles. Render into those exact-size surfaces before
+	// ImGui submits its draw data, so resizing never scales an old aspect ratio.
+	if (sceneViewportVisible)
+	{
+		m_worldRenderer->render(
+			*m_world,
+			m_display->getSwapChain(),
+			deltaTime,
+			false);
+	}
+	if (gameViewportVisible)
+	{
+		m_worldRenderer->render(
+			*m_world,
+			m_display->getSwapChain(),
+			deltaTime,
+			true);
+	}
 
 	// Scene and Game expose the same compact workbench controls. The toolbar
 	// is shared chrome only; manipulation and navigation remain Scene-owned.

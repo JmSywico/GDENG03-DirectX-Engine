@@ -105,10 +105,6 @@ void dx3d::SwapChain::resize(
 
 	m_rtv.Reset();
 	m_dsv.Reset();
-	m_sceneFrameView.Reset();
-	m_sceneFrame.Reset();
-	m_gameFrameView.Reset();
-	m_gameFrame.Reset();
 
 	DX3DGraphicsLogThrowOnFail(
 		m_swapChain->ResizeBuffers(
@@ -149,13 +145,18 @@ void dx3d::SwapChain::present(
 	}
 }
 
-void dx3d::SwapChain::captureSceneFrame()
+void dx3d::SwapChain::resizeSceneFrame(const Rect& size)
 {
-	if (!m_sceneFrame) return;
-	Microsoft::WRL::ComPtr<ID3D11Texture2D> backBuffer;
-	if (FAILED(m_swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer)))) return;
-	m_graphicsDevice->getImmediateContext()->CopyResource(
-		m_sceneFrame.Get(), backBuffer.Get());
+	if (size.width <= 0 || size.height <= 0 || size == m_sceneFrameSize)
+		return;
+
+	m_sceneFrameSize = size;
+	reloadSceneFrame();
+}
+
+dx3d::Rect dx3d::SwapChain::getSceneFrameSize() const noexcept
+{
+	return m_sceneFrameSize;
 }
 
 ID3D11ShaderResourceView* dx3d::SwapChain::getSceneFrameView() const noexcept
@@ -163,13 +164,18 @@ ID3D11ShaderResourceView* dx3d::SwapChain::getSceneFrameView() const noexcept
 	return m_sceneFrameView.Get();
 }
 
-void dx3d::SwapChain::captureGameFrame()
+void dx3d::SwapChain::resizeGameFrame(const Rect& size)
 {
-	if (!m_gameFrame) return;
-	Microsoft::WRL::ComPtr<ID3D11Texture2D> backBuffer;
-	if (FAILED(m_swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer)))) return;
-	m_graphicsDevice->getImmediateContext()->CopyResource(
-		m_gameFrame.Get(), backBuffer.Get());
+	if (size.width <= 0 || size.height <= 0 || size == m_gameFrameSize)
+		return;
+
+	m_gameFrameSize = size;
+	reloadGameFrame();
+}
+
+dx3d::Rect dx3d::SwapChain::getGameFrameSize() const noexcept
+{
+	return m_gameFrameSize;
 }
 
 ID3D11ShaderResourceView* dx3d::SwapChain::getGameFrameView() const noexcept
@@ -201,23 +207,6 @@ void dx3d::SwapChain::reloadBuffers()
 		),
 		"CreateRenderTargetView failed."
 	);
-
-	D3D11_TEXTURE2D_DESC sceneFrameDesc{};
-	backBuffer->GetDesc(&sceneFrameDesc);
-	sceneFrameDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-	sceneFrameDesc.MiscFlags = 0;
-	DX3DGraphicsLogThrowOnFail(
-		m_device.CreateTexture2D(&sceneFrameDesc, nullptr, &m_sceneFrame),
-		"Create scene viewport texture failed.");
-	DX3DGraphicsLogThrowOnFail(
-		m_device.CreateShaderResourceView(m_sceneFrame.Get(), nullptr, &m_sceneFrameView),
-		"Create scene viewport view failed.");
-	DX3DGraphicsLogThrowOnFail(
-		m_device.CreateTexture2D(&sceneFrameDesc, nullptr, &m_gameFrame),
-		"Create game viewport texture failed.");
-	DX3DGraphicsLogThrowOnFail(
-		m_device.CreateShaderResourceView(m_gameFrame.Get(), nullptr, &m_gameFrameView),
-		"Create game viewport view failed.");
 
 	D3D11_TEXTURE2D_DESC
 		depthTextureDesc{};
@@ -274,4 +263,85 @@ void dx3d::SwapChain::reloadBuffers()
 		),
 		"CreateDepthStencilView failed."
 	);
+
+	if (!m_sceneFrame) reloadSceneFrame();
+	if (!m_gameFrame) reloadGameFrame();
+}
+
+void dx3d::SwapChain::reloadSceneFrame()
+{
+	m_sceneFrameView.Reset();
+	m_sceneFrameTarget.Reset();
+	m_sceneFrameDepth.Reset();
+	m_sceneFrame.Reset();
+
+	D3D11_TEXTURE2D_DESC colorDesc{};
+	colorDesc.Width = static_cast<UINT>((std::max)(1, m_sceneFrameSize.width));
+	colorDesc.Height = static_cast<UINT>((std::max)(1, m_sceneFrameSize.height));
+	colorDesc.MipLevels = 1;
+	colorDesc.ArraySize = 1;
+	colorDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	colorDesc.SampleDesc.Count = 1;
+	colorDesc.Usage = D3D11_USAGE_DEFAULT;
+	colorDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateTexture2D(&colorDesc, nullptr, &m_sceneFrame),
+		"Create scene viewport texture failed.");
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateRenderTargetView(m_sceneFrame.Get(), nullptr, &m_sceneFrameTarget),
+		"Create scene viewport render target failed.");
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateShaderResourceView(m_sceneFrame.Get(), nullptr, &m_sceneFrameView),
+		"Create scene viewport view failed.");
+
+	D3D11_TEXTURE2D_DESC depthDesc = colorDesc;
+	depthDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	depthDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+	Microsoft::WRL::ComPtr<ID3D11Texture2D> depthTexture;
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateTexture2D(&depthDesc, nullptr, &depthTexture),
+		"Create scene viewport depth texture failed.");
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateDepthStencilView(depthTexture.Get(), nullptr, &m_sceneFrameDepth),
+		"Create scene viewport depth view failed.");
+}
+
+void dx3d::SwapChain::reloadGameFrame()
+{
+	m_gameFrameView.Reset();
+	m_gameFrameTarget.Reset();
+	m_gameFrameDepth.Reset();
+	m_gameFrame.Reset();
+
+	D3D11_TEXTURE2D_DESC colorDesc{};
+	colorDesc.Width = static_cast<UINT>((std::max)(1, m_gameFrameSize.width));
+	colorDesc.Height = static_cast<UINT>((std::max)(1, m_gameFrameSize.height));
+	colorDesc.MipLevels = 1;
+	colorDesc.ArraySize = 1;
+	colorDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	colorDesc.SampleDesc.Count = 1;
+	colorDesc.Usage = D3D11_USAGE_DEFAULT;
+	colorDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateTexture2D(&colorDesc, nullptr, &m_gameFrame),
+		"Create game viewport texture failed.");
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateRenderTargetView(m_gameFrame.Get(), nullptr, &m_gameFrameTarget),
+		"Create game viewport render target failed.");
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateShaderResourceView(m_gameFrame.Get(), nullptr, &m_gameFrameView),
+		"Create game viewport view failed.");
+
+	D3D11_TEXTURE2D_DESC depthDesc = colorDesc;
+	depthDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	depthDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+	Microsoft::WRL::ComPtr<ID3D11Texture2D> depthTexture;
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateTexture2D(&depthDesc, nullptr, &depthTexture),
+		"Create game viewport depth texture failed.");
+	DX3DGraphicsLogThrowOnFail(
+		m_device.CreateDepthStencilView(depthTexture.Get(), nullptr, &m_gameFrameDepth),
+		"Create game viewport depth view failed.");
 }

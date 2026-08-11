@@ -358,8 +358,9 @@ void dx3d::WorldRenderer::render(
 	bool useSceneCamera
 )
 {
-	const Rect size =
-		swapChain.getSize();
+	const Rect size = useSceneCamera
+		? swapChain.getGameFrameSize()
+		: swapChain.getSceneFrameSize();
 
 	auto& context =
 		*m_deviceContext;
@@ -965,8 +966,9 @@ void dx3d::WorldRenderer::render(
 		}
 	}
 
-	context.clearAndSetBackBuffer(
+	context.clearAndSetViewportFrame(
 		swapChain,
+		useSceneCamera,
 		useSceneCamera
 			? Vec4{ 0.094f, 0.129f, 0.169f, 1.0f }
 			: Vec4{ 0.20f, 0.298f, 0.40f, 1.0f }
