@@ -112,6 +112,21 @@ namespace dx3d
 
 		enum class PrimitiveKind { Cube, Sphere, Cylinder, Capsule, Plane };
 
+		struct CubeBatchSettings
+		{
+			i32 count{ 100 };
+			i32 columns{ 10 };
+			f32 spacing{ 1.25f };
+			bool addRigidBodies{ true };
+			bool addColliders{ true };
+			RigidBodyType bodyType{ RigidBodyType::Static };
+			f32 friction{ 0.6f };
+			f32 restitution{};
+			f32 linearDamping{ 0.05f };
+			f32 angularDamping{ 0.05f };
+			f32 gravityFactor{ 1.0f };
+		};
+
 	private:
 		void onInternalUpdate();
 
@@ -153,8 +168,14 @@ namespace dx3d
 		void pasteCopiedObject();
 		void duplicateSelectedObject();
 		GameObject* createPrimitiveObject(PrimitiveKind kind, const Vec3& position);
+		GameObject* spawnCubeBatch(const CubeBatchSettings& settings, const Vec3& origin);
 		void drawObjectCreationMenu(const Vec3& position);
 		GameObject* importObjAsset(const std::string& assetPath, const Vec3& position);
+		bool saveSelectedObjectAsPrefab();
+		GameObject* instantiatePrefabAsset(
+			const std::string& assetPath,
+			GameObject* parent,
+			const Vec3* position);
 		Vec3 getSceneSpawnPosition() const noexcept;
 
 		void createNewScene();
@@ -199,6 +220,7 @@ namespace dx3d
 
 		ui32 m_cubeCounter{ 0 };
 		ui32 m_planeCounter{ 0 };
+		CubeBatchSettings m_cubeBatchSettings{};
 
 		std::string m_sceneStatusMessage
 		{

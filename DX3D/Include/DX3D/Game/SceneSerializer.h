@@ -6,6 +6,7 @@
 
 namespace dx3d
 {
+	class GameObject;
 	class World;
 
 	struct SceneLoadResult
@@ -26,6 +27,17 @@ namespace dx3d
 		static SceneLoadResult load(
 			World& world,
 			const std::string& filePath
+		);
+
+		static bool savePrefab(
+			GameObject& root,
+			const std::string& filePath
+		);
+
+		static GameObject* instantiatePrefab(
+			World& world,
+			const std::string& filePath,
+			GameObject* parent = nullptr
 		);
 
 		// Memory snapshots are used by editor undo/redo and isolated Play Mode.

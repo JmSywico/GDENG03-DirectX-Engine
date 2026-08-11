@@ -160,6 +160,42 @@ namespace
 		return object && object->getName() == "Editor Camera";
 	}
 
+	std::string lowercaseExtension(const std::filesystem::path& path)
+	{
+		std::string extension = path.extension().string();
+		std::transform(extension.begin(), extension.end(), extension.begin(),
+			[](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+		return extension;
+	}
+
+	std::string sanitizeAssetStem(std::string value)
+	{
+		if (value.empty()) value = "Prefab";
+		for (char& character : value)
+		{
+			const auto code = static_cast<unsigned char>(character);
+			if (!std::isalnum(code) && character != '-' && character != '_')
+				character = '_';
+		}
+		if (value.empty()) value = "Prefab";
+		return value;
+	}
+
+	std::filesystem::path makeUniqueAssetPath(
+		const std::filesystem::path& directory,
+		const std::string& stem,
+		const std::string& extension)
+	{
+		std::filesystem::path path = directory / (stem + extension);
+		std::error_code error{};
+		for (unsigned suffix = 2; std::filesystem::exists(path, error); ++suffix)
+		{
+			error.clear();
+			path = directory / (stem + "_" + std::to_string(suffix) + extension);
+		}
+		return path;
+	}
+
 	std::filesystem::path chooseScenePath(HWND owner, const std::filesystem::path& initial)
 	{
 		const DPI_AWARENESS_CONTEXT previousDpiContext =
@@ -1371,6 +1407,90 @@ dx3d::GameObject* dx3d::Game::createPrimitiveObject(PrimitiveKind kind, const Ve
 	return object;
 }
 
+dx3d::GameObject* dx3d::Game::spawnCubeBatch(
+	const CubeBatchSettings& settings,
+	const Vec3& origin)
+{
+	if (m_editorMode != EditorMode::Editing)
+		return nullptr;
+
+	const i32 count = std::clamp(settings.count, 1, 10000);
+	const i32 autoColumns = static_cast<i32>(
+		std::ceil(std::sqrt(static_cast<f32>(count))));
+	const i32 columns = std::clamp(
+		settings.columns <= 0 ? autoColumns : settings.columns,
+		1,
+		count);
+	const i32 rows = (count + columns - 1) / columns;
+	const f32 spacing = std::max(
+		settings.addColliders || settings.addRigidBodies ? 1.05f : 0.1f,
+		settings.spacing);
+	const bool createColliders = settings.addColliders || settings.addRigidBodies;
+	const f32 friction = std::isfinite(settings.friction)
+		? std::max(0.0f, settings.friction) : 0.6f;
+	const f32 restitution = std::isfinite(settings.restitution)
+		? std::clamp(settings.restitution, 0.0f, 1.0f) : 0.0f;
+	const f32 linearDamping = std::isfinite(settings.linearDamping)
+		? std::max(0.0f, settings.linearDamping) : 0.05f;
+	const f32 angularDamping = std::isfinite(settings.angularDamping)
+		? std::max(0.0f, settings.angularDamping) : 0.05f;
+	const f32 gravityFactor = std::isfinite(settings.gravityFactor)
+		? settings.gravityFactor : 1.0f;
+
+	pushUndoSnapshot();
+	GameObject* first = nullptr;
+	GameObject* last = nullptr;
+	const f32 halfWidth = static_cast<f32>(columns - 1) * spacing * 0.5f;
+	const f32 halfDepth = static_cast<f32>(rows - 1) * spacing * 0.5f;
+
+	for (i32 index = 0; index < count; ++index)
+	{
+		auto* cube = m_world->createGameObject<GameObject>();
+		if (!cube) continue;
+		if (!first) first = cube;
+		last = cube;
+
+		++m_cubeCounter;
+		cube->setName(m_cubeCounter == 1
+			? "Cube"
+			: "Cube (" + std::to_string(m_cubeCounter) + ")");
+		cube->createOrGetComponent<CubeComponent>();
+		cube->createOrGetComponent<MaterialComponent>();
+
+		const i32 column = index % columns;
+		const i32 row = index / columns;
+		cube->getTransform().setPosition({
+			origin.x + static_cast<f32>(column) * spacing - halfWidth,
+			origin.y,
+			origin.z + static_cast<f32>(row) * spacing - halfDepth
+		});
+
+		if (createColliders)
+		{
+			auto* collider = cube->createOrGetComponent<ColliderComponent>();
+			collider->setShape(ColliderShape::Box);
+			collider->setHalfExtents({ 0.5f, 0.5f, 0.5f });
+		}
+
+		if (settings.addRigidBodies)
+		{
+			auto* rigidBody = cube->createOrGetComponent<RigidBodyComponent>();
+			rigidBody->setBodyType(settings.bodyType);
+			rigidBody->setFriction(friction);
+			rigidBody->setRestitution(restitution);
+			rigidBody->setLinearDamping(linearDamping);
+			rigidBody->setAngularDamping(angularDamping);
+			rigidBody->setGravityFactor(gravityFactor);
+		}
+	}
+
+	if (last) selectOnly(last);
+	m_sceneDirty = true;
+	m_focusSceneViewRequested = true;
+	m_sceneStatusMessage = "Spawned " + std::to_string(count) + " cubes";
+	return first;
+}
+
 dx3d::GameObject* dx3d::Game::importObjAsset(const std::string& assetPath, const Vec3& position)
 {
 	if (m_editorMode != EditorMode::Editing) return nullptr;
@@ -1395,6 +1515,70 @@ dx3d::GameObject* dx3d::Game::importObjAsset(const std::string& assetPath, const
 	return object;
 }
 
+bool dx3d::Game::saveSelectedObjectAsPrefab()
+{
+	if (m_editorMode != EditorMode::Editing ||
+		!m_selectedObject ||
+		isEditorCamera(m_selectedObject))
+	{
+		return false;
+	}
+
+	std::error_code error{};
+	const std::filesystem::path assetDirectory = "assets";
+	std::filesystem::create_directories(assetDirectory, error);
+	if (error)
+	{
+		m_sceneStatusMessage = "Prefab save failed: assets folder";
+		DX3DLogError("Prefab save failed: could not create assets folder.");
+		return false;
+	}
+
+	const std::string stem = sanitizeAssetStem(m_selectedObject->getName());
+	const std::filesystem::path path =
+		makeUniqueAssetPath(assetDirectory, stem, ".eprefab");
+	if (!SceneSerializer::savePrefab(*m_selectedObject, path.generic_string()))
+	{
+		m_sceneStatusMessage = "Prefab save failed: " + path.generic_string();
+		DX3DLogError("Prefab save failed: {}", path.generic_string());
+		return false;
+	}
+
+	refreshAssetLens();
+	m_focusAssetLensRequested = true;
+	m_sceneStatusMessage = "Saved prefab: " + path.generic_string();
+	DX3DLogInfo("Prefab saved: {}", path.generic_string());
+	return true;
+}
+
+dx3d::GameObject* dx3d::Game::instantiatePrefabAsset(
+	const std::string& assetPath,
+	GameObject* parent,
+	const Vec3* position)
+{
+	if (m_editorMode != EditorMode::Editing)
+		return nullptr;
+
+	const std::string previousScene = SceneSerializer::serialize(*m_world);
+	auto* root = SceneSerializer::instantiatePrefab(*m_world, assetPath, parent);
+	if (!root)
+	{
+		m_sceneStatusMessage = "Prefab instantiate failed: " + assetPath;
+		DX3DLogError("Prefab instantiate failed: {}", assetPath);
+		return nullptr;
+	}
+
+	if (position)
+		root->getTransform().setPosition(*position);
+
+	pushUndoSnapshot(previousScene);
+	selectOnly(root);
+	m_sceneDirty = true;
+	m_sceneStatusMessage = "Instantiated prefab: " + assetPath;
+	DX3DLogInfo("Prefab instantiated: {}", assetPath);
+	return root;
+}
+
 void dx3d::Game::drawObjectCreationMenu(const Vec3& position)
 {
 	if (m_editorMode != EditorMode::Editing)
@@ -1416,6 +1600,51 @@ void dx3d::Game::drawObjectCreationMenu(const Vec3& position)
 		if (ImGui::MenuItem("Capsule")) createPrimitiveObject(PrimitiveKind::Capsule, position);
 		if (ImGui::MenuItem("Cylinder")) createPrimitiveObject(PrimitiveKind::Cylinder, position);
 		if (ImGui::MenuItem("Plane")) createPrimitiveObject(PrimitiveKind::Plane, position);
+		ImGui::EndMenu();
+	}
+	if (ImGui::BeginMenu("Batch cubes"))
+	{
+		ImGui::SetNextItemWidth(132.0f * m_uiScale);
+		if (ImGui::InputInt("Count", &m_cubeBatchSettings.count, 10, 100))
+			m_cubeBatchSettings.count = std::clamp(m_cubeBatchSettings.count, 1, 10000);
+		ImGui::SetNextItemWidth(132.0f * m_uiScale);
+		if (ImGui::InputInt("Columns", &m_cubeBatchSettings.columns, 1, 10))
+			m_cubeBatchSettings.columns = std::clamp(m_cubeBatchSettings.columns, 1, 10000);
+		ImGui::SetNextItemWidth(132.0f * m_uiScale);
+		if (ImGui::DragFloat("Spacing", &m_cubeBatchSettings.spacing, 0.05f, 0.1f, 100.0f, "%.2f"))
+			m_cubeBatchSettings.spacing = std::clamp(m_cubeBatchSettings.spacing, 0.1f, 100.0f);
+		ImGui::Checkbox("Rigid bodies", &m_cubeBatchSettings.addRigidBodies);
+		if (m_cubeBatchSettings.addRigidBodies)
+		{
+			int bodyType = static_cast<int>(m_cubeBatchSettings.bodyType);
+			ImGui::SetNextItemWidth(132.0f * m_uiScale);
+			if (ImGui::Combo("Motion", &bodyType, "Static\0Dynamic\0Kinematic\0"))
+				m_cubeBatchSettings.bodyType = static_cast<RigidBodyType>(bodyType);
+			ImGui::SetNextItemWidth(132.0f * m_uiScale);
+			if (ImGui::DragFloat("Friction", &m_cubeBatchSettings.friction, 0.01f, 0.0f, 10.0f))
+				m_cubeBatchSettings.friction = std::max(0.0f, m_cubeBatchSettings.friction);
+			ImGui::SetNextItemWidth(132.0f * m_uiScale);
+			if (ImGui::SliderFloat("Restitution", &m_cubeBatchSettings.restitution, 0.0f, 1.0f))
+				m_cubeBatchSettings.restitution = std::clamp(m_cubeBatchSettings.restitution, 0.0f, 1.0f);
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Bounciness: 0 absorbs, 1 bounces strongly");
+			ImGui::SetNextItemWidth(132.0f * m_uiScale);
+			if (ImGui::DragFloat("Linear Damping", &m_cubeBatchSettings.linearDamping, 0.01f, 0.0f, 10.0f))
+				m_cubeBatchSettings.linearDamping = std::max(0.0f, m_cubeBatchSettings.linearDamping);
+			ImGui::SetNextItemWidth(132.0f * m_uiScale);
+			if (ImGui::DragFloat("Angular Damping", &m_cubeBatchSettings.angularDamping, 0.01f, 0.0f, 10.0f))
+				m_cubeBatchSettings.angularDamping = std::max(0.0f, m_cubeBatchSettings.angularDamping);
+			ImGui::SetNextItemWidth(132.0f * m_uiScale);
+			ImGui::DragFloat("Gravity Factor", &m_cubeBatchSettings.gravityFactor, 0.01f, -10.0f, 10.0f);
+		}
+		ImGui::BeginDisabled(m_cubeBatchSettings.addRigidBodies);
+		ImGui::Checkbox("Colliders", &m_cubeBatchSettings.addColliders);
+		ImGui::EndDisabled();
+		if (m_cubeBatchSettings.addRigidBodies)
+			m_cubeBatchSettings.addColliders = true;
+		ImGui::Separator();
+		if (ImGui::MenuItem("Spawn"))
+			spawnCubeBatch(m_cubeBatchSettings, position);
 		ImGui::EndMenu();
 	}
 	if (ImGui::MenuItem("Camera"))
@@ -2310,6 +2539,10 @@ void dx3d::Game::onInternalUpdate()
 			if (ImGui::MenuItem("Duplicate", "Ctrl+D", false,
 				m_editorMode == EditorMode::Editing && canCopySelectedObject()))
 				duplicateSelectedObject();
+			if (ImGui::MenuItem("Save Selected as Prefab", nullptr, false,
+				m_editorMode == EditorMode::Editing &&
+				m_selectedObject && !isEditorCamera(m_selectedObject)))
+				saveSelectedObjectAsPrefab();
 			const bool canDelete = m_editorMode == EditorMode::Editing &&
 				m_selectedObject && !isEditorCamera(m_selectedObject);
 			if (ImGui::MenuItem("Delete Selected", "Del", false, canDelete))
@@ -2621,10 +2854,13 @@ void dx3d::Game::onInternalUpdate()
 			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DX3D_ASSET_PATH"))
 			{
 				const char* path = static_cast<const char*>(payload->Data);
-				std::string extension = std::filesystem::path(path).extension().string();
-				std::transform(extension.begin(), extension.end(), extension.begin(),
-					[](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+				const std::string extension = lowercaseExtension(path);
 				if (extension == ".obj") importObjAsset(path, getSceneSpawnPosition());
+				else if (extension == ".eprefab")
+				{
+					const Vec3 position = getSceneSpawnPosition();
+					instantiatePrefabAsset(path, nullptr, &position);
+				}
 			}
 			ImGui::EndDragDropTarget();
 		}
@@ -3192,11 +3428,24 @@ void dx3d::Game::onInternalUpdate()
 				requestedParent = object;
 				reparentRequested = true;
 			}
+			if (const ImGuiPayload* payload =
+				ImGui::AcceptDragDropPayload("DX3D_ASSET_PATH"))
+			{
+				const char* path = static_cast<const char*>(payload->Data);
+				if (lowercaseExtension(path) == ".eprefab")
+					instantiatePrefabAsset(path, object, nullptr);
+			}
 			ImGui::EndDragDropTarget();
 		}
 
 		if (ImGui::BeginPopupContextItem("EntityActions"))
 		{
+			if (ImGui::MenuItem("Save as Prefab", nullptr, false,
+				m_editorMode == EditorMode::Editing && !isEditorCamera(object)))
+			{
+				selectOnly(object);
+				saveSelectedObjectAsPrefab();
+			}
 			if (ImGui::MenuItem("Duplicate", "Ctrl+D", false,
 				m_editorMode == EditorMode::Editing &&
 				object->getComponent<CameraComponent>() == nullptr))
@@ -3241,6 +3490,16 @@ void dx3d::Game::onInternalUpdate()
 			requestedChild = m_world->findGameObject(draggedId);
 			requestedParent = nullptr;
 			reparentRequested = true;
+		}
+		if (const ImGuiPayload* payload =
+			ImGui::AcceptDragDropPayload("DX3D_ASSET_PATH"))
+		{
+			const char* path = static_cast<const char*>(payload->Data);
+			if (lowercaseExtension(path) == ".eprefab")
+			{
+				const Vec3 position = getSceneSpawnPosition();
+				instantiatePrefabAsset(path, nullptr, &position);
+			}
 		}
 		ImGui::EndDragDropTarget();
 	}
@@ -3612,7 +3871,7 @@ void dx3d::Game::onInternalUpdate()
 				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
 				if (frictionChanged) rigidBody->setFriction(friction);
 				float restitution = rigidBody->getRestitution();
-				const bool restitutionChanged = ImGui::SliderFloat("Restitution", &restitution, 0.0f, 1.0f);
+				const bool restitutionChanged = ImGui::SliderFloat("Restitution (Bounce)", &restitution, 0.0f, 1.0f);
 				if (ImGui::IsItemActivated()) pushUndoSnapshot(inspectorSnapshot);
 				if (restitutionChanged) rigidBody->setRestitution(restitution);
 				float linearDamping = rigidBody->getLinearDamping();
@@ -3951,11 +4210,12 @@ void dx3d::Game::onInternalUpdate()
 
 			const auto& physicsStats = m_physicsWorld->getStats();
 			ImGui::TextDisabled(
-				"PHYSICS  /  %.3f ms  /  %u BODIES  /  %u ACTIVE  /  %u CONTACTS",
+				"PHYSICS  /  %.3f ms  /  %u BODIES  /  %u ACTIVE  /  %u CONTACTS  /  %u WORKERS",
 				physicsStats.stepMilliseconds,
 				physicsStats.bodyCount,
 				physicsStats.activeBodyCount,
-				physicsStats.contactCount
+				physicsStats.contactCount,
+				physicsStats.workerThreadCount
 			);
 
 			ImGui::PlotLines(
@@ -4070,10 +4330,7 @@ void dx3d::Game::onInternalUpdate()
 				for (const auto& path : m_assetPaths)
 				{
 					if (!containsFilter(path)) continue;
-					std::string extension =
-						std::filesystem::path(path).extension().string();
-					std::transform(extension.begin(), extension.end(), extension.begin(),
-						[](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+					const std::string extension = lowercaseExtension(path);
 					ImGui::TableNextRow();
 					ImGui::TableNextColumn();
 					ImGui::TextColored(rgba(150, 190, 176), "%s", assetType(extension));
@@ -4088,6 +4345,27 @@ void dx3d::Game::onInternalUpdate()
 					if (selectedAsset && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
 						extension == ".obj" && m_editorMode == EditorMode::Editing)
 						importObjAsset(path, getSceneSpawnPosition());
+					else if (selectedAsset && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
+						extension == ".eprefab" && m_editorMode == EditorMode::Editing)
+					{
+						const Vec3 position = getSceneSpawnPosition();
+						instantiatePrefabAsset(path, nullptr, &position);
+					}
+					if (ImGui::BeginPopupContextItem("##AssetActions"))
+					{
+						if (extension == ".obj" && ImGui::MenuItem(
+							"Add to Scene", nullptr, false,
+							m_editorMode == EditorMode::Editing))
+							importObjAsset(path, getSceneSpawnPosition());
+						if (extension == ".eprefab" && ImGui::MenuItem(
+							"Instantiate Prefab", nullptr, false,
+							m_editorMode == EditorMode::Editing))
+						{
+							const Vec3 position = getSceneSpawnPosition();
+							instantiatePrefabAsset(path, nullptr, &position);
+						}
+						ImGui::EndPopup();
+					}
 				}
 				ImGui::EndTable();
 			}

@@ -4,6 +4,7 @@
 #include <DX3D/Game/GameObject.h>
 #include <DX3D/Component/RigidBodyComponent.h>
 #include <DX3D/Component/ColliderComponent.h>
+#include <DX3D/Component/PlaneComponent.h>
 #include <DX3D/Component/TransformComponent.h>
 #include <DX3D/Core/Logger.h>
 
@@ -149,6 +150,80 @@ namespace
 			&& std::isfinite(value.z) && std::isfinite(value.w);
 	}
 
+	float length3(const dx3d::Vec4& value)
+	{
+		const float lengthSquared = value.x * value.x + value.y * value.y
+			+ value.z * value.z;
+		return std::isfinite(lengthSquared) && lengthSquared > 0.0f
+			? std::sqrt(lengthSquared) : 0.0f;
+	}
+
+	dx3d::Vec3 extractWorldScale(dx3d::TransformComponent& transform)
+	{
+		const auto affine = transform.getAffineWorldMatrix();
+		return {
+			std::max(0.001f, length3(affine.row(0))),
+			std::max(0.001f, length3(affine.row(1))),
+			std::max(0.001f, length3(affine.row(2)))
+		};
+	}
+
+	dx3d::Vec3 scaledHalfExtents(
+		const dx3d::Vec3& halfExtents,
+		const dx3d::Vec3& worldScale)
+	{
+		return {
+			halfExtents.x * worldScale.x,
+			halfExtents.y * worldScale.y,
+			halfExtents.z * worldScale.z
+		};
+	}
+
+	float scaledRadius(float radius, const dx3d::Vec3& worldScale)
+	{
+		return radius * std::max({ worldScale.x, worldScale.y, worldScale.z });
+	}
+
+	float scaledRadialRadius(float radius, const dx3d::Vec3& worldScale)
+	{
+		return radius * std::max(worldScale.x, worldScale.z);
+	}
+
+	JPH::Vec3 toJolt(const dx3d::Vec3& value)
+	{
+		return JPH::Vec3(value.x, value.y, value.z);
+	}
+
+	JPH::Quat toJoltRotation(const dx3d::Vec4& value)
+	{
+		return JPH::Quat(value.x, value.y, value.z, value.w).Normalized();
+	}
+
+	JPH::RVec3 physicsPosition(
+		const dx3d::Vec4& visualPosition,
+		JPH::QuatArg rotation,
+		const dx3d::Vec3& localOffset)
+	{
+		const JPH::Vec3 offset = rotation * toJolt(localOffset);
+		return JPH::RVec3(
+			visualPosition.x + offset.GetX(),
+			visualPosition.y + offset.GetY(),
+			visualPosition.z + offset.GetZ());
+	}
+
+	dx3d::Vec3 visualPosition(
+		JPH::RVec3Arg physicsPosition,
+		JPH::QuatArg rotation,
+		const dx3d::Vec3& localOffset)
+	{
+		const JPH::Vec3 offset = rotation * toJolt(localOffset);
+		return {
+			static_cast<dx3d::f32>(physicsPosition.GetX() - offset.GetX()),
+			static_cast<dx3d::f32>(physicsPosition.GetY() - offset.GetY()),
+			static_cast<dx3d::f32>(physicsPosition.GetZ() - offset.GetZ())
+		};
+	}
+
 	bool isValid(dx3d::RigidBodyType value)
 	{
 		return value == dx3d::RigidBodyType::Static
@@ -162,6 +237,13 @@ namespace
 			|| value == dx3d::ColliderShape::Sphere
 			|| value == dx3d::ColliderShape::Cylinder
 			|| value == dx3d::ColliderShape::Capsule;
+	}
+
+	int physicsWorkerCount()
+	{
+		const unsigned hardwareThreads = std::thread::hardware_concurrency();
+		const unsigned workerThreads = hardwareThreads > 1 ? hardwareThreads - 1 : 1;
+		return static_cast<int>(std::clamp(workerThreads, 1u, 4u));
 	}
 }
 
@@ -254,6 +336,7 @@ struct dx3d::PhysicsWorld::Impl
 	{
 		JPH::BodyID id{};
 		RigidBodyType motion{ RigidBodyType::Static };
+		Vec3 localOffset{};
 	};
 
 	BroadPhaseInterface broadPhase{};
@@ -296,8 +379,9 @@ void dx3d::PhysicsWorld::reset(World& world)
 	(void)runtime();
 	auto impl = std::make_unique<Impl>();
 	impl->allocator = std::make_unique<JPH::TempAllocatorImpl>(10u * 1024u * 1024u);
+	const int workerThreadCount = physicsWorkerCount();
 	impl->jobs = std::make_unique<JPH::JobSystemThreadPool>(
-		JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, 1);
+		JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, workerThreadCount);
 	impl->system = std::make_unique<JPH::PhysicsSystem>();
 	impl->system->Init(65536, 0, 65536, 10240,
 		impl->broadPhase, impl->objectVsBroad, impl->pairs);
@@ -331,12 +415,14 @@ void dx3d::PhysicsWorld::reset(World& world)
 		auto& transform = object.getTransform();
 		const Vec4 rotation = transform.getRotationQuaternion();
 		const Vec4 worldPosition = transform.getRigidWorldMatrix().row(3);
+		const Vec3 worldScale = extractWorldScale(transform);
 		const f32 rotationLengthSquared = rotation.x * rotation.x
 			+ rotation.y * rotation.y + rotation.z * rotation.z
 			+ rotation.w * rotation.w;
 		const bool validSettings = object.getEntityId() != 0
 			&& isValid(bodyType) && isValid(colliderShape)
-			&& isFinite(rotation) && isFinite(worldPosition)
+			&& isFinite(rotation) && isFinite(worldPosition) && isFinite(worldScale)
+			&& worldScale.x > 0.0f && worldScale.y > 0.0f && worldScale.z > 0.0f
 			&& std::isfinite(rotationLengthSquared)
 			&& rotationLengthSquared > 0.000001f
 			&& std::isfinite(body->getFriction()) && body->getFriction() >= 0.0f
@@ -354,9 +440,10 @@ void dx3d::PhysicsWorld::reset(World& world)
 		}
 
 		JPH::ShapeRefC shape{};
+		Vec3 localOffset{};
 		if (colliderShape == ColliderShape::Sphere)
 		{
-			const f32 radius = collider->getRadius();
+			const f32 radius = scaledRadius(collider->getRadius(), worldScale);
 			if (!std::isfinite(radius) || radius <= 0.0f)
 			{
 				DX3DLog(body->getLogger(), Logger::LogLevel::Warning,
@@ -369,8 +456,8 @@ void dx3d::PhysicsWorld::reset(World& world)
 		else if (colliderShape == ColliderShape::Cylinder ||
 			colliderShape == ColliderShape::Capsule)
 		{
-			const f32 radius = collider->getRadius();
-			const f32 halfHeight = collider->getHalfExtents().y;
+			const f32 radius = scaledRadialRadius(collider->getRadius(), worldScale);
+			const f32 halfHeight = collider->getHalfExtents().y * worldScale.y;
 			if (!std::isfinite(radius) || !std::isfinite(halfHeight) ||
 				radius <= 0.0f || halfHeight <= 0.0f)
 			{
@@ -385,7 +472,7 @@ void dx3d::PhysicsWorld::reset(World& world)
 		}
 		else
 		{
-			const Vec3 half = collider->getHalfExtents();
+			const Vec3 half = scaledHalfExtents(collider->getHalfExtents(), worldScale);
 			if (!isFinite(half) || half.x <= 0.0f || half.y <= 0.0f || half.z <= 0.0f)
 			{
 				DX3DLog(body->getLogger(), Logger::LogLevel::Warning,
@@ -393,13 +480,16 @@ void dx3d::PhysicsWorld::reset(World& world)
 					object.getEntityId(), object.getName());
 				continue;
 			}
+			if (object.getComponent<PlaneComponent>())
+				localOffset = { 0.0f, -half.y, 0.0f };
 			shape = new JPH::BoxShape(JPH::Vec3(half.x, half.y, half.z));
 		}
 
+		const JPH::Quat orientation = toJoltRotation(rotation);
 		JPH::BodyCreationSettings settings(
 			shape,
-			JPH::RVec3(worldPosition.x, worldPosition.y, worldPosition.z),
-			JPH::Quat(rotation.x, rotation.y, rotation.z, rotation.w).Normalized(),
+			physicsPosition(worldPosition, orientation, localOffset),
+			orientation,
 			motionType(bodyType),
 			bodyType == RigidBodyType::Static ? Layers::NonMoving : Layers::Moving);
 		settings.mUserData = object.getEntityId();
@@ -413,13 +503,14 @@ void dx3d::PhysicsWorld::reset(World& world)
 			bodyType == RigidBodyType::Dynamic
 				? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
 		if (!id.IsInvalid())
-			impl->bodies.emplace(object.getEntityId(), Impl::BodyRecord{ id, bodyType });
+			impl->bodies.emplace(object.getEntityId(), Impl::BodyRecord{ id, bodyType, localOffset });
 		else
 			DX3DLog(body->getLogger(), Logger::LogLevel::Warning,
 				"Physics could not create a Jolt body for entity {} ('{}').",
 				object.getEntityId(), object.getName());
 	}
 	m_stats.bodyCount = static_cast<ui32>(impl->bodies.size());
+	m_stats.workerThreadCount = static_cast<ui32>(workerThreadCount);
 	m_impl = std::move(impl);
 }
 
@@ -442,8 +533,8 @@ void dx3d::PhysicsWorld::step(World& world, f32 fixedDeltaTime)
 			|| !std::isfinite(rotationLengthSquared)
 			|| rotationLengthSquared <= 0.000001f)
 			continue;
-		const JPH::RVec3 target(position.x, position.y, position.z);
-		const JPH::Quat orientation = JPH::Quat(rotation.x, rotation.y, rotation.z, rotation.w).Normalized();
+		const JPH::Quat orientation = toJoltRotation(rotation);
+		const JPH::RVec3 target = physicsPosition(position, orientation, record.localOffset);
 		if (record.motion == RigidBodyType::Kinematic)
 			interface.MoveKinematic(record.id, target, orientation, fixedDeltaTime);
 		else
@@ -469,8 +560,7 @@ void dx3d::PhysicsWorld::step(World& world, f32 fixedDeltaTime)
 		JPH::Quat rotation{};
 		interface.GetPositionAndRotation(record.id, position, rotation);
 		auto& transform = object->getTransform();
-		transform.setPosition({ static_cast<f32>(position.GetX()),
-			static_cast<f32>(position.GetY()), static_cast<f32>(position.GetZ()) });
+		transform.setPosition(visualPosition(position, rotation, record.localOffset));
 		transform.setRotationQuaternion(
 			{ rotation.GetX(), rotation.GetY(), rotation.GetZ(), rotation.GetW() },
 			transform.getRotation());

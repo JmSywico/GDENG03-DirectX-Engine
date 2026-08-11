@@ -42,6 +42,10 @@ namespace jnpf::Graphics
 		if (path.empty())
 			return {};
 		const std::filesystem::path absolute = ResolvePath(path);
+		const std::filesystem::path lexicalRelative =
+			absolute.lexically_relative(m_projectRoot.lexically_normal());
+		if (!lexicalRelative.empty() && *lexicalRelative.begin() != "..")
+			return lexicalRelative.generic_string();
 		std::error_code error;
 		const std::filesystem::path relative = std::filesystem::relative(absolute, m_projectRoot, error);
 		if (!error && !relative.empty() && *relative.begin() != "..")

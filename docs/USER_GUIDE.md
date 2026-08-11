@@ -12,7 +12,7 @@ The borderless main window contains these primary surfaces:
 | **Game** | Output from the primary authored camera; receives captured game input during Play Mode |
 | **Elements** | Searchable object hierarchy with activation, multi-selection, drag-and-drop parenting, duplicate, and delete actions |
 | **Inspector** | Object name, activation, transform, camera, material, texture, physics, behavior, and light properties |
-| **Stats** | Frame time/FPS history, object and draw counts, physics timing/body/contact counts, and render queue summary |
+| **Stats** | Frame time/FPS history, object and draw counts, physics timing/body/contact/worker counts, and render queue summary |
 | **Asset Lens** | Filtered project asset list with refresh, drag sources, and OBJ import |
 | **Console** | Filterable in-memory Info/Warning/Error stream with follow and clear controls |
 
@@ -61,10 +61,13 @@ Available object types:
 - Cylinder
 - Capsule
 - Plane
+- Batch cubes
 - Camera
 - Light
 
 Renderable primitives receive a material automatically. Cameras receive a Fly Controller. If a loaded or new scene has no authored camera, the editor creates `Main Camera`; if no authored camera is marked primary, the first one becomes primary.
+
+Use **Batch cubes** when you need many test cubes at once. It creates the whole grid as one undoable edit, lets you choose count, columns, and spacing, and can add Colliders and/or Rigid Bodies automatically. The batch Rigid Body settings include motion type, friction, restitution, linear damping, angular damping, and gravity factor. The default Motion is Static for lower runtime cost; switch it to Dynamic when the cubes need to fall or move. Enabling Rigid Bodies also enables Colliders because physics bodies need collision shapes. Wider spacing avoids instant overlap, which keeps large dynamic batches from spending the first few frames separating interpenetrating cubes.
 
 ## Transform editing
 
@@ -118,7 +121,7 @@ Add a Texture component to enter a path or drag a supported texture from Asset L
 
 - Body type: Static, Dynamic, or Kinematic
 - Friction
-- Restitution
+- Restitution, also known as bounciness
 - Linear and angular damping
 - Gravity factor
 - Enabled state
@@ -130,7 +133,9 @@ Add a Texture component to enter a path or drag a supported texture from Asset L
 - Radius for curved shapes
 - Half height for cylinder and capsule
 
-Physics requires both an enabled Rigid Body and a Collider on an active object. Dynamic bodies with a parent are skipped because runtime world-space synchronization is only supported for root dynamic bodies.
+Physics requires both an enabled Rigid Body and a Collider on an active object. Collider shape sizes are multiplied by the object's world scale when Play Mode builds the physics scene. Box colliders on Plane objects are aligned so the collider's top face follows the visible plane surface. Dynamic bodies with a parent are skipped because runtime world-space synchronization is only supported for root dynamic bodies.
+
+For high cube counts, prefer Collider-only or Static bodies when the cubes do not need to move. Dynamic bodies are the most expensive path because every active object is simulated. The physics world uses a capped worker-thread pool during Play Mode, and the Stats panel shows the current physics time, active body count, contact count, and worker count.
 
 ### Rotator
 
@@ -170,10 +175,12 @@ During captured Play Mode, the primary camera's enabled Fly Controller uses:
 Asset Lens scans `assets/` and `DX3D/Assets/` recursively. It hides scene, JSON, metadata, and operating-system housekeeping files. Recognized display categories include models, textures, materials, prefabs, and HLSL.
 
 - Double-click an `.obj` entry in Edit Mode to import it at the Scene spawn point.
+- Save the selected object subtree as a production `.eprefab` with **Edit > Save Selected as Prefab** or the Elements right-click menu.
+- Double-click a production `.eprefab`, choose **Instantiate Prefab**, or drag it into Scene to instantiate it.
 - Drag supported image files onto a Texture component.
 - Use **Refresh** after adding or removing files outside the editor.
 
-Only OBJ import is wired into the production editor. Assimp-backed broader model preparation exists in the canonical test/migration layer but is not yet connected to Asset Lens.
+Assimp-backed broader model preparation and canonical readable prefab fixtures exist in the test/migration layer but are not yet connected to the production Asset Lens.
 
 ## Saving and loading
 

@@ -9,6 +9,7 @@
 #include <DX3D/Component/SphereComponent.h>
 #include <DX3D/Component/CylinderComponent.h>
 #include <DX3D/Component/CapsuleComponent.h>
+#include <DX3D/Component/PlaneComponent.h>
 
 #include <array>
 
@@ -68,6 +69,7 @@ namespace dx3d
 				if (object.getComponent<SphereComponent>()) collider->setShape(ColliderShape::Sphere);
 				else if (object.getComponent<CylinderComponent>()) collider->setShape(ColliderShape::Cylinder);
 				else if (object.getComponent<CapsuleComponent>()) collider->setShape(ColliderShape::Capsule);
+				else if (object.getComponent<PlaneComponent>()) collider->setHalfExtents({ 0.5f, 0.02f, 0.5f });
 				return true;
 			}
 			case ComponentKind::Texture: return object.createOrGetComponent<TextureComponent>() != nullptr;

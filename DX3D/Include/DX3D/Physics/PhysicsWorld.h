@@ -45,6 +45,7 @@ namespace dx3d
 			ui32 activeBodyCount{};
 			ui32 contactCount{};
 			ui32 contactEventCount{};
+			ui32 workerThreadCount{};
 			f32 stepMilliseconds{};
 		};
 

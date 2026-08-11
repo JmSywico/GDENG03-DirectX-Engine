@@ -111,7 +111,19 @@ Asset Lens scans these paths relative to the process working directory:
 - `assets/`
 - `DX3D/Assets/`
 
-It recursively lists regular files, excluding `.meta`, `.escene`, `.dx3dscene`, `.json`, and `.DS_Store`. Its type label recognizes common model, image, material, prefab, and HLSL extensions. Recognition in the UI does not imply that the production runtime imports every format.
+It recursively lists regular files, excluding `.meta`, `.escene`, `.dx3dscene`, `.json`, and `.DS_Store`. Its type label recognizes common model, image, material, prefab, and HLSL extensions. Production import actions are wired for OBJ models and production `.eprefab` prefabs.
+
+## Prefabs
+
+The production editor can save one selected object subtree as a `.eprefab` asset:
+
+- Right-click an object in Elements and choose **Save as Prefab**, or use **Edit > Save Selected as Prefab**.
+- Saving is allowed only in Edit Mode.
+- The file is written under `assets/` using the selected object name, with invalid filename characters replaced by `_`.
+- Existing files are not overwritten; the editor appends `_2`, `_3`, and so on.
+- The prefab payload uses the same production scene JSON envelope as `.dx3dscene`, scoped to the selected root and its children.
+
+Instantiate a production prefab by double-clicking it in Asset Lens, choosing **Instantiate Prefab** from its asset context menu, dragging it into Scene, or dragging it onto an object in Elements to parent the instance there. Instantiation participates in undo/redo and creates fresh entity IDs. Canonical readable `.eprefab` fixtures from the migration layer are separate from this production payload and are not imported by the DX3D runtime path.
 
 ## OBJ import
 
