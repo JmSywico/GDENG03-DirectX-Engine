@@ -46,7 +46,7 @@ namespace
 		'E'
 	};
 
-	constexpr dx3d::ui32 sceneVersion = 5;
+	constexpr dx3d::ui32 sceneVersion = 6;
 	constexpr dx3d::ui32 minimumSupportedSceneVersion = 1;
 	constexpr dx3d::ui32 maximumObjectCount = 100000;
 	constexpr dx3d::ui32 maximumLevelObjectCount = 10000;
@@ -100,6 +100,7 @@ namespace
 
 		bool hasMaterial{ false };
 		std::string materialTexturePath{};
+		bool materialUseTexture{ true };
 		dx3d::Vec2 materialUvTiling
 		{
 			1.0f,
@@ -113,6 +114,8 @@ namespace
 			1.0f,
 			1.0f
 		};
+		dx3d::f32 materialRoughness{ 0.50f };
+		dx3d::f32 materialMetallic{ 0.0f };
 
 		dx3d::Vec3 lightColor
 		{
@@ -1612,6 +1615,10 @@ namespace
 					stream,
 					material->getTexturePath()
 				) ||
+				!writeBool(
+					stream,
+					material->getUseTexture()
+				) ||
 				!writeVec2(
 					stream,
 					material->getUvTiling()
@@ -1623,6 +1630,14 @@ namespace
 				!writeVec4(
 					stream,
 					material->getColor()
+				) ||
+				!writeValue(
+					stream,
+					material->getRoughness()
+				) ||
+				!writeValue(
+					stream,
+					material->getMetallic()
 				)
 				)
 			{
@@ -1853,7 +1868,25 @@ namespace
 						stream,
 						object.
 						materialTexturePath
-					) ||
+					)
+					)
+				{
+					return false;
+				}
+
+				if (storedVersion >= 6)
+				{
+					if (!readBool(
+						stream,
+						object.
+						materialUseTexture
+					))
+					{
+						return false;
+					}
+				}
+
+				if (
 					!readVec2(
 						stream,
 						object.
@@ -1876,6 +1909,25 @@ namespace
 						object.
 						materialColor
 					))
+					{
+						return false;
+					}
+				}
+
+				if (storedVersion >= 6)
+				{
+					if (
+						!readValue(
+							stream,
+							object.
+							materialRoughness
+						) ||
+						!readValue(
+							stream,
+							object.
+							materialMetallic
+						)
+						)
 					{
 						return false;
 					}
@@ -2103,6 +2155,10 @@ namespace
 				data.materialTexturePath
 			);
 
+			material->setUseTexture(
+				data.materialUseTexture
+			);
+
 			material->setUvTiling(
 				data.materialUvTiling
 			);
@@ -2113,6 +2169,14 @@ namespace
 
 			material->setColor(
 				data.materialColor
+			);
+
+			material->setRoughness(
+				data.materialRoughness
+			);
+
+			material->setMetallic(
+				data.materialMetallic
 			);
 		}
 
@@ -2236,6 +2300,13 @@ namespace
 				: std::string{}
 			);
 			stream << ",\n";
+			stream << "        \"useTexture\": "
+				<< (
+					material
+					? material->getUseTexture()
+					: true
+					)
+				<< ",\n";
 			stream << "        \"uvTiling\": ";
 			writeLevelVec2(
 				stream,
@@ -2264,7 +2335,21 @@ namespace
 					1.0f
 				}
 			);
-			stream << "\n";
+			stream << ",\n";
+			stream << "        \"roughness\": "
+				<< (
+					material
+					? material->getRoughness()
+					: 0.50f
+					)
+				<< ",\n";
+			stream << "        \"metallic\": "
+				<< (
+					material
+					? material->getMetallic()
+					: 0.0f
+					)
+				<< "\n";
 			stream << "      },\n";
 		}
 
@@ -2472,6 +2557,12 @@ namespace
 				object.materialTexturePath
 			);
 
+			readBoolMember(
+				*material,
+				"useTexture",
+				object.materialUseTexture
+			);
+
 			readVec2Member(
 				*material,
 				"uvTiling",
@@ -2488,6 +2579,18 @@ namespace
 				*material,
 				"color",
 				object.materialColor
+			);
+
+			readNumberMember(
+				*material,
+				"roughness",
+				object.materialRoughness
+			);
+
+			readNumberMember(
+				*material,
+				"metallic",
+				object.materialMetallic
 			);
 		}
 

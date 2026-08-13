@@ -1,0 +1,3 @@
+import import_dx3d_level_unreal
+
+import_dx3d_level_unreal.install_unreal_editor_menu()

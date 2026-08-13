@@ -13,6 +13,7 @@ struct VSOutput
     float3 worldNormal : NORMAL0;
     float4 lightPosition : TEXCOORD0;
     float2 texCoord : TEXCOORD1;
+    float3 worldPosition : TEXCOORD2;
 };
 
 cbuffer ConstantData : register(b0)
@@ -26,6 +27,8 @@ cbuffer ConstantData : register(b0)
     float4 materialSettings;
     float4 textureSettings;
     float4 materialColor;
+    float4 cameraPosition;
+    float4 materialProperties;
 
     row_major float4x4 inverseWorld;
 
@@ -81,6 +84,9 @@ VSOutput VSMain(
             output.lightPosition,
             lightProj
         );
+
+    output.worldPosition =
+        worldPosition.xyz;
 
     output.color =
         input.color;
@@ -262,6 +268,16 @@ float4 PSMain(
         ambientStrength +
         directLighting;
 
+    const float roughness =
+        saturate(
+            materialProperties.x
+        );
+
+    const float metallic =
+        saturate(
+            materialProperties.y
+        );
+
     float4 surfaceColor =
         materialSettings.w > 0.5f
         ? materialColor
@@ -281,10 +297,64 @@ float4 PSMain(
             );
     }
 
+    const float3 viewDirection =
+        normalize(
+            cameraPosition.xyz -
+            input.worldPosition
+        );
+
+    const float3 halfDirection =
+        normalize(
+            directionToLight +
+            viewDirection
+        );
+
+    const float shininess =
+        lerp(
+            96.0f,
+            8.0f,
+            roughness
+        );
+
+    const float specularAmount =
+        pow(
+            saturate(
+                dot(
+                    normal,
+                    halfDirection
+                )
+            ),
+            shininess
+        ) *
+        (1.0f - roughness) *
+        shadowAmount *
+        0.35f;
+
+    const float3 diffuseColor =
+        lerp(
+            surfaceColor.rgb,
+            surfaceColor.rgb * 0.55f,
+            metallic
+        );
+
+    const float3 specularColor =
+        lerp(
+            float3(
+                1.0f,
+                1.0f,
+                1.0f
+            ),
+            surfaceColor.rgb,
+            metallic
+        );
+
     const float3 finalColor =
-        surfaceColor.rgb *
+        diffuseColor *
         lightColorAndAmbient.rgb *
-        lightingStrength;
+        lightingStrength +
+        specularColor *
+        lightColorAndAmbient.rgb *
+        specularAmount;
 
     return float4(
         finalColor,

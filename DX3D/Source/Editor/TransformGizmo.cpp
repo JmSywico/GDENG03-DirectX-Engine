@@ -11,6 +11,7 @@
 
 #include <imgui.h>
 
+#include <algorithm>
 #include <cmath>
 
 void dx3d::TransformGizmo::setOperation(
@@ -22,6 +23,7 @@ void dx3d::TransformGizmo::setOperation(
 	m_hoveredAxis = Axis::None;
 	m_activeAxis = Axis::None;
 	m_isUsing = false;
+	m_previousMousePosition = {};
 	m_previousRotationAngle = 0.0f;
 }
 
@@ -169,6 +171,24 @@ dx3d::TransformGizmo::distanceToLineSegment(
 }
 
 dx3d::f32
+dx3d::TransformGizmo::distanceBetweenScreenPoints(
+	const ScreenPoint& lhs,
+	const ScreenPoint& rhs
+) const noexcept
+{
+	const f32 differenceX =
+		lhs.x - rhs.x;
+
+	const f32 differenceY =
+		lhs.y - rhs.y;
+
+	return std::sqrt(
+		differenceX * differenceX +
+		differenceY * differenceY
+	);
+}
+
+dx3d::f32
 dx3d::TransformGizmo::distanceToLineSegmentWithParameter(
 	const ScreenPoint& point,
 	const ScreenPoint& start,
@@ -236,15 +256,17 @@ dx3d::TransformGizmo::distanceToLineSegmentWithParameter(
 }
 
 void dx3d::TransformGizmo::drawRotationGizmo(
+	CameraComponent* camera,
 	GameObject* selectedObject,
 	const Vec3& gizmoOrigin,
 	f32 ringRadius,
+	f32 centerHandleRadius,
 	const Mat4x4& viewProjectionMatrix,
 	const ViewportArea& renderViewportArea,
 	const ViewportArea& interactionViewportArea
 )
 {
-	if (!selectedObject)
+	if (!selectedObject || !camera)
 		return;
 
 	ImDrawList* drawList =
@@ -338,6 +360,7 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 					sine * ringRadius;
 				break;
 
+			case Axis::Center:
 			case Axis::None:
 			default:
 				break;
@@ -449,45 +472,61 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 
 	if (!m_isUsing && canHoverGizmo)
 	{
-		f32 closestDistance =
-			hoverDistance;
-
-		f32 unusedAngle = 0.0f;
-
-		const f32 xDistance =
-			findClosestRingAngle(
-				Axis::X,
-				unusedAngle
+		const f32 centerDistance =
+			distanceBetweenScreenPoints(
+				mousePosition,
+				centerScreen
 			);
 
-		if (xDistance < closestDistance)
+		const f32 centerHoverRadius =
+			centerHandleRadius + 5.0f;
+
+		if (centerDistance <= centerHoverRadius)
 		{
-			closestDistance = xDistance;
-			m_hoveredAxis = Axis::X;
+			m_hoveredAxis = Axis::Center;
 		}
-
-		const f32 yDistance =
-			findClosestRingAngle(
-				Axis::Y,
-				unusedAngle
-			);
-
-		if (yDistance < closestDistance)
+		else
 		{
-			closestDistance = yDistance;
-			m_hoveredAxis = Axis::Y;
-		}
+			f32 closestDistance =
+				hoverDistance;
 
-		const f32 zDistance =
-			findClosestRingAngle(
-				Axis::Z,
-				unusedAngle
-			);
+			f32 unusedAngle = 0.0f;
 
-		if (zDistance < closestDistance)
-		{
-			closestDistance = zDistance;
-			m_hoveredAxis = Axis::Z;
+			const f32 xDistance =
+				findClosestRingAngle(
+					Axis::X,
+					unusedAngle
+				);
+
+			if (xDistance < closestDistance)
+			{
+				closestDistance = xDistance;
+				m_hoveredAxis = Axis::X;
+			}
+
+			const f32 yDistance =
+				findClosestRingAngle(
+					Axis::Y,
+					unusedAngle
+				);
+
+			if (yDistance < closestDistance)
+			{
+				closestDistance = yDistance;
+				m_hoveredAxis = Axis::Y;
+			}
+
+			const f32 zDistance =
+				findClosestRingAngle(
+					Axis::Z,
+					unusedAngle
+				);
+
+			if (zDistance < closestDistance)
+			{
+				closestDistance = zDistance;
+				m_hoveredAxis = Axis::Z;
+			}
 		}
 	}
 
@@ -515,23 +554,32 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 		m_hoveredAxis != Axis::None &&
 		leftMouseClicked)
 	{
-		f32 startingAngle = 0.0f;
-
-		const f32 startingDistance =
-			findClosestRingAngle(
-				m_hoveredAxis,
-				startingAngle
-			);
-
-		if (startingDistance <= hoverDistance)
+		if (m_hoveredAxis == Axis::Center)
 		{
-			m_activeAxis =
-				m_hoveredAxis;
-
-			m_previousRotationAngle =
-				startingAngle;
-
+			m_activeAxis = Axis::Center;
+			m_previousMousePosition = mousePosition;
 			m_isUsing = true;
+		}
+		else
+		{
+			f32 startingAngle = 0.0f;
+
+			const f32 startingDistance =
+				findClosestRingAngle(
+					m_hoveredAxis,
+					startingAngle
+				);
+
+			if (startingDistance <= hoverDistance)
+			{
+				m_activeAxis =
+					m_hoveredAxis;
+
+				m_previousRotationAngle =
+					startingAngle;
+
+				m_isUsing = true;
+			}
 		}
 	}
 
@@ -549,33 +597,22 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 		}
 		else
 		{
-			f32 currentAngle = 0.0f;
-
-			const f32 currentDistance =
-				findClosestRingAngle(
-					m_activeAxis,
-					currentAngle
-				);
-
-			if (currentDistance < 1000000.0f)
+			if (m_activeAxis == Axis::Center)
 			{
-				f32 angleDifference =
-					currentAngle -
-					m_previousRotationAngle;
+				const f32 mouseDeltaX =
+					mousePosition.x -
+					m_previousMousePosition.x;
 
-				if (angleDifference >
-					MathUtils::PI)
-				{
-					angleDifference -=
-						fullRotation;
-				}
+				const f32 mouseDeltaY =
+					mousePosition.y -
+					m_previousMousePosition.y;
 
-				if (angleDifference <
-					-MathUtils::PI)
-				{
-					angleDifference +=
-						fullRotation;
-				}
+				constexpr f32 rotationSensitivity =
+					0.01f;
+
+				const f32 angleMovement =
+					(mouseDeltaX - mouseDeltaY) *
+					rotationSensitivity;
 
 				auto& transform =
 					selectedObject->getTransform();
@@ -583,32 +620,91 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 				auto rotation =
 					transform.getRotation();
 
-				switch (m_activeAxis)
+				const Vec3 cameraForward =
+					camera->getGameObject().
+					getTransform().
+					forward();
+
+				rotation.x +=
+					cameraForward.x * angleMovement;
+
+				rotation.y +=
+					cameraForward.y * angleMovement;
+
+				rotation.z +=
+					cameraForward.z * angleMovement;
+
+				transform.setRotation(
+					rotation
+				);
+
+				m_previousMousePosition =
+					mousePosition;
+			}
+			else
+			{
+				f32 currentAngle = 0.0f;
+
+				const f32 currentDistance =
+					findClosestRingAngle(
+						m_activeAxis,
+						currentAngle
+					);
+
+				if (currentDistance < 1000000.0f)
 				{
-				case Axis::X:
-					rotation.x +=
-						angleDifference;
-					break;
+					f32 angleDifference =
+						currentAngle -
+						m_previousRotationAngle;
 
-				case Axis::Y:
-					rotation.y +=
-						angleDifference;
-					break;
+					if (angleDifference >
+						MathUtils::PI)
+					{
+						angleDifference -=
+							fullRotation;
+					}
 
-				case Axis::Z:
-					rotation.z +=
-						angleDifference;
-					break;
+					if (angleDifference <
+						-MathUtils::PI)
+					{
+						angleDifference +=
+							fullRotation;
+					}
 
-				case Axis::None:
-				default:
-					break;
+					auto& transform =
+						selectedObject->getTransform();
+
+					auto rotation =
+						transform.getRotation();
+
+					switch (m_activeAxis)
+					{
+					case Axis::X:
+						rotation.x +=
+							angleDifference;
+						break;
+
+					case Axis::Y:
+						rotation.y +=
+							angleDifference;
+						break;
+
+					case Axis::Z:
+						rotation.z +=
+							angleDifference;
+						break;
+
+					case Axis::Center:
+					case Axis::None:
+					default:
+						break;
+					}
+
+					transform.setRotation(rotation);
+
+					m_previousRotationAngle =
+						currentAngle;
 				}
-
-				transform.setRotation(rotation);
-
-				m_previousRotationAngle =
-					currentAngle;
 			}
 		}
 	}
@@ -640,6 +736,11 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 		? m_activeAxis == Axis::Z
 		: m_hoveredAxis == Axis::Z;
 
+	const bool centerHighlighted =
+		m_isUsing
+		? m_activeAxis == Axis::Center
+		: m_hoveredAxis == Axis::Center;
+
 	const ImU32 xRingColor =
 		xRingHighlighted
 		? highlightedColor
@@ -654,6 +755,11 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 		zRingHighlighted
 		? highlightedColor
 		: normalZAxisColor;
+
+	const ImU32 centerHandleColor =
+		centerHighlighted
+		? highlightedColor
+		: IM_COL32(240, 240, 240, 255);
 
 	drawList->PushClipRect(
 		clipMinimum,
@@ -740,8 +846,8 @@ void dx3d::TransformGizmo::drawRotationGizmo(
 			centerScreen.x,
 			centerScreen.y
 		},
-		4.0f,
-		IM_COL32(240, 240, 240, 255)
+		centerHandleRadius,
+		centerHandleColor
 	);
 
 	drawList->PopClipRect();
@@ -834,15 +940,24 @@ void dx3d::TransformGizmo::draw(
 	if (axisLength > 5.0f)
 		axisLength = 5.0f;
 
+	const f32 centerHandleRadius =
+		std::clamp(
+			34.0f / originInViewSpace.z,
+			4.0f,
+			12.0f
+		);
+
 	if (isRotate)
 	{
 		const f32 ringRadius =
 			axisLength * 0.85f;
 
 		drawRotationGizmo(
+			camera,
 			selectedObject,
 			gizmoOrigin,
 			ringRadius,
+			centerHandleRadius,
 			viewProjectionMatrix,
 			renderViewportArea,
 			interactionViewportArea
@@ -934,54 +1049,70 @@ void dx3d::TransformGizmo::draw(
 	{
 		constexpr f32 hoverDistance = 10.0f;
 
-		f32 closestDistance =
-			hoverDistance;
+		const f32 centerDistance =
+			distanceBetweenScreenPoints(
+				mousePosition,
+				originScreen
+			);
 
-		if (xAxisVisible)
+		const f32 centerHoverRadius =
+			centerHandleRadius + 5.0f;
+
+		if (centerDistance <= centerHoverRadius)
 		{
-			const f32 distance =
-				distanceToLineSegment(
-					mousePosition,
-					originScreen,
-					xAxisScreen
-				);
-
-			if (distance < closestDistance)
-			{
-				closestDistance = distance;
-				m_hoveredAxis = Axis::X;
-			}
+			m_hoveredAxis = Axis::Center;
 		}
-
-		if (yAxisVisible)
+		else
 		{
-			const f32 distance =
-				distanceToLineSegment(
-					mousePosition,
-					originScreen,
-					yAxisScreen
-				);
+			f32 closestDistance =
+				hoverDistance;
 
-			if (distance < closestDistance)
+			if (xAxisVisible)
 			{
-				closestDistance = distance;
-				m_hoveredAxis = Axis::Y;
+				const f32 distance =
+					distanceToLineSegment(
+						mousePosition,
+						originScreen,
+						xAxisScreen
+					);
+
+				if (distance < closestDistance)
+				{
+					closestDistance = distance;
+					m_hoveredAxis = Axis::X;
+				}
 			}
-		}
 
-		if (zAxisVisible)
-		{
-			const f32 distance =
-				distanceToLineSegment(
-					mousePosition,
-					originScreen,
-					zAxisScreen
-				);
-
-			if (distance < closestDistance)
+			if (yAxisVisible)
 			{
-				closestDistance = distance;
-				m_hoveredAxis = Axis::Z;
+				const f32 distance =
+					distanceToLineSegment(
+						mousePosition,
+						originScreen,
+						yAxisScreen
+					);
+
+				if (distance < closestDistance)
+				{
+					closestDistance = distance;
+					m_hoveredAxis = Axis::Y;
+				}
+			}
+
+			if (zAxisVisible)
+			{
+				const f32 distance =
+					distanceToLineSegment(
+						mousePosition,
+						originScreen,
+						zAxisScreen
+					);
+
+				if (distance < closestDistance)
+				{
+					closestDistance = distance;
+					m_hoveredAxis = Axis::Z;
+				}
 			}
 		}
 	}
@@ -1025,167 +1156,260 @@ void dx3d::TransformGizmo::draw(
 		}
 		else if (originVisible)
 		{
-			ScreenPoint activeAxisScreen{};
-			Vec3 activeWorldAxis{};
+			const f32 mouseDeltaX =
+				mousePosition.x -
+				m_previousMousePosition.x;
 
-			bool activeAxisVisible = false;
+			const f32 mouseDeltaY =
+				mousePosition.y -
+				m_previousMousePosition.y;
 
-			switch (m_activeAxis)
+			auto& transform =
+				selectedObject->getTransform();
+
+			if (m_activeAxis == Axis::Center)
 			{
-			case Axis::X:
-				activeAxisScreen =
-					xAxisScreen;
-
-				activeWorldAxis =
-				{ 1.0f, 0.0f, 0.0f };
-
-				activeAxisVisible =
-					xAxisVisible;
-				break;
-
-			case Axis::Y:
-				activeAxisScreen =
-					yAxisScreen;
-
-				activeWorldAxis =
-				{ 0.0f, 1.0f, 0.0f };
-
-				activeAxisVisible =
-					yAxisVisible;
-				break;
-
-			case Axis::Z:
-				activeAxisScreen =
-					zAxisScreen;
-
-				activeWorldAxis =
-				{ 0.0f, 0.0f, 1.0f };
-
-				activeAxisVisible =
-					zAxisVisible;
-				break;
-
-			case Axis::None:
-			default:
-				break;
-			}
-
-			if (activeAxisVisible)
-			{
-				const f32 axisScreenX =
-					activeAxisScreen.x -
-					originScreen.x;
-
-				const f32 axisScreenY =
-					activeAxisScreen.y -
-					originScreen.y;
-
-				const f32 axisScreenLength =
-					std::sqrt(
-						axisScreenX * axisScreenX +
-						axisScreenY * axisScreenY
-					);
-
-				if (axisScreenLength > 1.0f)
+				if (isTranslate)
 				{
-					const f32 normalizedAxisX =
-						axisScreenX /
-						axisScreenLength;
+					const f32 viewportHeight =
+						std::max(
+							1.0f,
+							renderViewportArea.height
+						);
 
-					const f32 normalizedAxisY =
-						axisScreenY /
-						axisScreenLength;
+					const f32 worldUnitsPerPixel =
+						(
+							2.0f *
+							originInViewSpace.z *
+							std::tan(
+								camera->getFieldOfView() *
+								0.5f
+							)
+							) /
+						viewportHeight;
 
-					const f32 mouseDeltaX =
-						mousePosition.x -
-						m_previousMousePosition.x;
+					auto& cameraTransform =
+						camera->getGameObject().
+						getTransform();
 
-					const f32 mouseDeltaY =
-						mousePosition.y -
-						m_previousMousePosition.y;
+					const Vec3 cameraRight =
+						cameraTransform.right();
 
-					const f32 pixelMovement =
-						mouseDeltaX *
-						normalizedAxisX +
-						mouseDeltaY *
-						normalizedAxisY;
+					const Vec3 cameraUp =
+						cameraTransform.up();
 
-					auto& transform =
-						selectedObject->getTransform();
+					auto position =
+						transform.getPosition();
 
-					if (isTranslate)
+					position +=
+						cameraRight *
+						(mouseDeltaX *
+							worldUnitsPerPixel);
+
+					position +=
+						cameraUp *
+						(-mouseDeltaY *
+							worldUnitsPerPixel);
+
+					transform.setPosition(
+						position
+					);
+				}
+				else if (isScale)
+				{
+					constexpr f32 scaleSensitivity =
+						0.01f;
+
+					constexpr f32 minimumScale =
+						0.05f;
+
+					const f32 scaleMovement =
+						(mouseDeltaX - mouseDeltaY) *
+						scaleSensitivity;
+
+					auto scale =
+						transform.getScale();
+
+					scale.x =
+						std::max(
+							minimumScale,
+							scale.x + scaleMovement
+						);
+
+					scale.y =
+						std::max(
+							minimumScale,
+							scale.y + scaleMovement
+						);
+
+					scale.z =
+						std::max(
+							minimumScale,
+							scale.z + scaleMovement
+						);
+
+					transform.setScale(
+						scale
+					);
+				}
+			}
+			else
+			{
+				ScreenPoint activeAxisScreen{};
+				Vec3 activeWorldAxis{};
+
+				bool activeAxisVisible = false;
+
+				switch (m_activeAxis)
+				{
+				case Axis::X:
+					activeAxisScreen =
+						xAxisScreen;
+
+					activeWorldAxis =
+					{ 1.0f, 0.0f, 0.0f };
+
+					activeAxisVisible =
+						xAxisVisible;
+					break;
+
+				case Axis::Y:
+					activeAxisScreen =
+						yAxisScreen;
+
+					activeWorldAxis =
+					{ 0.0f, 1.0f, 0.0f };
+
+					activeAxisVisible =
+						yAxisVisible;
+					break;
+
+				case Axis::Z:
+					activeAxisScreen =
+						zAxisScreen;
+
+					activeWorldAxis =
+					{ 0.0f, 0.0f, 1.0f };
+
+					activeAxisVisible =
+						zAxisVisible;
+					break;
+
+				case Axis::Center:
+				case Axis::None:
+				default:
+					break;
+				}
+
+				if (activeAxisVisible)
+				{
+					const f32 axisScreenX =
+						activeAxisScreen.x -
+						originScreen.x;
+
+					const f32 axisScreenY =
+						activeAxisScreen.y -
+						originScreen.y;
+
+					const f32 axisScreenLength =
+						std::sqrt(
+							axisScreenX *
+							axisScreenX +
+							axisScreenY *
+							axisScreenY
+						);
+
+					if (axisScreenLength > 1.0f)
 					{
-						const f32 worldUnitsPerPixel =
-							axisLength /
+						const f32 normalizedAxisX =
+							axisScreenX /
 							axisScreenLength;
 
-						const f32 worldMovement =
-							pixelMovement *
-							worldUnitsPerPixel;
+						const f32 normalizedAxisY =
+							axisScreenY /
+							axisScreenLength;
 
-						auto position =
-							transform.getPosition();
+						const f32 pixelMovement =
+							mouseDeltaX *
+							normalizedAxisX +
+							mouseDeltaY *
+							normalizedAxisY;
 
-						position.x +=
-							activeWorldAxis.x *
-							worldMovement;
-
-						position.y +=
-							activeWorldAxis.y *
-							worldMovement;
-
-						position.z +=
-							activeWorldAxis.z *
-							worldMovement;
-
-						transform.setPosition(
-							position
-						);
-					}
-					else if (isScale)
-					{
-						constexpr f32 scaleSensitivity =
-							0.01f;
-
-						constexpr f32 minimumScale =
-							0.05f;
-
-						const f32 scaleMovement =
-							pixelMovement *
-							scaleSensitivity;
-
-						auto scale =
-							transform.getScale();
-
-						switch (m_activeAxis)
+						if (isTranslate)
 						{
-						case Axis::X:
-							scale.x += scaleMovement;
+							const f32 worldUnitsPerPixel =
+								axisLength /
+								axisScreenLength;
 
-							if (scale.x < minimumScale)
-								scale.x = minimumScale;
-							break;
+							const f32 worldMovement =
+								pixelMovement *
+								worldUnitsPerPixel;
 
-						case Axis::Y:
-							scale.y += scaleMovement;
+							auto position =
+								transform.getPosition();
 
-							if (scale.y < minimumScale)
-								scale.y = minimumScale;
-							break;
+							position.x +=
+								activeWorldAxis.x *
+								worldMovement;
 
-						case Axis::Z:
-							scale.z += scaleMovement;
+							position.y +=
+								activeWorldAxis.y *
+								worldMovement;
 
-							if (scale.z < minimumScale)
-								scale.z = minimumScale;
-							break;
+							position.z +=
+								activeWorldAxis.z *
+								worldMovement;
 
-						case Axis::None:
-						default:
-							break;
+							transform.setPosition(
+								position
+							);
 						}
+						else if (isScale)
+						{
+							constexpr f32 scaleSensitivity =
+								0.01f;
 
-						transform.setScale(scale);
+							constexpr f32 minimumScale =
+								0.05f;
+
+							const f32 scaleMovement =
+								pixelMovement *
+								scaleSensitivity;
+
+							auto scale =
+								transform.getScale();
+
+							switch (m_activeAxis)
+							{
+							case Axis::X:
+								scale.x += scaleMovement;
+
+								if (scale.x < minimumScale)
+									scale.x = minimumScale;
+								break;
+
+							case Axis::Y:
+								scale.y += scaleMovement;
+
+								if (scale.y < minimumScale)
+									scale.y = minimumScale;
+								break;
+
+							case Axis::Z:
+								scale.z += scaleMovement;
+
+								if (scale.z < minimumScale)
+									scale.z = minimumScale;
+								break;
+
+							case Axis::Center:
+							case Axis::None:
+							default:
+								break;
+							}
+
+							transform.setScale(scale);
+						}
 					}
 				}
 			}
@@ -1252,6 +1476,11 @@ void dx3d::TransformGizmo::draw(
 		? m_activeAxis == Axis::Z
 		: m_hoveredAxis == Axis::Z;
 
+	const bool centerHighlighted =
+		m_isUsing
+		? m_activeAxis == Axis::Center
+		: m_hoveredAxis == Axis::Center;
+
 	const ImU32 xAxisColor =
 		xAxisHighlighted
 		? highlightedAxisColor
@@ -1266,6 +1495,11 @@ void dx3d::TransformGizmo::draw(
 		zAxisHighlighted
 		? highlightedAxisColor
 		: normalZAxisColor;
+
+	const ImU32 centerHandleColor =
+		centerHighlighted
+		? highlightedAxisColor
+		: IM_COL32(240, 240, 240, 255);
 
 	constexpr f32 axisThickness = 4.0f;
 	constexpr f32 handleRadius = 6.0f;
@@ -1398,8 +1632,8 @@ void dx3d::TransformGizmo::draw(
 
 	drawList->AddCircleFilled(
 		originPosition,
-		5.0f,
-		IM_COL32(240, 240, 240, 255)
+		centerHandleRadius,
+		centerHandleColor
 	);
 
 	drawList->PopClipRect();

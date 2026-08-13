@@ -87,6 +87,7 @@ namespace dx3d
 		{
 			bool isPresent{ false };
 			std::string texturePath{};
+			bool useTexture{ true };
 			Vec2 uvTiling{
 				1.0f,
 				1.0f
@@ -98,6 +99,8 @@ namespace dx3d
 				1.0f,
 				1.0f
 			};
+			f32 roughness{ 0.50f };
+			f32 metallic{ 0.0f };
 		};
 
 		struct ObjectSnapshot
@@ -349,12 +352,24 @@ namespace dx3d
 		void createNewScene();
 
 		void saveScene();
+		void saveSceneToPath(
+			const std::string& filePath
+		);
 
 		void loadScene();
+		void loadSceneFromPath(
+			const std::string& filePath
+		);
 
 		void saveLevel();
+		void saveLevelToPath(
+			const std::string& filePath
+		);
 
 		void loadLevel();
+		void loadLevelFromPath(
+			const std::string& filePath
+		);
 
 	private:
 		UniquePtr<Logger> m_logger{};
@@ -381,8 +396,6 @@ namespace dx3d
 		TransformGizmo m_transformGizmo{};
 
 		bool m_showCreditsWindow = false;
-
-		bool m_showColorPickerWindow = false;
 
 		bool m_showPhysicsDebugOverlay = false;
 		bool m_showOnlySelectedPhysicsDebug = true;
@@ -419,6 +432,9 @@ namespace dx3d
 
 		std::array<char, 128>
 			m_projectSearchBuffer{};
+
+		std::array<char, 128>
+			m_projectSceneSaveNameBuffer{};
 
 		bool m_projectAssetsDirty{ true };
 

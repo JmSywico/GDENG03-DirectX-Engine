@@ -1081,6 +1081,10 @@ void dx3d::Game::assignTextureToObject(
 	material->setTexturePath(
 		texturePath
 	);
+
+	material->setUseTexture(
+		true
+	);
 }
 
 void dx3d::Game::processDroppedAssetFiles()
@@ -1580,12 +1584,18 @@ void dx3d::Game::copySelectedObject()
 		copiedData.material.isPresent = true;
 		copiedData.material.texturePath =
 			material->getTexturePath();
+		copiedData.material.useTexture =
+			material->getUseTexture();
 		copiedData.material.uvTiling =
 			material->getUvTiling();
 		copiedData.material.uvOffset =
 			material->getUvOffset();
 		copiedData.material.color =
 			material->getColor();
+		copiedData.material.roughness =
+			material->getRoughness();
+		copiedData.material.metallic =
+			material->getMetallic();
 	}
 
 	// A new copy operation restarts the pasted-object count.
@@ -1719,6 +1729,11 @@ void dx3d::Game::pasteCopiedObject()
 			material.texturePath
 		);
 
+		material->setUseTexture(
+			m_objectClipboard.
+			material.useTexture
+		);
+
 		material->setUvTiling(
 			m_objectClipboard.
 			material.uvTiling
@@ -1732,6 +1747,16 @@ void dx3d::Game::pasteCopiedObject()
 		material->setColor(
 			m_objectClipboard.
 			material.color
+		);
+
+		material->setRoughness(
+			m_objectClipboard.
+			material.roughness
+		);
+
+		material->setMetallic(
+			m_objectClipboard.
+			material.metallic
 		);
 	}
 
@@ -2140,12 +2165,18 @@ dx3d::Game::captureEditorSnapshot() const
 			objectSnapshot.material.isPresent = true;
 			objectSnapshot.material.texturePath =
 				material->getTexturePath();
+			objectSnapshot.material.useTexture =
+				material->getUseTexture();
 			objectSnapshot.material.uvTiling =
 				material->getUvTiling();
 			objectSnapshot.material.uvOffset =
 				material->getUvOffset();
 			objectSnapshot.material.color =
 				material->getColor();
+			objectSnapshot.material.roughness =
+				material->getRoughness();
+			objectSnapshot.material.metallic =
+				material->getMetallic();
 		}
 
 		if (auto* rigidBody =
@@ -2428,6 +2459,11 @@ void dx3d::Game::restoreEditorSnapshot(
 				material.texturePath
 			);
 
+			material->setUseTexture(
+				objectSnapshot.
+				material.useTexture
+			);
+
 			material->setUvTiling(
 				objectSnapshot.
 				material.uvTiling
@@ -2441,6 +2477,16 @@ void dx3d::Game::restoreEditorSnapshot(
 			material->setColor(
 				objectSnapshot.
 				material.color
+			);
+
+			material->setRoughness(
+				objectSnapshot.
+				material.roughness
+			);
+
+			material->setMetallic(
+				objectSnapshot.
+				material.metallic
 			);
 		}
 
@@ -2557,6 +2603,8 @@ bool dx3d::Game::areEditorSnapshotsEqual(
 			rhsObject.material.isPresent ||
 			lhsObject.material.texturePath !=
 			rhsObject.material.texturePath ||
+			lhsObject.material.useTexture !=
+			rhsObject.material.useTexture ||
 			!areVec2Equal(
 				lhsObject.material.uvTiling,
 				rhsObject.material.uvTiling
@@ -2568,6 +2616,14 @@ bool dx3d::Game::areEditorSnapshotsEqual(
 			!areVec4Equal(
 				lhsObject.material.color,
 				rhsObject.material.color
+			) ||
+			!areFloatsEqual(
+				lhsObject.material.roughness,
+				rhsObject.material.roughness
+			) ||
+			!areFloatsEqual(
+				lhsObject.material.metallic,
+				rhsObject.material.metallic
 			) ||
 			!areMeshDataEqual(
 				lhsObject.meshData,
@@ -2821,6 +2877,21 @@ void dx3d::Game::handleViewportPicking(
 
 	if (!leftMousePressed)
 		return;
+
+	const ImGuiIO& io =
+		ImGui::GetIO();
+
+	const bool imguiWindowHovered =
+		ImGui::IsWindowHovered(
+			ImGuiHoveredFlags_AnyWindow |
+			ImGuiHoveredFlags_AllowWhenBlockedByActiveItem
+		);
+
+	if (io.WantCaptureMouse ||
+		imguiWindowHovered)
+	{
+		return;
+	}
 
 	const bool rightMouseDown =
 		ImGui::IsMouseDown(
@@ -3913,6 +3984,67 @@ void dx3d::Game::drawProjectWindow(
 		refreshProjectAssets();
 	}
 
+	auto findSelectedProjectAsset =
+		[&]() -> const ProjectAssetEntry*
+		{
+			for (const auto& asset :
+				m_projectAssets)
+			{
+				if (asset.path ==
+					m_selectedProjectAssetPath)
+				{
+					return &asset;
+				}
+			}
+
+			return nullptr;
+		};
+
+	auto openProjectAsset =
+		[&](
+			const ProjectAssetEntry& asset
+			)
+		{
+			if (asset.isDirectory)
+			{
+				m_projectCurrentPath =
+					asset.path;
+
+				m_projectAssetsDirty = true;
+				m_projectSearchBuffer[0] = '\0';
+				return;
+			}
+
+			if (asset.kind ==
+				ProjectAssetKind::Model)
+			{
+				createModelObjectFromAsset(
+					asset.path
+				);
+				return;
+			}
+
+			if (asset.kind ==
+				ProjectAssetKind::Scene)
+			{
+				loadSceneFromPath(
+					asset.path
+				);
+				return;
+			}
+
+			if (asset.kind ==
+				ProjectAssetKind::Level)
+			{
+				loadLevelFromPath(
+					asset.path
+				);
+			}
+		};
+
+	const ProjectAssetEntry* selectedProjectAsset =
+		findSelectedProjectAsset();
+
 	std::error_code pathError{};
 
 	const bool canGoUp =
@@ -4002,6 +4134,129 @@ void dx3d::Game::drawProjectWindow(
 		"%s",
 		displayPath.c_str()
 	);
+
+	if (ImGui::Button("New Scene"))
+	{
+		createNewScene();
+	}
+
+	ImGui::SameLine();
+
+	if (ImGui::Button("Save Scene"))
+	{
+		std::string defaultSceneName =
+			"Scene.dx3dscene";
+
+		if (selectedProjectAsset &&
+			!selectedProjectAsset->isDirectory &&
+			selectedProjectAsset->kind ==
+			ProjectAssetKind::Scene)
+		{
+			defaultSceneName =
+				selectedProjectAsset->name;
+		}
+
+		std::snprintf(
+			m_projectSceneSaveNameBuffer.data(),
+			m_projectSceneSaveNameBuffer.size(),
+			"%s",
+			defaultSceneName.c_str()
+		);
+
+		ImGui::OpenPopup(
+			"Save Scene Asset"
+		);
+	}
+
+	ImGui::SameLine();
+
+	const bool canOpenSelectedAsset =
+		selectedProjectAsset &&
+		!selectedProjectAsset->isDirectory &&
+		(
+			selectedProjectAsset->kind ==
+			ProjectAssetKind::Scene ||
+			selectedProjectAsset->kind ==
+			ProjectAssetKind::Level
+			);
+
+	ImGui::BeginDisabled(
+		!canOpenSelectedAsset
+	);
+
+	if (ImGui::Button("Open"))
+	{
+		openProjectAsset(
+			*selectedProjectAsset
+		);
+	}
+
+	ImGui::EndDisabled();
+
+	if (ImGui::BeginPopupModal(
+		"Save Scene Asset",
+		nullptr,
+		ImGuiWindowFlags_AlwaysAutoResize
+	))
+	{
+		ImGui::SetNextItemWidth(
+			260.0f
+		);
+
+		ImGui::InputText(
+			"Name",
+			m_projectSceneSaveNameBuffer.data(),
+			m_projectSceneSaveNameBuffer.size()
+		);
+
+		std::string sceneFileName =
+			m_projectSceneSaveNameBuffer.data();
+
+		const bool canSaveSceneAsset =
+			!sceneFileName.empty();
+
+		ImGui::BeginDisabled(
+			!canSaveSceneAsset
+		);
+
+		if (ImGui::Button("Save"))
+		{
+			std::filesystem::path scenePath =
+				std::filesystem::path(
+					m_projectCurrentPath
+				) / sceneFileName;
+
+			const std::string extension =
+				toLowerAscii(
+					scenePath.extension().
+					string()
+				);
+
+			if (extension != ".dx3dscene")
+			{
+				scenePath.replace_extension(
+					".dx3dscene"
+				);
+			}
+
+			saveSceneToPath(
+				scenePath.generic_string()
+			);
+
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndDisabled();
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("Cancel"))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
+	}
 
 	ImGui::Separator();
 
@@ -4189,21 +4444,9 @@ void dx3d::Game::drawProjectWindow(
 					ImGuiMouseButton_Left
 				))
 			{
-				if (asset.isDirectory)
-				{
-					m_projectCurrentPath =
-						asset.path;
-
-					m_projectAssetsDirty = true;
-					m_projectSearchBuffer[0] = '\0';
-				}
-				else if (asset.kind ==
-					ProjectAssetKind::Model)
-				{
-					createModelObjectFromAsset(
-						asset.path
-					);
-				}
+				openProjectAsset(
+					asset
+				);
 			}
 
 			if (ImGui::BeginPopupContextItem(
@@ -4242,6 +4485,52 @@ void dx3d::Game::drawProjectWindow(
 					createModelObjectFromAsset(
 						asset.path
 					);
+				}
+
+				if (!asset.isDirectory &&
+					asset.kind ==
+					ProjectAssetKind::Scene)
+				{
+					if (ImGui::MenuItem(
+						"Open Scene"
+					))
+					{
+						loadSceneFromPath(
+							asset.path
+						);
+					}
+
+					if (ImGui::MenuItem(
+						"Save Current Scene Here"
+					))
+					{
+						saveSceneToPath(
+							asset.path
+						);
+					}
+				}
+
+				if (!asset.isDirectory &&
+					asset.kind ==
+					ProjectAssetKind::Level)
+				{
+					if (ImGui::MenuItem(
+						"Import Level"
+					))
+					{
+						loadLevelFromPath(
+							asset.path
+						);
+					}
+
+					if (ImGui::MenuItem(
+						"Export Current Level Here"
+					))
+					{
+						saveLevelToPath(
+							asset.path
+						);
+					}
 				}
 
 				ImGui::EndPopup();
@@ -4362,34 +4651,101 @@ void dx3d::Game::createNewScene()
 
 void dx3d::Game::saveScene()
 {
+	saveSceneToPath(
+		"Scene.dx3dscene"
+	);
+}
+
+void dx3d::Game::saveSceneToPath(
+	const std::string& filePath
+)
+{
+	if (filePath.empty())
+		return;
+
+	const std::filesystem::path scenePath{
+		filePath
+	};
+
+	std::error_code error{};
+
+	const auto parentPath =
+		scenePath.parent_path();
+
+	if (!parentPath.empty())
+	{
+		std::filesystem::create_directories(
+			parentPath,
+			error
+		);
+
+		if (error)
+		{
+			m_sceneStatusMessage =
+				"Scene save failed: " +
+				scenePath.filename().string();
+
+			DX3DLogError(
+				"Scene save failed: {}",
+				filePath
+			);
+
+			return;
+		}
+	}
+
 	const bool saved =
 		SceneSerializer::save(
 			*m_world,
-			"Scene.dx3dscene"
+			scenePath.generic_string()
 		);
 
 	if (saved)
 	{
 		m_sceneStatusMessage =
-			"Saved: Scene.dx3dscene";
+			"Saved: " +
+			scenePath.filename().string();
 
 		DX3DLogInfo(
-			"Scene saved."
+			"Scene saved: {}",
+			scenePath.generic_string()
 		);
+
+		m_projectAssetsDirty = true;
+		m_selectedProjectAssetPath =
+			scenePath.generic_string();
 	}
 	else
 	{
 		m_sceneStatusMessage =
-			"Save failed";
+			"Scene save failed: " +
+			scenePath.filename().string();
 
 		DX3DLogError(
-			"Scene save failed."
+			"Scene save failed: {}",
+			scenePath.generic_string()
 		);
 	}
 }
 
 void dx3d::Game::loadScene()
 {
+	loadSceneFromPath(
+		"Scene.dx3dscene"
+	);
+}
+
+void dx3d::Game::loadSceneFromPath(
+	const std::string& filePath
+)
+{
+	if (filePath.empty())
+		return;
+
+	const std::filesystem::path scenePath{
+		filePath
+	};
+
 	const EditorSnapshot undoSnapshot =
 		captureEditorSnapshot();
 
@@ -4398,16 +4754,18 @@ void dx3d::Game::loadScene()
 	const SceneLoadResult result =
 		SceneSerializer::load(
 			*m_world,
-			"Scene.dx3dscene"
+			scenePath.generic_string()
 		);
 
 	if (!result.success)
 	{
 		m_sceneStatusMessage =
-			"Load failed or file not found";
+			"Scene load failed: " +
+			scenePath.filename().string();
 
 		DX3DLogError(
-			"Scene load failed."
+			"Scene load failed: {}",
+			scenePath.generic_string()
 		);
 
 		return;
@@ -4433,11 +4791,16 @@ void dx3d::Game::loadScene()
 		result.capsuleCount;
 
 	m_sceneStatusMessage =
-		"Loaded: Scene.dx3dscene";
+		"Opened: " +
+		scenePath.filename().string();
 
 	DX3DLogInfo(
-		"Scene loaded."
+		"Scene loaded: {}",
+		scenePath.generic_string()
 	);
+
+	m_selectedProjectAssetPath =
+		scenePath.generic_string();
 
 	if (!areEditorSnapshotsEqual(
 		undoSnapshot,
@@ -4452,28 +4815,79 @@ void dx3d::Game::loadScene()
 
 void dx3d::Game::saveLevel()
 {
+	saveLevelToPath(
+		"Scene.level"
+	);
+}
+
+void dx3d::Game::saveLevelToPath(
+	const std::string& filePath
+)
+{
+	if (filePath.empty())
+		return;
+
+	const std::filesystem::path levelPath{
+		filePath
+	};
+
+	std::error_code error{};
+
+	const auto parentPath =
+		levelPath.parent_path();
+
+	if (!parentPath.empty())
+	{
+		std::filesystem::create_directories(
+			parentPath,
+			error
+		);
+
+		if (error)
+		{
+			m_sceneStatusMessage =
+				"Level export failed: " +
+				levelPath.filename().string();
+
+			DX3DLogError(
+				"Level export failed: {}",
+				filePath
+			);
+
+			return;
+		}
+	}
+
 	const bool saved =
 		SceneSerializer::saveLevel(
 			*m_world,
-			"Scene.level"
+			levelPath.generic_string()
 		);
 
 	if (saved)
 	{
 		m_sceneStatusMessage =
-			"Exported: Scene.level";
+			"Exported: " +
+			levelPath.filename().string();
 
 		DX3DLogInfo(
-			"Level exported."
+			"Level exported: {}",
+			levelPath.generic_string()
 		);
+
+		m_projectAssetsDirty = true;
+		m_selectedProjectAssetPath =
+			levelPath.generic_string();
 	}
 	else
 	{
 		m_sceneStatusMessage =
-			"Level export failed";
+			"Level export failed: " +
+			levelPath.filename().string();
 
 		DX3DLogError(
-			"Level export failed."
+			"Level export failed: {}",
+			levelPath.generic_string()
 		);
 	}
 }
@@ -4497,6 +4911,22 @@ void dx3d::Game::loadLevel()
 		return;
 	}
 
+	loadLevelFromPath(
+		levelFilePath
+	);
+}
+
+void dx3d::Game::loadLevelFromPath(
+	const std::string& filePath
+)
+{
+	if (filePath.empty())
+		return;
+
+	const std::filesystem::path levelPath{
+		filePath
+	};
+
 	const EditorSnapshot undoSnapshot =
 		captureEditorSnapshot();
 
@@ -4505,19 +4935,18 @@ void dx3d::Game::loadLevel()
 	const SceneLoadResult result =
 		SceneSerializer::loadLevel(
 			*m_world,
-			levelFilePath
+			levelPath.generic_string()
 		);
 
 	if (!result.success)
 	{
 		m_sceneStatusMessage =
 			"Level import failed: " +
-			std::filesystem::path(
-				levelFilePath
-			).filename().string();
+			levelPath.filename().string();
 
 		DX3DLogError(
-			"Level import failed."
+			"Level import failed: {}",
+			levelPath.generic_string()
 		);
 
 		return;
@@ -4544,13 +4973,15 @@ void dx3d::Game::loadLevel()
 
 	m_sceneStatusMessage =
 		"Imported: " +
-		std::filesystem::path(
-			levelFilePath
-		).filename().string();
+		levelPath.filename().string();
 
 	DX3DLogInfo(
-		"Level imported."
+		"Level imported: {}",
+		levelPath.generic_string()
 	);
+
+	m_selectedProjectAssetPath =
+		levelPath.generic_string();
 
 	if (!areEditorSnapshotsEqual(
 		undoSnapshot,
@@ -5548,11 +5979,6 @@ void dx3d::Game::onInternalUpdate()
 
 			ImGui::EndDisabled();
 
-			if (ImGui::MenuItem("Color Picker"))
-			{
-				m_showColorPickerWindow = true;
-			}
-
 			ImGui::EndMenu();
 		}
 
@@ -5638,56 +6064,6 @@ void dx3d::Game::onInternalUpdate()
 			ImGui::TextUnformatted(
 				"GDENG03 X21"
 			);
-		}
-
-		ImGui::End();
-	}
-
-	if (m_showColorPickerWindow)
-	{
-		ImGui::SetNextWindowSize(
-			ImVec2(360.0f, 430.0f),
-			ImGuiCond_FirstUseEver
-		);
-
-		if (ImGui::Begin(
-			"Color Picker",
-			&m_showColorPickerWindow
-		))
-		{
-			static float placeholderColor[4]
-			{
-				1.0f,
-				0.0f,
-				0.0f,
-				1.0f
-			};
-
-			ImGui::TextUnformatted(
-				"Color Picker Placeholder"
-			);
-
-			ImGui::Separator();
-			ImGui::Spacing();
-
-			ImGui::BeginDisabled();
-
-			ImGui::ColorPicker4(
-				"##PlaceholderColorPicker",
-				placeholderColor,
-				ImGuiColorEditFlags_AlphaBar |
-				ImGuiColorEditFlags_DisplayRGB
-			);
-
-			ImGui::Spacing();
-
-			ImGui::InputFloat4(
-				"RGBA",
-				placeholderColor,
-				"%.2f"
-			);
-
-			ImGui::EndDisabled();
 		}
 
 		ImGui::End();
@@ -5798,6 +6174,138 @@ void dx3d::Game::onInternalUpdate()
 		gizmoViewport,
 		sceneInteractionViewport
 	);
+
+	if (sceneInteractionViewport.width > 0.0f &&
+		sceneInteractionViewport.height > 0.0f)
+	{
+		const ImGuiWindowFlags gizmoToolbarFlags =
+			ImGuiWindowFlags_NoTitleBar |
+			ImGuiWindowFlags_NoResize |
+			ImGuiWindowFlags_NoMove |
+			ImGuiWindowFlags_NoScrollbar |
+			ImGuiWindowFlags_NoSavedSettings |
+			ImGuiWindowFlags_AlwaysAutoResize |
+			ImGuiWindowFlags_NoFocusOnAppearing |
+			ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+		ImGui::SetNextWindowPos(
+			{
+				sceneInteractionViewport.x + 12.0f,
+				sceneInteractionViewport.y + 12.0f
+			},
+			ImGuiCond_Always
+		);
+
+		ImGui::SetNextWindowBgAlpha(
+			0.88f
+		);
+
+		ImGui::PushStyleVar(
+			ImGuiStyleVar_WindowPadding,
+			{ 6.0f, 6.0f }
+		);
+
+		if (ImGui::Begin(
+			"##SceneGizmoToolbar",
+			nullptr,
+			gizmoToolbarFlags
+		))
+		{
+			const bool compactToolbar =
+				sceneInteractionViewport.width < 310.0f;
+
+			const ImVec2 modeButtonSize =
+				compactToolbar
+				? ImVec2{ 34.0f, 28.0f }
+				: ImVec2{ 82.0f, 28.0f };
+
+			auto drawModeButton =
+				[&](
+					const char* label,
+					const char* tooltip,
+					TransformGizmo::Operation operation
+					)
+				{
+					const bool isActive =
+						m_transformGizmo.getOperation() ==
+						operation;
+
+					if (isActive)
+					{
+						ImGui::PushStyleColor(
+							ImGuiCol_Button,
+							{ 0.18f, 0.42f, 0.78f, 1.0f }
+						);
+
+						ImGui::PushStyleColor(
+							ImGuiCol_ButtonHovered,
+							{ 0.24f, 0.50f, 0.92f, 1.0f }
+						);
+
+						ImGui::PushStyleColor(
+							ImGuiCol_ButtonActive,
+							{ 0.14f, 0.34f, 0.64f, 1.0f }
+						);
+					}
+
+					if (ImGui::Button(
+						label,
+						modeButtonSize
+					))
+					{
+						m_transformGizmo.setOperation(
+							operation
+						);
+					}
+
+					if (isActive)
+					{
+						ImGui::PopStyleColor(
+							3
+						);
+					}
+
+					if (ImGui::IsItemHovered())
+					{
+						ImGui::SetTooltip(
+							"%s",
+							tooltip
+						);
+					}
+				};
+
+			drawModeButton(
+				compactToolbar ? "T" : "Translate",
+				"Translate (W)",
+				TransformGizmo::Operation::Translate
+			);
+
+			ImGui::SameLine(
+				0.0f,
+				6.0f
+			);
+
+			drawModeButton(
+				compactToolbar ? "R" : "Rotate",
+				"Rotate (E)",
+				TransformGizmo::Operation::Rotate
+			);
+
+			ImGui::SameLine(
+				0.0f,
+				6.0f
+			);
+
+			drawModeButton(
+				compactToolbar ? "S" : "Scale",
+				"Scale (R)",
+				TransformGizmo::Operation::Scale
+			);
+		}
+
+		ImGui::End();
+		ImGui::PopStyleVar();
+	}
 
 	if (m_showProjectWindow)
 	{
@@ -6050,7 +6558,7 @@ void dx3d::Game::onInternalUpdate()
 				m_selectedObject->getComponent<
 				ModelComponent>();
 
-			Vec4 materialColor =
+			const Vec4 materialColor =
 				material
 				? material->getColor()
 				: Vec4{
@@ -6069,7 +6577,7 @@ void dx3d::Game::onInternalUpdate()
 			};
 
 			if (ImGui::ColorEdit4(
-				"Color",
+				"Base Color",
 				materialColorValues
 			))
 			{
@@ -6091,24 +6599,67 @@ void dx3d::Game::onInternalUpdate()
 			const std::string* texturePath =
 				nullptr;
 
+			const char* textureSource =
+				"None";
+
 			if (material &&
 				material->hasTexture())
 			{
 				texturePath =
 					&material->getTexturePath();
+
+				textureSource =
+					"Material";
 			}
 			else if (modelComponent &&
 				modelComponent->hasTexture())
 			{
 				texturePath =
 					&modelComponent->getTexturePath();
+
+				textureSource =
+					"Model";
 			}
+
+			const bool hasAssignedTexture =
+				texturePath != nullptr;
+
+			bool useTexture =
+				material
+				? material->getUseTexture()
+				: true;
+
+			ImGui::BeginDisabled(
+				!hasAssignedTexture
+			);
+
+			if (ImGui::Checkbox(
+				"Use Texture",
+				&useTexture
+			))
+			{
+				material =
+					m_selectedObject->
+					createOrGetComponent<
+					MaterialComponent>();
+
+				material->setUseTexture(
+					useTexture
+				);
+			}
+
+			ImGui::EndDisabled();
 
 			ImGui::TextWrapped(
 				"Texture: %s",
 				texturePath
 				? texturePath->c_str()
 				: "None"
+			);
+
+			ImGui::TextDisabled(
+				"Texture Source: %s",
+				textureSource
 			);
 
 			ImGui::Button(
@@ -6150,17 +6701,6 @@ void dx3d::Game::onInternalUpdate()
 				ImGui::EndDragDropTarget();
 			}
 
-			if (!texturePath &&
-				material &&
-				material->hasTexture())
-			{
-				texturePath =
-					&material->getTexturePath();
-			}
-
-			const bool hasAssignedTexture =
-				texturePath != nullptr;
-
 			ImGui::BeginDisabled(
 				!hasAssignedTexture
 			);
@@ -6186,71 +6726,134 @@ void dx3d::Game::onInternalUpdate()
 
 			ImGui::EndDisabled();
 
-			if (material ||
-				hasAssignedTexture)
+			Vec2 uvTiling =
+				material
+				? material->getUvTiling()
+				: Vec2{ 1.0f, 1.0f };
+
+			Vec2 uvOffset =
+				material
+				? material->getUvOffset()
+				: Vec2{};
+
+			float uvTilingValues[2]
 			{
-				Vec2 uvTiling =
-					material
-					? material->getUvTiling()
-					: Vec2{ 1.0f, 1.0f };
+				uvTiling.x,
+				uvTiling.y
+			};
 
-				Vec2 uvOffset =
-					material
-					? material->getUvOffset()
-					: Vec2{};
+			float uvOffsetValues[2]
+			{
+				uvOffset.x,
+				uvOffset.y
+			};
 
-				float uvTilingValues[2]
+			if (ImGui::DragFloat2(
+				"UV Tiling",
+				uvTilingValues,
+				0.02f,
+				0.01f,
+				100.0f
+			))
+			{
+				material =
+					m_selectedObject->
+					createOrGetComponent<
+					MaterialComponent>();
+
+				material->setUvTiling(
+					{
+						uvTilingValues[0],
+						uvTilingValues[1]
+					}
+				);
+			}
+
+			if (ImGui::DragFloat2(
+				"UV Offset",
+				uvOffsetValues,
+				0.02f,
+				-100.0f,
+				100.0f
+			))
+			{
+				material =
+					m_selectedObject->
+					createOrGetComponent<
+					MaterialComponent>();
+
+				material->setUvOffset(
+					{
+						uvOffsetValues[0],
+						uvOffsetValues[1]
+					}
+				);
+			}
+
+			f32 roughness =
+				material
+				? material->getRoughness()
+				: 0.50f;
+
+			if (ImGui::SliderFloat(
+				"Roughness",
+				&roughness,
+				0.0f,
+				1.0f
+			))
+			{
+				material =
+					m_selectedObject->
+					createOrGetComponent<
+					MaterialComponent>();
+
+				material->setRoughness(
+					roughness
+				);
+			}
+
+			f32 metallic =
+				material
+				? material->getMetallic()
+				: 0.0f;
+
+			if (ImGui::SliderFloat(
+				"Metallic",
+				&metallic,
+				0.0f,
+				1.0f
+			))
+			{
+				material =
+					m_selectedObject->
+					createOrGetComponent<
+					MaterialComponent>();
+
+				material->setMetallic(
+					metallic
+				);
+			}
+
+			ImGui::Spacing();
+
+			if (ImGui::Button(
+				"Reset Material"
+			))
+			{
+				pushUndoSnapshot(
+					frameStartSnapshot
+				);
+
+				material =
+					m_selectedObject->
+					createOrGetComponent<
+					MaterialComponent>();
+
+				material->reset();
+
+				if (modelComponent)
 				{
-					uvTiling.x,
-					uvTiling.y
-				};
-
-				float uvOffsetValues[2]
-				{
-					uvOffset.x,
-					uvOffset.y
-				};
-
-				if (ImGui::DragFloat2(
-					"UV Tiling",
-					uvTilingValues,
-					0.02f,
-					0.01f,
-					100.0f
-				))
-				{
-					material =
-						m_selectedObject->
-						createOrGetComponent<
-						MaterialComponent>();
-
-					material->setUvTiling(
-						{
-							uvTilingValues[0],
-							uvTilingValues[1]
-						}
-					);
-				}
-
-				if (ImGui::DragFloat2(
-					"UV Offset",
-					uvOffsetValues,
-					0.02f,
-					-100.0f,
-					100.0f
-				))
-				{
-					material =
-						m_selectedObject->
-						createOrGetComponent<
-						MaterialComponent>();
-
-					material->setUvOffset(
-						{
-							uvOffsetValues[0],
-							uvOffsetValues[1]
-						}
-					);
+					modelComponent->clearTexture();
 				}
 			}
 		}

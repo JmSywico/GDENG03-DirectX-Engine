@@ -558,6 +558,8 @@ void dx3d::WorldRenderer::render(
 	Mat4x4 cameraProjection =
 		Mat4x4::identity();
 
+	Vec3 cameraPosition{};
+
 	{
 		auto components =
 			world.getComponents<
@@ -590,9 +592,22 @@ void dx3d::WorldRenderer::render(
 			cameraProjection =
 				component->getProjectionMatrix();
 
+			cameraPosition =
+				component->getGameObject().
+				getTransform().
+				getPosition();
+
 			break;
 		}
 	}
+
+	data.cameraPosition =
+	{
+		cameraPosition.x,
+		cameraPosition.y,
+		cameraPosition.z,
+		1.0f
+	};
 
 	std::unordered_set<
 		const CombinedMeshComponent*
@@ -828,6 +843,9 @@ void dx3d::WorldRenderer::render(
 			1.0f,
 			1.0f
 		};
+		f32 roughness{ 0.50f };
+		f32 metallic{ 0.0f };
+		bool useTexture{ true };
 		bool hasMaterial{ true };
 	};
 
@@ -854,9 +872,22 @@ void dx3d::WorldRenderer::render(
 				material.color =
 					materialComponent->getColor();
 
+				material.roughness =
+					materialComponent->
+					getRoughness();
+
+				material.metallic =
+					materialComponent->
+					getMetallic();
+
+				material.useTexture =
+					materialComponent->
+					getUseTexture();
+
 				material.hasMaterial = true;
 
-				if (materialComponent->hasTexture())
+				if (material.useTexture &&
+					materialComponent->hasTexture())
 				{
 					texturePath =
 						materialComponent->
@@ -865,6 +896,7 @@ void dx3d::WorldRenderer::render(
 			}
 
 			if (texturePath.empty() &&
+				material.useTexture &&
 				model &&
 				model->hasTexture())
 			{
@@ -945,6 +977,14 @@ void dx3d::WorldRenderer::render(
 
 			data.materialColor =
 				material.color;
+
+			data.materialProperties =
+			{
+				material.roughness,
+				material.metallic,
+				0.0f,
+				0.0f
+			};
 
 			auto& constantBuffer =
 				*m_cb;

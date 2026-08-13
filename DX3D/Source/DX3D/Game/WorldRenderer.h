@@ -47,6 +47,8 @@ namespace dx3d
 			Vec4 materialSettings{};
 			Vec4 textureSettings{};
 			Vec4 materialColor{};
+			Vec4 cameraPosition{};
+			Vec4 materialProperties{};
 
 			Mat4x4 inverseWorld{};
 

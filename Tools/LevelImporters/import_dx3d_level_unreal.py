@@ -11,6 +11,12 @@ DEFAULT_MATERIAL_COLOR = [0.72, 0.72, 0.72, 1.0]
 DEFAULT_UV_TILING = [1.0, 1.0]
 DEFAULT_UV_OFFSET = [0.0, 0.0]
 MATERIAL_PACKAGE_PATH = "/Game/DX3DImported/Materials"
+LEVEL_PACKAGE_PATH = "/Game/DX3DImported/Levels"
+LEVEL_FILE_FILTER = (
+    "DX3D Level Files (*.level)|*.level|"
+    "JSON Files (*.json)|*.json|"
+    "All Files (*.*)|*.*"
+)
 
 
 STATIC_MESH_CANDIDATES = {
@@ -44,6 +50,287 @@ def _load_asset(path):
         return editor_asset_library.load_asset(path)
 
     return None
+
+
+def _project_directory():
+    paths_class = getattr(
+        unreal,
+        "Paths",
+        None,
+    )
+
+    if paths_class and hasattr(paths_class, "project_dir"):
+        return paths_class.project_dir()
+
+    system_library = getattr(
+        unreal,
+        "SystemLibrary",
+        None,
+    )
+
+    if (
+        system_library and
+        hasattr(system_library, "get_project_directory")
+    ):
+        return system_library.get_project_directory()
+
+    return os.getcwd()
+
+
+def _get_file_dialog_flags():
+    file_dialog_flags = getattr(
+        unreal,
+        "FileDialogFlags",
+        None,
+    )
+
+    if file_dialog_flags and hasattr(file_dialog_flags, "NONE"):
+        return file_dialog_flags.NONE
+
+    return 0
+
+
+def _get_desktop_platform():
+    desktop_platform_class = getattr(
+        unreal,
+        "DesktopPlatform",
+        None,
+    )
+
+    if not desktop_platform_class:
+        return None
+
+    try:
+        return desktop_platform_class()
+    except Exception:
+        return desktop_platform_class
+
+
+def _first_dialog_file(result):
+    if not result:
+        return ""
+
+    if isinstance(result, tuple):
+        if len(result) >= 2:
+            accepted = result[0]
+            files = result[1]
+
+            if accepted and files:
+                return files[0]
+
+            return ""
+
+        return ""
+
+    if isinstance(result, list):
+        return result[0] if result else ""
+
+    try:
+        return result[0] if len(result) else ""
+    except Exception:
+        return ""
+
+
+def _open_level_file_dialog():
+    desktop_platform = _get_desktop_platform()
+
+    if (
+        not desktop_platform or
+        not hasattr(desktop_platform, "open_file_dialog")
+    ):
+        unreal.log_warning(
+            "DX3D importer could not open a file dialog in this Unreal version. "
+            "Run import_dx3d_level(r\"C:/path/to/Scene.level\") instead."
+        )
+        return ""
+
+    try:
+        return _first_dialog_file(
+            desktop_platform.open_file_dialog(
+                None,
+                "Import DX3D .level",
+                _project_directory(),
+                "",
+                LEVEL_FILE_FILTER,
+                _get_file_dialog_flags(),
+            )
+        )
+    except Exception as error:
+        unreal.log_warning(
+            "DX3D importer file dialog failed: {0}".format(error)
+        )
+        return ""
+
+
+def _save_level_file_dialog():
+    desktop_platform = _get_desktop_platform()
+
+    if (
+        not desktop_platform or
+        not hasattr(desktop_platform, "save_file_dialog")
+    ):
+        unreal.log_warning(
+            "DX3D exporter could not open a save dialog in this Unreal version. "
+            "Run export_dx3d_level(r\"C:/path/to/Scene.level\") instead."
+        )
+        return ""
+
+    try:
+        file_path = _first_dialog_file(
+            desktop_platform.save_file_dialog(
+                None,
+                "Export DX3D .level",
+                _project_directory(),
+                "Scene.level",
+                LEVEL_FILE_FILTER,
+                _get_file_dialog_flags(),
+            )
+        )
+    except Exception as error:
+        unreal.log_warning(
+            "DX3D exporter save dialog failed: {0}".format(error)
+        )
+        return ""
+
+    if file_path and not os.path.splitext(file_path)[1]:
+        file_path += ".level"
+
+    return file_path
+
+
+def _sanitize_asset_name(value):
+    result = []
+
+    for character in value:
+        if character.isalnum() or character == "_":
+            result.append(character)
+        else:
+            result.append("_")
+
+    name = "".join(result).strip("_")
+
+    if not name:
+        name = "DX3D_Level"
+
+    if name[0].isdigit():
+        name = "DX3D_" + name
+
+    return name
+
+
+def _ensure_editor_asset_directory(package_path):
+    editor_asset_library = getattr(
+        unreal,
+        "EditorAssetLibrary",
+        None,
+    )
+
+    if editor_asset_library:
+        editor_asset_library.make_directory(package_path)
+
+
+def _unreal_asset_exists(package_path):
+    editor_asset_library = getattr(
+        unreal,
+        "EditorAssetLibrary",
+        None,
+    )
+
+    if not editor_asset_library:
+        return False
+
+    asset_name = package_path.rsplit("/", 1)[-1]
+
+    return (
+        editor_asset_library.does_asset_exist(package_path) or
+        editor_asset_library.does_asset_exist(
+            "{0}.{1}".format(package_path, asset_name)
+        )
+    )
+
+
+def _make_unique_level_asset_path(level_file):
+    base_name = _sanitize_asset_name(
+        os.path.splitext(os.path.basename(level_file))[0]
+    )
+
+    package_path = "{0}/{1}".format(
+        LEVEL_PACKAGE_PATH,
+        base_name,
+    )
+
+    if not _unreal_asset_exists(package_path):
+        return package_path
+
+    suffix = 1
+
+    while True:
+        candidate_path = "{0}/{1}_{2}".format(
+            LEVEL_PACKAGE_PATH,
+            base_name,
+            suffix,
+        )
+
+        if not _unreal_asset_exists(candidate_path):
+            return candidate_path
+
+        suffix += 1
+
+
+def _create_new_level_for_import(level_file):
+    _ensure_editor_asset_directory(LEVEL_PACKAGE_PATH)
+
+    level_asset_path = _make_unique_level_asset_path(level_file)
+
+    level_editor_subsystem_class = getattr(
+        unreal,
+        "LevelEditorSubsystem",
+        None,
+    )
+
+    if (
+        level_editor_subsystem_class and
+        hasattr(unreal, "get_editor_subsystem")
+    ):
+        level_editor_subsystem = unreal.get_editor_subsystem(
+            level_editor_subsystem_class
+        )
+
+        if (
+            level_editor_subsystem and
+            hasattr(level_editor_subsystem, "new_level")
+        ):
+            if not level_editor_subsystem.new_level(level_asset_path):
+                raise RuntimeError(
+                    "Unreal could not create level: {0}".format(
+                        level_asset_path
+                    )
+                )
+
+            return level_asset_path
+
+    editor_level_library = getattr(
+        unreal,
+        "EditorLevelLibrary",
+        None,
+    )
+
+    if (
+        editor_level_library and
+        hasattr(editor_level_library, "new_level")
+    ):
+        if not editor_level_library.new_level(level_asset_path):
+            raise RuntimeError(
+                "Unreal could not create level: {0}".format(
+                    level_asset_path
+                )
+            )
+
+        return level_asset_path
+
+    raise RuntimeError(
+        "No supported Unreal editor level creation API was found."
+    )
 
 
 def _spawn_actor(actor_class, location, rotation):
@@ -1069,6 +1356,7 @@ def import_dx3d_level(level_file):
     )
 
     with transaction:
+        imported_level_path = _create_new_level_for_import(level_file)
         imported_count = 0
 
         for level_object in objects[:10000]:
@@ -1076,14 +1364,170 @@ def import_dx3d_level(level_file):
                 imported_count += 1
 
         unreal.log(
-            "DX3D importer created {0} actor(s) from {1}.".format(
+            "DX3D importer created {0} actor(s) in {1} from {2}.".format(
                 imported_count,
+                imported_level_path,
                 level_file,
             )
         )
 
 
+def import_dx3d_level_from_dialog():
+    level_file = _open_level_file_dialog()
+
+    if not level_file:
+        return
+
+    import_dx3d_level(level_file)
+
+
+def export_dx3d_level_from_dialog():
+    level_file = _save_level_file_dialog()
+
+    if not level_file:
+        return
+
+    export_dx3d_level(level_file)
+
+
+def _python_command(function_name):
+    module_name = globals().get(
+        "__name__",
+        "__main__",
+    )
+
+    if module_name == "__main__":
+        return "{0}()".format(function_name)
+
+    return (
+        "import {0}; "
+        "{0}.{1}()"
+    ).format(
+        module_name,
+        function_name,
+    )
+
+
+def _add_tool_menu_entry(
+    menu,
+    section_name,
+    name,
+    label,
+    tool_tip,
+    function_name,
+):
+    tool_menu_entry_class = getattr(
+        unreal,
+        "ToolMenuEntry",
+        None,
+    )
+
+    multi_block_type = getattr(
+        unreal,
+        "MultiBlockType",
+        None,
+    )
+
+    string_command_type = getattr(
+        unreal,
+        "ToolMenuStringCommandType",
+        None,
+    )
+
+    if (
+        not tool_menu_entry_class or
+        not multi_block_type or
+        not string_command_type
+    ):
+        return False
+
+    entry = tool_menu_entry_class(
+        name=name,
+        type=multi_block_type.MENU_ENTRY,
+    )
+
+    entry.set_label(label)
+    entry.set_tool_tip(tool_tip)
+    entry.set_string_command(
+        string_command_type.PYTHON,
+        "",
+        _python_command(function_name),
+    )
+
+    menu.add_menu_entry(
+        section_name,
+        entry,
+    )
+
+    return True
+
+
+def install_unreal_editor_menu():
+    tool_menus_class = getattr(
+        unreal,
+        "ToolMenus",
+        None,
+    )
+
+    if not tool_menus_class:
+        unreal.log_warning(
+            "DX3D menu was not installed because Unreal ToolMenus is unavailable."
+        )
+        return False
+
+    menus = tool_menus_class.get()
+    tools_menu = menus.extend_menu(
+        "LevelEditor.MainMenu.Tools"
+    )
+
+    section_name = "DX3D"
+
+    try:
+        tools_menu.add_section(
+            section_name,
+            "DX3D",
+        )
+    except Exception:
+        pass
+
+    installed_import = _add_tool_menu_entry(
+        tools_menu,
+        section_name,
+        "DX3DImportLevel",
+        "Import DX3D .level...",
+        "Create a fresh Unreal level and import a DX3D .level file.",
+        "import_dx3d_level_from_dialog",
+    )
+
+    installed_export = _add_tool_menu_entry(
+        tools_menu,
+        section_name,
+        "DX3DExportLevel",
+        "Export DX3D .level...",
+        "Export supported actors from the current Unreal level to a DX3D .level file.",
+        "export_dx3d_level_from_dialog",
+    )
+
+    if hasattr(menus, "refresh_all_widgets"):
+        menus.refresh_all_widgets()
+
+    if installed_import and installed_export:
+        unreal.log(
+            "DX3D import/export entries installed under the Tools menu."
+        )
+        return True
+
+    unreal.log_warning(
+        "DX3D menu could not install all entries in this Unreal version."
+    )
+    return False
+
+
 if __name__ == "__main__":
+    install_unreal_editor_menu()
+
     unreal.log(
-        "DX3D level tools loaded. Run import_dx3d_level(r\"C:/path/to/Scene.level\") or export_dx3d_level(r\"C:/path/to/Scene.level\")."
+        "DX3D level tools loaded. Use Tools > DX3D, or run "
+        "import_dx3d_level(r\"C:/path/to/Scene.level\") / "
+        "export_dx3d_level(r\"C:/path/to/Scene.level\")."
     )

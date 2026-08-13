@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -52,11 +53,24 @@ public static class ImportDX3DLevelUnity
         if (level == null || level.objects == null)
             throw new InvalidDataException("Invalid DX3D .level file.");
 
+        if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            return;
+
+        var importedScene = EditorSceneManager.NewScene(
+            NewSceneSetup.EmptyScene,
+            NewSceneMode.Single);
+
+        SceneManager.SetActiveScene(importedScene);
+
         var undoGroup = Undo.GetCurrentGroup();
         Undo.SetCurrentGroupName("Import DX3D .level");
 
         var root = new GameObject(
             Path.GetFileNameWithoutExtension(path));
+
+        SceneManager.MoveGameObjectToScene(
+            root,
+            importedScene);
 
         Undo.RegisterCreatedObjectUndo(
             root,
@@ -75,12 +89,17 @@ public static class ImportDX3DLevelUnity
                 importedObject,
                 "Create DX3D Object");
 
+            SceneManager.MoveGameObjectToScene(
+                importedObject,
+                importedScene);
+
             importedObject.transform.SetParent(
                 root.transform,
                 true);
         }
 
         Undo.CollapseUndoOperations(undoGroup);
+        EditorSceneManager.MarkSceneDirty(importedScene);
     }
 
     public static void ExportLevel(string path)

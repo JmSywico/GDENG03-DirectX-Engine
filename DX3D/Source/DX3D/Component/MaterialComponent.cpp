@@ -1,5 +1,7 @@
 #include <DX3D/Component/MaterialComponent.h>
 
+#include <algorithm>
+
 dx3d::MaterialComponent::MaterialComponent(
 	const ComponentDesc& data
 )
@@ -23,6 +25,19 @@ dx3d::MaterialComponent::getTexturePath() const noexcept
 bool dx3d::MaterialComponent::hasTexture() const noexcept
 {
 	return !m_texturePath.empty();
+}
+
+void dx3d::MaterialComponent::setUseTexture(
+	bool useTexture
+) noexcept
+{
+	m_useTexture =
+		useTexture;
+}
+
+bool dx3d::MaterialComponent::getUseTexture() const noexcept
+{
+	return m_useTexture;
 }
 
 void dx3d::MaterialComponent::clearTexture()
@@ -70,4 +85,55 @@ const dx3d::Vec4&
 dx3d::MaterialComponent::getColor() const noexcept
 {
 	return m_color;
+}
+
+void dx3d::MaterialComponent::setRoughness(
+	f32 roughness
+) noexcept
+{
+	m_roughness =
+		std::clamp(
+			roughness,
+			0.0f,
+			1.0f
+		);
+}
+
+dx3d::f32 dx3d::MaterialComponent::getRoughness() const noexcept
+{
+	return m_roughness;
+}
+
+void dx3d::MaterialComponent::setMetallic(
+	f32 metallic
+) noexcept
+{
+	m_metallic =
+		std::clamp(
+			metallic,
+			0.0f,
+			1.0f
+		);
+}
+
+dx3d::f32 dx3d::MaterialComponent::getMetallic() const noexcept
+{
+	return m_metallic;
+}
+
+void dx3d::MaterialComponent::reset() noexcept
+{
+	m_texturePath.clear();
+	m_useTexture = true;
+	m_uvTiling = { 1.0f, 1.0f };
+	m_uvOffset = {};
+	m_color =
+	{
+		1.0f,
+		1.0f,
+		1.0f,
+		1.0f
+	};
+	m_roughness = 0.50f;
+	m_metallic = 0.0f;
 }

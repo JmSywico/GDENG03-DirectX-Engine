@@ -24,7 +24,8 @@ namespace dx3d
 			None,
 			X,
 			Y,
-			Z
+			Z,
+			Center
 		};
 
 		struct ViewportArea
@@ -76,6 +77,11 @@ namespace dx3d
 			const ScreenPoint& end
 		) const noexcept;
 
+		f32 distanceBetweenScreenPoints(
+			const ScreenPoint& lhs,
+			const ScreenPoint& rhs
+		) const noexcept;
+
 		f32 distanceToLineSegmentWithParameter(
 			const ScreenPoint& point,
 			const ScreenPoint& start,
@@ -84,9 +90,11 @@ namespace dx3d
 		) const noexcept;
 
 		void drawRotationGizmo(
+			CameraComponent* camera,
 			GameObject* selectedObject,
 			const Vec3& gizmoOrigin,
 			f32 ringRadius,
+			f32 centerHandleRadius,
 			const Mat4x4& viewProjectionMatrix,
 			const ViewportArea& renderViewportArea,
 			const ViewportArea& interactionViewportArea

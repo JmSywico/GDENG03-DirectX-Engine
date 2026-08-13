@@ -7,17 +7,20 @@ Unity:
 1. Copy `ImportDX3DLevelUnity.cs` into a Unity project's `Assets/Editor` folder.
 2. In Unity, choose `Tools > DX3D > Import .level`.
 3. Select the exported `Scene.level`.
-4. To send edits back to DX3D, choose `Tools > DX3D > Export .level`, then load that `.level` file in the DX3D editor.
+4. The importer creates a fresh empty Unity scene, then loads the `.level` objects into that scene.
+5. To send edits back to DX3D, choose `Tools > DX3D > Export .level`, then load that `.level` file in the DX3D editor.
 
 Unreal:
 
-1. Copy `import_dx3d_level_unreal.py` into your Unreal project.
-2. Put `Scene.level` in the Unreal project root, or call `import_dx3d_level("C:/path/to/Scene.level")` from the Python console.
-3. Run `exec(open(r"C:/path/to/import_dx3d_level_unreal.py").read())` from Unreal's Python console or editor scripting tools.
-4. Import a level with `import_dx3d_level(r"C:/path/to/Scene.level")`.
-5. To send edits back to DX3D, call `export_dx3d_level(r"C:/path/to/Scene.level")` from Unreal's Python console.
+1. Copy `import_dx3d_level_unreal.py` and `init_unreal.py` into your Unreal project's `Content/Python` folder. If your project already has an `init_unreal.py`, copy the two lines from this file into the existing one instead.
+2. Restart Unreal, or run `import import_dx3d_level_unreal; import_dx3d_level_unreal.install_unreal_editor_menu()` once from the Python console.
+3. Use the Tools menu entries `Import DX3D .level...` and `Export DX3D .level...` to choose files with a dialog.
+4. The importer creates a fresh Unreal level under `/Game/DX3DImported/Levels`, then loads the `.level` actors into that level.
+5. Console fallback: `import_dx3d_level(r"C:/path/to/Scene.level")` or `export_dx3d_level(r"C:/path/to/Scene.level")`.
 
 Unreal imports assign generated solid-color materials under `/Game/DX3DImported/Materials` so primitives do not use Unreal's default checker material. Unreal exports also write a `material.color` block for primitive actors so DX3D does not fall back to plain white.
+
+Unreal Content Browser drag-and-drop for `.level` files would require a custom Unreal editor importer plugin/factory. These Python tools provide menu-and-dialog import/export without needing a C++ plugin.
 
 10,000-object stress file:
 
