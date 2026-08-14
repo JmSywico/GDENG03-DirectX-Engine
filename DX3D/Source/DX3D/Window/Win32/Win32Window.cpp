@@ -73,6 +73,15 @@ static LRESULT CALLBACK WindowProcedure(
 )
 {
 	if (
+		msg == WM_KILLFOCUS ||
+		(msg == WM_ACTIVATEAPP && wparam == FALSE)
+		)
+	{
+		ReleaseCapture();
+		ClipCursor(nullptr);
+	}
+
+	if (
 		ImGui::GetCurrentContext() &&
 		ImGui_ImplWin32_WndProcHandler(
 			hwnd,

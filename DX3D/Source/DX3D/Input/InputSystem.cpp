@@ -34,19 +34,45 @@ dx3d::Vec2 dx3d::InputSystem::getMouseDelta() const noexcept
 	return m_mouseDelta;
 }
 
+void dx3d::InputSystem::setTargetWindow(
+	void* windowHandle
+) noexcept
+{
+	m_targetWindowHandle =
+		windowHandle;
+}
+
+bool dx3d::InputSystem::isTargetWindowActive() const noexcept
+{
+	if (!m_targetWindowHandle)
+		return true;
+
+	return GetForegroundWindow() ==
+		static_cast<HWND>(m_targetWindowHandle);
+}
 
 void dx3d::InputSystem::setCursorVisible(bool visible)
 {
 	m_cursorVisible = visible;
 
-	while (ShowCursor(visible) < 0 && visible) {}
-	while (ShowCursor(visible) >= 0 && !visible) {}
+	applyCursorVisibility(
+		isTargetWindowActive() ?
+		m_cursorVisible :
+		true
+	);
 }
 
 void dx3d::InputSystem::setCursorLocked(bool locked)
 {
 	m_cursorLocked = locked;
-	if (locked) centerCursor();
+
+	if (
+		m_cursorLocked &&
+		isTargetWindowActive()
+		)
+	{
+		centerCursor();
+	}
 }
 
 void  dx3d::InputSystem::setCursorLockArea(const Rect& rect)
@@ -65,23 +91,67 @@ void dx3d::InputSystem::centerCursor()
 	m_mousePosition.y = static_cast<f32>(centerY);
 }
 
+void dx3d::InputSystem::applyCursorVisibility(
+	bool visible
+)
+{
+	if (m_appliedCursorVisible == visible)
+		return;
+
+	if (visible)
+	{
+		while (ShowCursor(TRUE) < 0) {}
+	}
+	else
+	{
+		while (ShowCursor(FALSE) >= 0) {}
+	}
+
+	m_appliedCursorVisible =
+		visible;
+}
+
 void dx3d::InputSystem::update()
 {
 	m_previousKeys = m_currentKeys;
 
-	for (auto i: std::views::iota(0u,static_cast<std::size_t>(KeyCode::Count)))
-	{
-		const auto vk = getInternalKeyCode(static_cast<KeyCode>(i));
-		m_currentKeys[i] = (GetAsyncKeyState(vk) & 0x8000) != 0;
-	}
-
 	m_previousMousePosition = m_mousePosition;
 
 	POINT point{};
-	GetCursorPos(&point);
+	if (GetCursorPos(&point))
+	{
+		m_mousePosition.x =
+			static_cast<f32>(point.x);
 
-	m_mousePosition.x = static_cast<f32>(point.x);
-	m_mousePosition.y = static_cast<f32>(point.y);
+		m_mousePosition.y =
+			static_cast<f32>(point.y);
+	}
+
+	if (!isTargetWindowActive())
+	{
+		m_currentKeys.fill(false);
+		m_previousMousePosition =
+			m_mousePosition;
+		m_mouseDelta = {};
+		m_cursorLocked = false;
+		m_cursorVisible = true;
+
+		applyCursorVisibility(true);
+		return;
+	}
+
+	applyCursorVisibility(
+		m_cursorVisible
+	);
+
+	for (auto i: std::views::iota(0u,static_cast<std::size_t>(KeyCode::Count)))
+	{
+		const auto vk =
+			getInternalKeyCode(static_cast<KeyCode>(i));
+
+		m_currentKeys[i] =
+			(GetAsyncKeyState(vk) & 0x8000) != 0;
+	}
 
 	m_mouseDelta.x = m_mousePosition.x - m_previousMousePosition.x;
 	m_mouseDelta.y = m_mousePosition.y - m_previousMousePosition.y;

@@ -1,0 +1,447 @@
+{
+    "format": "DX3D_LEVEL",
+    "version": 1,
+    "objects": [
+        {
+            "name": "Directional Light",
+            "type": "directionalLight",
+            "transform": {
+                "position": [
+                    0.0,
+                    3.0,
+                    0.0
+                ],
+                "rotation": [
+                    0.8726646304130554,
+                    5.759586334228516,
+                    0.0
+                ],
+                "scale": [
+                    1.0,
+                    1.0,
+                    0.9999999403953552
+                ]
+            },
+            "light": {
+                "color": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "intensity": 2.0,
+                "castShadows": true
+            },
+            "material": {
+                "texture": "",
+                "uvTiling": [
+                    1.0,
+                    1.0
+                ],
+                "uvOffset": [
+                    0.0,
+                    0.0
+                ],
+                "color": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "rigidBody": {
+                "enabled": false,
+                "velocity": [],
+                "angularVelocity": [],
+                "mass": 1.0,
+                "restitution": 0.44999998807907107,
+                "friction": 0.20000000298023225,
+                "useGravity": true,
+                "isStatic": false,
+                "collider": {
+                    "shape": "box",
+                    "size": [],
+                    "offset": [],
+                    "matchRenderScale": true
+                }
+            }
+        },
+        {
+            "name": "Plane",
+            "type": "plane",
+            "transform": {
+                "position": [
+                    1.2602143287658692,
+                    0.8221659660339356,
+                    -0.9017210006713867
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scale": [
+                    14.249063491821289,
+                    1.4249063730239869,
+                    14.249063491821289
+                ]
+            },
+            "light": {
+                "color": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "intensity": 1.0,
+                "castShadows": true
+            },
+            "material": {
+                "texture": "",
+                "uvTiling": [
+                    1.0,
+                    1.0
+                ],
+                "uvOffset": [
+                    0.0,
+                    0.0
+                ],
+                "color": [
+                    0.5,
+                    0.5,
+                    0.5,
+                    1.0
+                ]
+            },
+            "rigidBody": {
+                "enabled": false,
+                "velocity": [],
+                "angularVelocity": [],
+                "mass": 1.0,
+                "restitution": 0.44999998807907107,
+                "friction": 0.20000000298023225,
+                "useGravity": true,
+                "isStatic": false,
+                "collider": {
+                    "shape": "box",
+                    "size": [],
+                    "offset": [],
+                    "matchRenderScale": true
+                }
+            }
+        },
+        {
+            "name": "Cube (3)",
+            "type": "cube",
+            "transform": {
+                "position": [
+                    1.468000054359436,
+                    1.6039999723434449,
+                    -4.840000152587891
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scale": [
+                    8.994282722473145,
+                    1.176800012588501,
+                    0.28887706995010378
+                ]
+            },
+            "light": {
+                "color": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "intensity": 1.0,
+                "castShadows": true
+            },
+            "material": {
+                "texture": "",
+                "uvTiling": [
+                    1.0,
+                    1.0
+                ],
+                "uvOffset": [
+                    0.0,
+                    0.0
+                ],
+                "color": [
+                    0.5,
+                    0.5,
+                    0.5,
+                    1.0
+                ]
+            },
+            "rigidBody": {
+                "enabled": false,
+                "velocity": [],
+                "angularVelocity": [],
+                "mass": 1.0,
+                "restitution": 0.44999998807907107,
+                "friction": 0.20000000298023225,
+                "useGravity": true,
+                "isStatic": false,
+                "collider": {
+                    "shape": "box",
+                    "size": [],
+                    "offset": [],
+                    "matchRenderScale": true
+                }
+            }
+        },
+        {
+            "name": "Cube (4)",
+            "type": "cube",
+            "transform": {
+                "position": [
+                    6.058000087738037,
+                    1.6039999723434449,
+                    -0.6200000047683716
+                ],
+                "rotation": [
+                    0.0,
+                    1.5707963705062867,
+                    0.0
+                ],
+                "scale": [
+                    8.994284629821778,
+                    1.176800012588501,
+                    0.28887712955474856
+                ]
+            },
+            "light": {
+                "color": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "intensity": 1.0,
+                "castShadows": true
+            },
+            "material": {
+                "texture": "",
+                "uvTiling": [
+                    1.0,
+                    1.0
+                ],
+                "uvOffset": [
+                    0.0,
+                    0.0
+                ],
+                "color": [
+                    0.5,
+                    0.5,
+                    0.5,
+                    1.0
+                ]
+            },
+            "rigidBody": {
+                "enabled": false,
+                "velocity": [],
+                "angularVelocity": [],
+                "mass": 1.0,
+                "restitution": 0.44999998807907107,
+                "friction": 0.20000000298023225,
+                "useGravity": true,
+                "isStatic": false,
+                "collider": {
+                    "shape": "box",
+                    "size": [],
+                    "offset": [],
+                    "matchRenderScale": true
+                }
+            }
+        },
+        {
+            "name": "Cube (5)",
+            "type": "cube",
+            "transform": {
+                "position": [
+                    1.5700000524520875,
+                    2.311000108718872,
+                    3.434999942779541
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scale": [
+                    8.994282722473145,
+                    2.9560039043426515,
+                    0.28887706995010378
+                ]
+            },
+            "light": {
+                "color": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "intensity": 1.0,
+                "castShadows": true
+            },
+            "material": {
+                "texture": "",
+                "uvTiling": [
+                    1.0,
+                    1.0
+                ],
+                "uvOffset": [
+                    0.0,
+                    0.0
+                ],
+                "color": [
+                    0.5,
+                    0.5,
+                    0.5,
+                    1.0
+                ]
+            },
+            "rigidBody": {
+                "enabled": false,
+                "velocity": [],
+                "angularVelocity": [],
+                "mass": 1.0,
+                "restitution": 0.44999998807907107,
+                "friction": 0.20000000298023225,
+                "useGravity": true,
+                "isStatic": false,
+                "collider": {
+                    "shape": "box",
+                    "size": [],
+                    "offset": [],
+                    "matchRenderScale": true
+                }
+            }
+        },
+        {
+            "name": "Cube (6)",
+            "type": "cube",
+            "transform": {
+                "position": [
+                    -2.9000000953674318,
+                    2.311000108718872,
+                    -0.47999998927116396
+                ],
+                "rotation": [
+                    0.0,
+                    1.5707963705062867,
+                    0.0
+                ],
+                "scale": [
+                    8.428274154663086,
+                    2.9560039043426515,
+                    0.28887712955474856
+                ]
+            },
+            "light": {
+                "color": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "intensity": 1.0,
+                "castShadows": true
+            },
+            "material": {
+                "texture": "",
+                "uvTiling": [
+                    1.0,
+                    1.0
+                ],
+                "uvOffset": [
+                    0.0,
+                    0.0
+                ],
+                "color": [
+                    0.5,
+                    0.5,
+                    0.5,
+                    1.0
+                ]
+            },
+            "rigidBody": {
+                "enabled": false,
+                "velocity": [],
+                "angularVelocity": [],
+                "mass": 1.0,
+                "restitution": 0.44999998807907107,
+                "friction": 0.20000000298023225,
+                "useGravity": true,
+                "isStatic": false,
+                "collider": {
+                    "shape": "box",
+                    "size": [],
+                    "offset": [],
+                    "matchRenderScale": true
+                }
+            }
+        },
+        {
+            "name": "Capsule",
+            "type": "capsule",
+            "transform": {
+                "position": [
+                    3.5530874729156496,
+                    3.431668281555176,
+                    -2.115330696105957
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scale": [
+                    0.6464499831199646,
+                    0.6464499831199646,
+                    0.6464499831199646
+                ]
+            },
+            "light": {
+                "color": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "intensity": 1.0,
+                "castShadows": true
+            },
+            "material": {
+                "texture": "",
+                "uvTiling": [
+                    1.0,
+                    1.0
+                ],
+                "uvOffset": [
+                    0.0,
+                    0.0
+                ],
+                "color": [
+                    0.5,
+                    0.5,
+                    0.5,
+                    1.0
+                ]
+            },
+            "rigidBody": {
+                "enabled": false,
+                "velocity": [],
+                "angularVelocity": [],
+                "mass": 1.0,
+                "restitution": 0.44999998807907107,
+                "friction": 0.20000000298023225,
+                "useGravity": true,
+                "isStatic": false,
+                "collider": {
+                    "shape": "box",
+                    "size": [],
+                    "offset": [],
+                    "matchRenderScale": true
+                }
+            }
+        }
+    ]
+}

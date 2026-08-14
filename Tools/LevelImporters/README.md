@@ -20,9 +20,10 @@ Unreal:
 
 1. Copy `Unreal/import_dx3d_level_unreal.py` and `Unreal/init_unreal.py` into your Unreal project's `Content/Python` folder. If your project already has an `init_unreal.py`, copy the two lines from this file into the existing one instead.
 2. Restart Unreal, or run `import import_dx3d_level_unreal; import_dx3d_level_unreal.install_unreal_editor_menu()` once from the Python console.
-3. Use the Tools menu entries `Import DX3D .level...` and `Export DX3D .level...` to choose files with a dialog.
-4. The importer creates a fresh Unreal level under `/Game/DX3DImported/Levels`, then loads the `.level` actors into that level.
-5. Console fallback: `import_dx3d_level(r"C:/path/to/Scene.level")` or `export_dx3d_level(r"C:/path/to/Scene.level")`.
+3. Use the Tools menu entries `Import DX3D .level...` and `Export DX3D .level...`.
+4. If your Unreal version cannot open a file dialog, put `Scene.level` beside your Unreal `.uproject` file. The menu import/export will use that project-folder file automatically.
+5. The importer creates a fresh Unreal level under `/Game/DX3DImported/Levels`, then loads the `.level` actors into that level.
+6. Console fallback: `import_dx3d_level(r"C:/path/to/Scene.level")` or `export_dx3d_level(r"C:/path/to/Scene.level")`.
 
 Unreal imports assign generated solid-color materials under `/Game/DX3DImported/Materials` so primitives do not use Unreal's default checker material. Unreal exports also write a `material.color` block for primitive actors so DX3D does not fall back to plain white.
 

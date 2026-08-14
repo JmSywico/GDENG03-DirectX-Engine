@@ -36,6 +36,28 @@ STATIC_MESH_CANDIDATES = {
 }
 
 
+FALLBACK_TYPE_COLORS = {
+    "cube": [0.50, 0.56, 0.62, 1.0],
+    "plane": [0.36, 0.42, 0.38, 1.0],
+    "sphere": [0.55, 0.65, 0.82, 1.0],
+    "capsule": [0.62, 0.54, 0.74, 1.0],
+}
+
+
+SKIPPED_EXPORT_NAME_PARTS = (
+    "sky",
+    "skysphere",
+    "sky_sphere",
+    "skyatmosphere",
+    "sky_atmosphere",
+    "skylight",
+    "sky_light",
+    "fog",
+    "cloud",
+    "atmosphere",
+)
+
+
 def _load_asset(path):
     if hasattr(unreal, "load_asset"):
         return unreal.load_asset(path)
@@ -75,6 +97,13 @@ def _project_directory():
         return system_library.get_project_directory()
 
     return os.getcwd()
+
+
+def _default_level_file_path():
+    return os.path.join(
+        _project_directory(),
+        "Scene.level",
+    )
 
 
 def _get_file_dialog_flags():
@@ -138,11 +167,13 @@ def _open_level_file_dialog():
         not desktop_platform or
         not hasattr(desktop_platform, "open_file_dialog")
     ):
+        fallback_path = _default_level_file_path()
+
         unreal.log_warning(
             "DX3D importer could not open a file dialog in this Unreal version. "
-            "Run import_dx3d_level(r\"C:/path/to/Scene.level\") instead."
+            "Trying {0} instead.".format(fallback_path)
         )
-        return ""
+        return fallback_path
 
     try:
         return _first_dialog_file(
@@ -156,10 +187,16 @@ def _open_level_file_dialog():
             )
         )
     except Exception as error:
+        fallback_path = _default_level_file_path()
+
         unreal.log_warning(
-            "DX3D importer file dialog failed: {0}".format(error)
+            "DX3D importer file dialog failed: {0}. "
+            "Trying {1} instead.".format(
+                error,
+                fallback_path,
+            )
         )
-        return ""
+        return fallback_path
 
 
 def _save_level_file_dialog():
@@ -169,11 +206,13 @@ def _save_level_file_dialog():
         not desktop_platform or
         not hasattr(desktop_platform, "save_file_dialog")
     ):
+        fallback_path = _default_level_file_path()
+
         unreal.log_warning(
             "DX3D exporter could not open a save dialog in this Unreal version. "
-            "Run export_dx3d_level(r\"C:/path/to/Scene.level\") instead."
+            "Writing {0} instead.".format(fallback_path)
         )
-        return ""
+        return fallback_path
 
     try:
         file_path = _first_dialog_file(
@@ -187,10 +226,16 @@ def _save_level_file_dialog():
             )
         )
     except Exception as error:
+        fallback_path = _default_level_file_path()
+
         unreal.log_warning(
-            "DX3D exporter save dialog failed: {0}".format(error)
+            "DX3D exporter save dialog failed: {0}. "
+            "Writing {1} instead.".format(
+                error,
+                fallback_path,
+            )
         )
-        return ""
+        return fallback_path
 
     if file_path and not os.path.splitext(file_path)[1]:
         file_path += ".level"
@@ -419,6 +464,40 @@ def _clamp01(value):
     return max(0.0, min(float(value), 1.0))
 
 
+def _normalized_color_component(value):
+    component = float(value)
+
+    if component > 1.0:
+        component /= 255.0
+
+    return _clamp01(component)
+
+
+def _normalized_color(values, fallback):
+    if not values:
+        return list(fallback)
+
+    try:
+        red = _normalized_color_component(values[0])
+        green = _normalized_color_component(values[1])
+        blue = _normalized_color_component(values[2])
+
+        alpha = (
+            _normalized_color_component(values[3])
+            if len(values) > 3
+            else 1.0
+        )
+    except Exception:
+        return list(fallback)
+
+    return [
+        red,
+        green,
+        blue,
+        alpha,
+    ]
+
+
 def _float_list_tag(values):
     return ",".join("{0:.6g}".format(float(value)) for value in values)
 
@@ -489,31 +568,117 @@ def _level_material(level_object):
 def _location(values):
     x, y, z = _vec3(values)
     return unreal.Vector(
-        x * ENGINE_TO_UNREAL_SCALE,
         z * ENGINE_TO_UNREAL_SCALE,
+        x * ENGINE_TO_UNREAL_SCALE,
         y * ENGINE_TO_UNREAL_SCALE,
     )
 
 
 def _scale(values):
     x, y, z = _vec3(values, (1.0, 1.0, 1.0))
-    return unreal.Vector(x, z, y)
+    return unreal.Vector(z, x, y)
+
+
+def _mesh_scale(values, type_name):
+    return _scale(values)
+
+
+def _is_rigid_body_enabled(level_object):
+    rigid_body = level_object.get("rigidBody") or {}
+    return bool(rigid_body.get("enabled", False))
+
+
+def _clean_rotation_angle(value):
+    angle = math.fmod(float(value), math.tau)
+
+    if angle > math.pi:
+        angle -= math.tau
+
+    if angle < -math.pi:
+        angle += math.tau
+
+    right_angle = math.pi * 0.5
+
+    for quarter_turn in range(-4, 5):
+        snapped = quarter_turn * right_angle
+
+        if abs(angle - snapped) <= 0.06:
+            return snapped
+
+    return angle
+
+
+def _is_near_angle(value, target):
+    return abs(
+        _clean_rotation_angle(value) - target
+    ) <= 0.06
+
+
+def _axis_aligned_wall_scale(level_object):
+    if (
+        (level_object.get("type") or "").lower() != "cube" or
+        _is_rigid_body_enabled(level_object)
+    ):
+        return None
+
+    transform = level_object.get("transform") or {}
+    rotation = _vec3(transform.get("rotation"))
+    scale = list(
+        _vec3(
+            transform.get("scale"),
+            (1.0, 1.0, 1.0),
+        )
+    )
+
+    if (
+        not _is_near_angle(rotation[0], 0.0) or
+        not _is_near_angle(rotation[2], 0.0)
+    ):
+        return None
+
+    right_angle = math.pi * 0.5
+    y_angle = _clean_rotation_angle(rotation[1])
+    y_quarter_turn = round(y_angle / right_angle)
+
+    if abs(y_angle - y_quarter_turn * right_angle) > 0.06:
+        return None
+
+    horizontal_long_side = max(
+        abs(scale[0]),
+        abs(scale[2]),
+    )
+    horizontal_short_side = min(
+        abs(scale[0]),
+        abs(scale[2]),
+    )
+
+    if (
+        horizontal_long_side <= 0.0 or
+        horizontal_short_side >
+        horizontal_long_side * 0.20
+    ):
+        return None
+
+    if abs(y_quarter_turn) % 2 == 1:
+        scale[0], scale[2] = scale[2], scale[0]
+
+    return scale
 
 
 def _rotation(values):
     x, y, z = _vec3(values)
     return unreal.Rotator(
-        math.degrees(x),
-        math.degrees(z),
-        math.degrees(y),
+        math.degrees(_clean_rotation_angle(x)),
+        math.degrees(_clean_rotation_angle(y)),
+        math.degrees(_clean_rotation_angle(z)),
     )
 
 
 def _velocity(values):
     x, y, z = _vec3(values)
     return unreal.Vector(
-        x * ENGINE_TO_UNREAL_SCALE,
         z * ENGINE_TO_UNREAL_SCALE,
+        x * ENGINE_TO_UNREAL_SCALE,
         y * ENGINE_TO_UNREAL_SCALE,
     )
 
@@ -521,49 +686,53 @@ def _velocity(values):
 def _angular_velocity(values):
     x, y, z = _vec3(values)
     return unreal.Vector(
-        math.degrees(x),
         math.degrees(z),
+        math.degrees(x),
         math.degrees(y),
     )
 
 
 def _dx3d_position(vector):
     return [
-        float(vector.x) / ENGINE_TO_UNREAL_SCALE,
-        float(vector.z) / ENGINE_TO_UNREAL_SCALE,
         float(vector.y) / ENGINE_TO_UNREAL_SCALE,
+        float(vector.z) / ENGINE_TO_UNREAL_SCALE,
+        float(vector.x) / ENGINE_TO_UNREAL_SCALE,
     ]
 
 
 def _dx3d_scale(vector):
     return [
-        float(vector.x),
-        float(vector.z),
         float(vector.y),
+        float(vector.z),
+        float(vector.x),
     ]
+
+
+def _dx3d_mesh_scale(vector, type_name):
+    return _dx3d_scale(vector)
 
 
 def _dx3d_rotation(rotator):
     return [
         math.radians(float(rotator.pitch)),
-        math.radians(float(rotator.roll)),
         math.radians(float(rotator.yaw)),
+        math.radians(float(rotator.roll)),
     ]
 
 
 def _dx3d_velocity(vector):
     return [
-        float(vector.x) / ENGINE_TO_UNREAL_SCALE,
-        float(vector.z) / ENGINE_TO_UNREAL_SCALE,
         float(vector.y) / ENGINE_TO_UNREAL_SCALE,
+        float(vector.z) / ENGINE_TO_UNREAL_SCALE,
+        float(vector.x) / ENGINE_TO_UNREAL_SCALE,
     ]
 
 
 def _dx3d_angular_velocity(vector):
     return [
-        math.radians(float(vector.x)),
-        math.radians(float(vector.z)),
         math.radians(float(vector.y)),
+        math.radians(float(vector.z)),
+        math.radians(float(vector.x)),
     ]
 
 
@@ -585,6 +754,15 @@ def _get_actor_label(actor):
         return actor.get_name()
 
     return str(actor)
+
+
+def _should_skip_export_actor(actor):
+    label = _get_actor_label(actor).lower()
+
+    return any(
+        name_part in label
+        for name_part in SKIPPED_EXPORT_NAME_PARTS
+    )
 
 
 def _get_actor_tags(actor):
@@ -849,6 +1027,75 @@ def _get_all_level_actors():
     return []
 
 
+def _enum_value(enum_class, *names):
+    if not enum_class:
+        return None
+
+    for name in names:
+        if hasattr(enum_class, name):
+            return getattr(enum_class, name)
+
+    return None
+
+
+def _set_mesh_mobility(component, movable):
+    mobility_class = getattr(
+        unreal,
+        "ComponentMobility",
+        None,
+    )
+
+    mobility = _enum_value(
+        mobility_class,
+        "MOVABLE" if movable else "STATIC",
+        "Movable" if movable else "Static",
+    )
+
+    if mobility is None:
+        return
+
+    if hasattr(component, "set_mobility"):
+        try:
+            component.set_mobility(mobility)
+            return
+        except Exception:
+            pass
+
+    if hasattr(component, "set_editor_property"):
+        try:
+            component.set_editor_property(
+                "mobility",
+                mobility,
+            )
+        except Exception:
+            pass
+
+
+def _set_mesh_collision(component, profile_name):
+    if hasattr(component, "set_collision_enabled"):
+        component.set_collision_enabled(
+            unreal.CollisionEnabled.QUERY_AND_PHYSICS
+        )
+
+    if hasattr(component, "set_collision_profile_name"):
+        try:
+            component.set_collision_profile_name(
+                profile_name
+            )
+            return
+        except Exception:
+            pass
+
+    if hasattr(component, "set_editor_property"):
+        try:
+            component.set_editor_property(
+                "collision_profile_name",
+                _name(profile_name),
+            )
+        except Exception:
+            pass
+
+
 def _spawn_static_mesh_actor(level_object, type_name):
     transform = level_object.get("transform") or {}
     mesh = _load_static_mesh(type_name)
@@ -862,18 +1109,37 @@ def _spawn_static_mesh_actor(level_object, type_name):
         )
         return None
 
+    wall_scale = _axis_aligned_wall_scale(
+        level_object
+    )
+
     actor = _spawn_actor(
         unreal.StaticMeshActor,
         _location(transform.get("position")),
-        _rotation(transform.get("rotation")),
+        unreal.Rotator(0.0, 0.0, 0.0)
+        if wall_scale
+        else _rotation(transform.get("rotation")),
     )
 
     actor.set_actor_scale3d(
-        _scale(transform.get("scale"))
+        _mesh_scale(
+            wall_scale
+            if wall_scale
+            else transform.get("scale"),
+            type_name,
+        )
     )
 
     component = actor.static_mesh_component
     component.set_static_mesh(mesh)
+
+    if hasattr(actor, "set_actor_enable_collision"):
+        actor.set_actor_enable_collision(True)
+
+    _set_mesh_collision(
+        component,
+        "BlockAll",
+    )
 
     return actor
 
@@ -931,6 +1197,48 @@ def _spawn_directional_light(level_object):
     return actor
 
 
+def _is_directional_light_object(level_object):
+    type_name = (
+        level_object.get("type") or ""
+    ).lower()
+
+    return type_name in (
+        "directionallight",
+        "directional_light",
+        "light",
+    )
+
+
+def _spawn_fallback_directional_light():
+    level_object = {
+        "name": "DX3D Default Directional Light",
+        "type": "directionalLight",
+        "transform": {
+            "position": [0.0, 6.0, -4.0],
+            "rotation": [-0.85, -0.35, 0.0],
+            "scale": [1.0, 1.0, 1.0],
+        },
+        "light": {
+            "color": [1.0, 0.96, 0.90],
+            "intensity": 1.0,
+            "ambientStrength": 0.2,
+            "shadowArea": 30.0,
+            "castShadows": True,
+        },
+    }
+
+    actor = _spawn_directional_light(
+        level_object
+    )
+
+    if actor:
+        actor.set_actor_label(
+            level_object["name"]
+        )
+
+    return actor
+
+
 def _apply_rigid_body(actor, level_object):
     rigid_body = level_object.get("rigidBody") or {}
 
@@ -942,15 +1250,25 @@ def _apply_rigid_body(actor, level_object):
     if not component:
         return
 
-    if hasattr(component, "set_collision_enabled"):
-        component.set_collision_enabled(
-            unreal.CollisionEnabled.QUERY_AND_PHYSICS
-        )
-
     is_static = bool(rigid_body.get("isStatic", False))
 
+    if hasattr(actor, "set_actor_enable_collision"):
+        actor.set_actor_enable_collision(True)
+
+    _set_mesh_mobility(
+        component,
+        not is_static,
+    )
+
+    _set_mesh_collision(
+        component,
+        "BlockAll" if is_static else "PhysicsActor",
+    )
+
     if hasattr(component, "set_simulate_physics"):
-        component.set_simulate_physics(not is_static)
+        component.set_simulate_physics(
+            not is_static
+        )
 
     if hasattr(component, "set_enable_gravity"):
         component.set_enable_gravity(
@@ -963,6 +1281,12 @@ def _apply_rigid_body(actor, level_object):
             float(rigid_body.get("mass", 1.0)),
             True,
         )
+
+    if hasattr(component, "recreate_physics_state"):
+        try:
+            component.recreate_physics_state()
+        except Exception:
+            pass
 
     if not is_static:
         if hasattr(component, "set_physics_linear_velocity"):
@@ -979,6 +1303,9 @@ def _apply_rigid_body(actor, level_object):
                 _angular_velocity(rigid_body.get("angularVelocity")),
                 False,
             )
+
+        if hasattr(component, "wake_all_rigid_bodies"):
+            component.wake_all_rigid_bodies()
 
 
 def _spawn_object(level_object):
@@ -1090,11 +1417,99 @@ def _component_bool_property(component, property_name, fallback):
         return fallback
 
 
-def _export_transform(actor):
+def _color_from_unreal_value(value):
+    if not value:
+        return None
+
+    red = getattr(value, "r", getattr(value, "red", None))
+    green = getattr(value, "g", getattr(value, "green", None))
+    blue = getattr(value, "b", getattr(value, "blue", None))
+    alpha = getattr(value, "a", getattr(value, "alpha", 1.0))
+
+    if red is None or green is None or blue is None:
+        return None
+
+    return _normalized_color(
+        [
+            red,
+            green,
+            blue,
+            alpha,
+        ],
+        DEFAULT_MATERIAL_COLOR,
+    )
+
+
+def _read_material_color(material):
+    if not material:
+        return None
+
+    if hasattr(material, "get_vector_parameter_value"):
+        for parameter_name in (
+            "BaseColor",
+            "Base Color",
+            "Color",
+            "Tint",
+        ):
+            try:
+                color = material.get_vector_parameter_value(
+                    _name(parameter_name)
+                )
+
+                color = _color_from_unreal_value(color)
+
+                if color:
+                    return color
+            except Exception:
+                pass
+
+    if hasattr(material, "get_editor_property"):
+        for property_name in (
+            "base_color",
+            "diffuse_color",
+            "color",
+        ):
+            try:
+                color = material.get_editor_property(
+                    property_name
+                )
+
+                color = _color_from_unreal_value(color)
+
+                if color:
+                    return color
+            except Exception:
+                pass
+
+    return None
+
+
+def _fallback_material_color(type_name, actor):
+    color = list(
+        FALLBACK_TYPE_COLORS.get(
+            type_name,
+            DEFAULT_MATERIAL_COLOR,
+        )
+    )
+
+    label = _get_actor_label(actor)
+    variation = (sum(ord(ch) for ch in label) % 5) * 0.035
+
+    color[0] = _clamp01(color[0] + variation)
+    color[1] = _clamp01(color[1] + variation * 0.5)
+    color[2] = _clamp01(color[2] - variation * 0.35)
+
+    return color
+
+
+def _export_transform(actor, type_name):
     return {
         "position": _dx3d_position(actor.get_actor_location()),
         "rotation": _dx3d_rotation(actor.get_actor_rotation()),
-        "scale": _dx3d_scale(actor.get_actor_scale3d()),
+        "scale": _dx3d_mesh_scale(
+            actor.get_actor_scale3d(),
+            type_name,
+        ),
     }
 
 
@@ -1113,12 +1528,10 @@ def _export_light(actor):
     except Exception:
         color = None
 
-    if color:
-        red = float(getattr(color, "r", getattr(color, "red", 1.0)))
-        green = float(getattr(color, "g", getattr(color, "green", 1.0)))
-        blue = float(getattr(color, "b", getattr(color, "blue", 1.0)))
-    else:
-        red = green = blue = 1.0
+    color = _color_from_unreal_value(color)
+
+    if not color:
+        color = [1.0, 1.0, 1.0, 1.0]
 
     try:
         intensity = float(component.get_editor_property("intensity")) / 10.0
@@ -1131,7 +1544,7 @@ def _export_light(actor):
         cast_shadows = True
 
     return {
-        "color": [red, green, blue],
+        "color": color[:3],
         "intensity": intensity,
         "ambientStrength": 0.2,
         "shadowArea": 30.0,
@@ -1139,7 +1552,7 @@ def _export_light(actor):
     }
 
 
-def _export_material(actor):
+def _export_material(actor, type_name):
     component = getattr(
         actor,
         "static_mesh_component",
@@ -1151,7 +1564,10 @@ def _export_material(actor):
             "texture": "",
             "uvTiling": list(DEFAULT_UV_TILING),
             "uvOffset": list(DEFAULT_UV_OFFSET),
-            "color": list(DEFAULT_MATERIAL_COLOR),
+            "color": _fallback_material_color(
+                type_name,
+                actor,
+            ),
         }
 
     tagged_color = _get_dx3d_tag_value(actor, "DX3D_COLOR:")
@@ -1179,24 +1595,20 @@ def _export_material(actor):
             ),
         }
 
-    color = list(DEFAULT_MATERIAL_COLOR)
+    color = _fallback_material_color(
+        type_name,
+        actor,
+    )
 
     try:
         material = component.get_material(0)
     except Exception:
         material = None
 
-    if material and hasattr(material, "get_editor_property"):
-        try:
-            material_color = material.get_editor_property("base_color")
-            color = [
-                float(material_color.r),
-                float(material_color.g),
-                float(material_color.b),
-                float(material_color.a),
-            ]
-        except Exception:
-            pass
+    material_color = _read_material_color(material)
+
+    if material_color:
+        color = material_color
 
     return {
         "texture": "",
@@ -1281,6 +1693,9 @@ def _export_rigid_body(actor):
 
 
 def _export_actor(actor):
+    if _should_skip_export_actor(actor):
+        return None
+
     type_name = _infer_actor_type(actor)
 
     if not type_name:
@@ -1289,13 +1704,19 @@ def _export_actor(actor):
     level_object = {
         "name": _get_actor_label(actor),
         "type": type_name,
-        "transform": _export_transform(actor),
+        "transform": _export_transform(
+            actor,
+            type_name,
+        ),
     }
 
     if type_name == "directionalLight":
         level_object["light"] = _export_light(actor)
     else:
-        level_object["material"] = _export_material(actor)
+        level_object["material"] = _export_material(
+            actor,
+            type_name,
+        )
 
     level_object["rigidBody"] = _export_rigid_body(actor)
 
@@ -1358,10 +1779,24 @@ def import_dx3d_level(level_file):
     with transaction:
         imported_level_path = _create_new_level_for_import(level_file)
         imported_count = 0
+        added_fallback_light = False
 
         for level_object in objects[:10000]:
             if _spawn_object(level_object):
                 imported_count += 1
+
+        if not any(
+            _is_directional_light_object(level_object)
+            for level_object in objects
+        ):
+            if _spawn_fallback_directional_light():
+                imported_count += 1
+                added_fallback_light = True
+
+        if added_fallback_light:
+            unreal.log(
+                "DX3D importer added a default directional light because the .level file did not contain one."
+            )
 
         unreal.log(
             "DX3D importer created {0} actor(s) in {1} from {2}.".format(
@@ -1376,6 +1811,16 @@ def import_dx3d_level_from_dialog():
     level_file = _open_level_file_dialog()
 
     if not level_file:
+        return
+
+    if not os.path.exists(level_file):
+        unreal.log_warning(
+            "DX3D importer could not find {0}. "
+            "Copy Scene.level into your Unreal project folder, or run "
+            "import_dx3d_level(r\"C:/path/to/Scene.level\") with the full path.".format(
+                level_file
+            )
+        )
         return
 
     import_dx3d_level(level_file)

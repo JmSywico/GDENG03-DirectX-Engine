@@ -31,6 +31,7 @@
 #include <iterator>
 #include <cctype>
 #include <cstdlib>
+#include <cmath>
 
 namespace
 {
@@ -53,6 +54,10 @@ namespace
 	constexpr dx3d::ui32 maximumStringLength = 1024 * 1024;
 	constexpr dx3d::ui32 maximumVertexCount = 10000000;
 	constexpr dx3d::ui32 maximumIndexCount = 30000000;
+	constexpr dx3d::f32 levelPi = 3.14159265358979323846f;
+	constexpr dx3d::f32 levelTwoPi = levelPi * 2.0f;
+	constexpr dx3d::f32 levelRightAngle = levelPi * 0.5f;
+	constexpr dx3d::f32 levelAngleSnapEpsilon = 0.06f;
 
 	enum class SceneObjectType : dx3d::ui32
 	{
@@ -1303,6 +1308,108 @@ namespace
 		}
 	}
 
+	dx3d::f32 normalizeLevelColorComponent(
+		dx3d::f32 value
+	) noexcept
+	{
+		if (value > 1.0f)
+			value /= 255.0f;
+
+		if (value < 0.0f)
+			return 0.0f;
+
+		if (value > 1.0f)
+			return 1.0f;
+
+		return value;
+	}
+
+	void normalizeLevelColor(
+		dx3d::Vec3& value
+	) noexcept
+	{
+		value.x =
+			normalizeLevelColorComponent(
+				value.x
+			);
+		value.y =
+			normalizeLevelColorComponent(
+				value.y
+			);
+		value.z =
+			normalizeLevelColorComponent(
+				value.z
+			);
+	}
+
+	void normalizeLevelColor(
+		dx3d::Vec4& value
+	) noexcept
+	{
+		value.x =
+			normalizeLevelColorComponent(
+				value.x
+			);
+		value.y =
+			normalizeLevelColorComponent(
+				value.y
+			);
+		value.z =
+			normalizeLevelColorComponent(
+				value.z
+			);
+		value.w =
+			normalizeLevelColorComponent(
+				value.w
+			);
+	}
+
+	dx3d::f32 normalizeLevelAngle(
+		dx3d::f32 value
+	) noexcept
+	{
+		value = std::fmod(
+			value,
+			levelTwoPi
+		);
+
+		if (value > levelPi)
+			value -= levelTwoPi;
+
+		if (value < -levelPi)
+			value += levelTwoPi;
+
+		for (int quarterTurn = -4;
+			quarterTurn <= 4;
+			++quarterTurn)
+		{
+			const dx3d::f32 snapped =
+				static_cast<dx3d::f32>(
+					quarterTurn
+				) * levelRightAngle;
+
+			if (std::fabs(value - snapped) <=
+				levelAngleSnapEpsilon)
+			{
+				return snapped;
+			}
+		}
+
+		return value;
+	}
+
+	dx3d::Vec3 normalizeLevelRotation(
+		const dx3d::Vec3& value
+	) noexcept
+	{
+		return
+		{
+			normalizeLevelAngle(value.x),
+			normalizeLevelAngle(value.y),
+			normalizeLevelAngle(value.z)
+		};
+	}
+
 	void writeJsonString(
 		std::ofstream& stream,
 		const std::string& value
@@ -2237,7 +2344,9 @@ namespace
 		stream << "        \"rotation\": ";
 		writeLevelVec3(
 			stream,
-			transform.getRotation()
+			normalizeLevelRotation(
+				transform.getRotation()
+			)
 		);
 		stream << ",\n";
 		stream << "        \"scale\": ";
@@ -2515,6 +2624,10 @@ namespace
 				object.lightColor
 			);
 
+			normalizeLevelColor(
+				object.lightColor
+			);
+
 			readNumberMember(
 				*light,
 				"intensity",
@@ -2578,6 +2691,10 @@ namespace
 			readVec4Member(
 				*material,
 				"color",
+				object.materialColor
+			);
+
+			normalizeLevelColor(
 				object.materialColor
 			);
 
